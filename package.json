@@ -35,7 +35,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && rm -rf dist/src",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

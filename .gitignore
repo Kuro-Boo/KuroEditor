@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 docs/
+screen/
 .DS_Store
 *.local
 
@@ -16,3 +17,4 @@ AGENTS.local.md
 
 # Local helper scripts (per-developer)
 kuroeditor_push.sh
+kuroeditor_deploy_copy.sh

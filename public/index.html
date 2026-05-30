@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n="meta.title">KuroEditor — Vanilla JS WYSIWYG エディター</title>
+  <meta name="description" data-i18n-attr="content" data-i18n="meta.desc" content="依存ゼロ・単一ファイルで組込み可能な、ダークモード専用 WYSIWYG エディター。Vanilla JS + Tailwind CSS で構築。">
+
+  <!-- OGP -->
+  <meta property="og:title" data-i18n-attr="content" data-i18n="meta.title" content="KuroEditor — Vanilla JS WYSIWYG エディター" />
+  <meta property="og:description" data-i18n-attr="content" data-i18n="meta.desc" content="依存ゼロ・単一ファイル組込み・ダークモード専用。表の罫線も自由に編集できる、こだわりの WYSIWYG エディター。" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://kuro.boo/kuroeditor/" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '"Hiragino Sans"', '"Yu Gothic"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', '"Fira Code"', 'monospace'],
+          },
+        },
+      },
+    }
+  </script>
+
+  <style>
+    .hero-bg {
+      background:
+        radial-gradient(at 25% 20%, rgba(99, 102, 241, 0.18) 0%, transparent 50%),
+        radial-gradient(at 80% 50%, rgba(139, 92, 246, 0.12) 0%, transparent 50%),
+        #0a0a0f;
+    }
+    .glass-card {
+      background: rgba(23, 23, 27, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(99, 102, 241, 0.15);
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #f472b6 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    code.inline {
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      padding: 0.15em 0.45em;
+      border-radius: 0.3em;
+      font-size: 0.9em;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    pre {
+      background: #0a0a0f;
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      padding: 1.2rem 1.5rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.7;
+    }
+    pre code {
+      color: #d4d4d8;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+    .token-keyword { color: #c084fc; }
+    .token-string  { color: #86efac; }
+    .token-tag     { color: #f472b6; }
+    .token-attr    { color: #fbbf24; }
+    .token-comment { color: #6b7280; font-style: italic; }
+
+    /* 言語セレクト */
+    .lang-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-position: right 0.5rem center;
+      background-repeat: no-repeat;
+      background-size: 12px;
+      padding-right: 1.75rem;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+  </style>
+</head>
+
+<body class="bg-neutral-950 text-neutral-100 font-sans antialiased">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       Header
+       ═══════════════════════════════════════════════════════════════ -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-amber-600/90 border-b border-amber-500/50 shadow-lg shadow-amber-900/20">
+    <nav class="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+      <a href="#" class="flex items-center gap-2 text-xl font-bold">
+        <img src="./assets/kuroeditor_logo_plus_mark.png"
+             alt="KuroEditor"
+             class="h-14 w-auto select-none drop-shadow-md">
+      </a>
+
+      <div class="flex items-center gap-2 sm:gap-5">
+        <a href="#features" class="hidden sm:inline text-sm font-medium text-amber-50 hover:text-white transition-colors" data-i18n="nav.features">特徴</a>
+        <a href="#quickstart" class="hidden sm:inline text-sm font-medium text-amber-50 hover:text-white transition-colors" data-i18n="nav.quickstart">使い方</a>
+        <a href="./sample/" class="text-sm font-medium text-amber-50 hover:text-white transition-colors" data-i18n="nav.sample">サンプル</a>
+        <a href="https://github.com/Kuro-Boo/KuroEditor"
+           target="_blank" rel="noopener"
+           class="text-sm bg-neutral-900/80 hover:bg-neutral-900 text-amber-50 border border-amber-700/50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.4-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.7-5.5 6 .4.3.8 1 .8 2.1v3.1c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+          GitHub
+        </a>
+
+        <!-- 言語セレクト -->
+        <select id="lang-select"
+                class="lang-select text-sm font-medium text-amber-50 bg-neutral-900/80 hover:bg-neutral-900 border border-amber-700/50 rounded-lg pl-3 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-300/50"
+                aria-label="Language">
+          <option value="ja" class="bg-neutral-900 text-amber-50">🇯🇵 日本語</option>
+          <option value="en" class="bg-neutral-900 text-amber-50">🇬🇧 English</option>
+          <option value="de" class="bg-neutral-900 text-amber-50">🇩🇪 Deutsch</option>
+          <option value="fr" class="bg-neutral-900 text-amber-50">🇫🇷 Français</option>
+          <option value="es" class="bg-neutral-900 text-amber-50">🇪🇸 Español</option>
+          <option value="it" class="bg-neutral-900 text-amber-50">🇮🇹 Italiano</option>
+          <option value="uk" class="bg-neutral-900 text-amber-50">🇺🇦 Українська</option>
+          <option value="zh" class="bg-neutral-900 text-amber-50">🇨🇳 中文</option>
+          <option value="ko" class="bg-neutral-900 text-amber-50">🇰🇷 한국어</option>
+        </select>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       Hero
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="hero-bg">
+    <div class="max-w-6xl mx-auto px-6 py-24 sm:py-32 text-center">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-medium mb-6">
+        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+        <span data-i18n="hero.badge">v0.3.6 — 公開中</span>
+      </div>
+
+      <h1 class="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6" data-i18n="hero.title">
+        ライブラリ依存ゼロ。<br>
+        <span class="gradient-text">単一ファイルで組み込める</span><br>
+        WYSIWYG エディター。
+      </h1>
+
+      <p class="text-lg text-neutral-400 max-w-2xl mx-auto mb-10 leading-relaxed" data-i18n="hero.subtitle">
+        Vanilla JS + Tailwind CSS で書かれた、組込み専用 WYSIWYG エディター。<br>
+        React も Vue も不要。<code class="inline">&lt;script&gt;</code> 一行で動きます。
+      </p>
+
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <a href="./sample/"
+           class="inline-flex items-center gap-2 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold px-6 py-3 rounded-xl transition-colors shadow-lg shadow-indigo-500/20">
+          <span data-i18n="hero.cta_demo">🎮 サンプルを試す</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round"/></svg>
+        </a>
+        <a href="https://github.com/Kuro-Boo/KuroEditor"
+           target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-semibold px-6 py-3 rounded-xl border border-neutral-700 transition-colors">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.4-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.7-5.5 6 .4.3.8 1 .8 2.1v3.1c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+          <span data-i18n="hero.cta_github">GitHub で見る</span>
+        </a>
+      </div>
+
+      <!-- Stats row -->
+      <div class="flex flex-wrap justify-center gap-6 sm:gap-12 mt-16 text-sm">
+        <div class="text-center">
+          <div class="text-3xl font-bold text-indigo-300">0</div>
+          <div class="text-neutral-500 mt-1" data-i18n="hero.stat_deps">runtime deps</div>
+        </div>
+        <div class="text-center">
+          <div class="text-3xl font-bold text-indigo-300">2</div>
+          <div class="text-neutral-500 mt-1" data-i18n="hero.stat_files">files to embed</div>
+        </div>
+        <div class="text-center">
+          <div class="text-3xl font-bold text-indigo-300">100%</div>
+          <div class="text-neutral-500 mt-1" data-i18n="hero.stat_vanilla">Vanilla JS</div>
+        </div>
+        <div class="text-center">
+          <div class="text-3xl font-bold text-indigo-300">🌙</div>
+          <div class="text-neutral-500 mt-1" data-i18n="hero.stat_dark">Dark mode</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       Features
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="features" class="max-w-6xl mx-auto px-6 py-24">
+    <div class="text-center mb-16">
+      <h2 class="text-4xl sm:text-5xl font-bold mb-4" data-i18n="features.heading">主な特徴</h2>
+      <p class="text-neutral-400" data-i18n="features.sub">こだわって作り込んだ、組込み用 WYSIWYG エディターの中身。</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-indigo-500/15 flex items-center justify-center mb-4 text-2xl">🪶</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f1_t">ライブラリ不要</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f1_d">React も Vue も jQuery も不要。Vanilla JS と Tailwind CSS だけで構成。単一ファイル <code class="inline">kuro-editor.js</code> を読み込むだけで動きます。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-purple-500/15 flex items-center justify-center mb-4 text-2xl">🎨</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f2_t">豊富な装飾</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f2_d">見出し H1〜H4、引用、コールアウト (4 色)、リスト、文字色、フォントサイズ、行間、整列、コードブロックなど、必要な装飾はすべて揃っています。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-pink-500/15 flex items-center justify-center mb-4 text-2xl">📊</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f3_t">本格的なテーブル</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f3_d">セル結合・分割、罫線スタイル個別指定、列幅ドラッグリサイズ、セル背景色。Dropbox Paper のような操作性。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/15 flex items-center justify-center mb-4 text-2xl">🖼</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f4_t">メディア対応</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f4_d">画像／動画／音声／YouTube・Vimeo 埋め込み。ドラッグ&amp;ドロップ、クリップボード貼り付けにも対応。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-amber-500/15 flex items-center justify-center mb-4 text-2xl">🔗</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f5_t">特殊リンク記法</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f5_d"><code class="inline">[[slug]]</code>、<code class="inline">[[[slug]]]</code>、<code class="inline">[[slug|表示]]</code> で WiKi 風リンクをサポート。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-cyan-500/15 flex items-center justify-center mb-4 text-2xl">🌙</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f6_t">ダークモード固定</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f6_d">常に統一感のあるダーク UI。記事の色設定だけが反映され、UI 色は変動しない設計。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-rose-500/15 flex items-center justify-center mb-4 text-2xl">💾</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f7_t">自動保存</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f7_d">任意の間隔で <code class="inline">onSave</code> コールバック発火。サーバー連携も自由自在。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-violet-500/15 flex items-center justify-center mb-4 text-2xl">📝</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f8_t">ソース編集</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f8_d">WYSIWYG / HTML ソースのタブ切り替え。パワーユーザーは生 HTML で細かい調整もできます。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-teal-500/15 flex items-center justify-center mb-4 text-2xl">🪄</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f9_t">目次自動生成</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f9_d">見出しから右側パネルに目次を自動生成。クリックでスムーススクロール。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       Quick Start
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="quickstart" class="bg-neutral-900/40 border-y border-neutral-800/70">
+    <div class="max-w-6xl mx-auto px-6 py-24">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl sm:text-5xl font-bold mb-4" data-i18n="qs.heading">クイックスタート</h2>
+        <p class="text-neutral-400" data-i18n="qs.sub">2 ファイル読み込むだけで使えます。</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+        <div>
+          <div class="space-y-8">
+            <div class="flex gap-4">
+              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold">1</div>
+              <div>
+                <h3 class="text-lg font-bold mb-1" data-i18n="qs.s1_t">ファイルを設置</h3>
+                <p class="text-sm text-neutral-400" data-i18n="qs.s1_d"><code class="inline">kuro-editor.js</code> と <code class="inline">kuro-editor.css</code> をサーバーに配置。</p>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold">2</div>
+              <div>
+                <h3 class="text-lg font-bold mb-1" data-i18n="qs.s2_t">HTML に貼り付け</h3>
+                <p class="text-sm text-neutral-400" data-i18n="qs.s2_d">CSS を <code class="inline">&lt;head&gt;</code>、JS を <code class="inline">&lt;body&gt;</code> 末尾に。</p>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold">3</div>
+              <div>
+                <h3 class="text-lg font-bold mb-1" data-i18n="qs.s3_t">マウント先を指定して初期化</h3>
+                <p class="text-sm text-neutral-400" data-i18n="qs.s3_d"><code class="inline">new KuroEditor(element, options)</code>。これだけ。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+<pre><code><span class="token-comment" data-i18n="qs.code_c1">&lt;!-- ① CSS を head に読み込み --&gt;</span>
+<span class="token-tag">&lt;link</span> <span class="token-attr">rel</span>=<span class="token-string">"stylesheet"</span> <span class="token-attr">href</span>=<span class="token-string">"/assets/kuro-editor.css"</span><span class="token-tag">&gt;</span>
+
+<span class="token-comment" data-i18n="qs.code_c2">&lt;!-- ② マウント先と JS --&gt;</span>
+<span class="token-tag">&lt;div</span> <span class="token-attr">id</span>=<span class="token-string">"editor"</span><span class="token-tag">&gt;&lt;/div&gt;</span>
+<span class="token-tag">&lt;script</span> <span class="token-attr">src</span>=<span class="token-string">"/assets/kuro-editor.js"</span><span class="token-tag">&gt;&lt;/script&gt;</span>
+
+<span class="token-comment" data-i18n="qs.code_c3">&lt;!-- ③ 初期化 --&gt;</span>
+<span class="token-tag">&lt;script&gt;</span>
+  <span class="token-keyword">new</span> KuroEditor(
+    <span class="token-attr">document</span>.getElementById(<span class="token-string">'editor'</span>),
+    {
+      initialContent: <span class="token-string">'&lt;p&gt;Hello!&lt;/p&gt;'</span>,
+      onSave(html) {
+        console.log(<span class="token-string">'保存:'</span>, html)
+      },
+    }
+  )
+<span class="token-tag">&lt;/script&gt;</span></code></pre>
+        </div>
+      </div>
+
+      <div class="mt-10 text-center">
+        <a href="https://github.com/Kuro-Boo/KuroEditor#readme"
+           target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 transition-colors" data-i18n="qs.read_guide">
+          詳しい組込みガイドを読む →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       CTA
+       ═══════════════════════════════════════════════════════════════ -->
+  <section class="max-w-4xl mx-auto px-6 py-24 text-center">
+    <h2 class="text-4xl sm:text-5xl font-bold mb-4" data-i18n="cta.heading">
+      <span class="gradient-text">触ってみよう。</span>
+    </h2>
+    <p class="text-neutral-400 mb-10 text-lg" data-i18n="cta.text">百聞は一見にしかず。動作を実際に確かめてください。</p>
+
+    <a href="./sample/"
+       class="inline-flex items-center gap-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-400 hover:to-purple-400 text-white font-semibold px-8 py-4 rounded-2xl text-lg transition-all shadow-2xl shadow-indigo-500/30">
+      <span data-i18n="cta.button">🎮 サンプルを開く</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round"/></svg>
+    </a>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       Footer
+       ═══════════════════════════════════════════════════════════════ -->
+  <footer class="bg-amber-600 border-t border-amber-500/50 mt-12 shadow-[0_-4px_24px_rgba(120,53,15,0.25)]">
+    <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-amber-50">
+      <div class="flex items-center gap-2 font-medium">
+        <img src="./assets/kuroeditor_logo_plus_mark.png"
+             alt="KuroEditor"
+             class="h-7 w-auto select-none drop-shadow-sm">
+        <span class="ml-1" data-i18n="footer.powered">— Powered by Kuro-Boo</span>
+      </div>
+      <div class="flex items-center gap-5 font-medium">
+        <a href="https://github.com/Kuro-Boo/KuroEditor" target="_blank" rel="noopener"
+           class="hover:text-white transition-colors">GitHub</a>
+        <a href="./sample/" class="hover:text-white transition-colors" data-i18n="footer.sample">サンプル</a>
+        <a href="https://github.com/Kuro-Boo/KuroEditor/blob/main/LICENSE.txt"
+           target="_blank" rel="noopener"
+           class="hover:text-white transition-colors">Kuro License</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       i18n Dictionary + runtime
+       ═══════════════════════════════════════════════════════════════ -->
+  <script>
+    const I18N = {
+      ja: {
+        'meta.title': 'KuroEditor — Vanilla JS WYSIWYG エディター',
+        'meta.desc': '依存ゼロ・単一ファイルで組込み可能な、ダークモード専用 WYSIWYG エディター。Vanilla JS + Tailwind CSS で構築。',
+        'nav.features': '特徴',
+        'nav.quickstart': '使い方',
+        'nav.sample': 'サンプル',
+        'hero.badge': 'v0.3.6 — 公開中',
+        'hero.title': 'ライブラリ依存ゼロ。<br><span class="gradient-text">単一ファイルで組み込める</span><br>WYSIWYG エディター。',
+        'hero.subtitle': 'Vanilla JS + Tailwind CSS で書かれた、組込み専用 WYSIWYG エディター。<br>React も Vue も不要。<code class="inline">&lt;script&gt;</code> 一行で動きます。',
+        'hero.cta_demo': '🎮 サンプルを試す',
+        'hero.cta_github': 'GitHub で見る',
+        'hero.stat_deps': 'ランタイム依存',
+        'hero.stat_files': '組込みファイル数',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'ダークモード',
+        'features.heading': '主な特徴',
+        'features.sub': 'こだわって作り込んだ、組込み用 WYSIWYG エディターの中身。',
+        'features.f1_t': 'ライブラリ不要',
+        'features.f1_d': 'React も Vue も jQuery も不要。Vanilla JS と Tailwind CSS だけで構成。単一ファイル <code class="inline">kuro-editor.js</code> を読み込むだけで動きます。',
+        'features.f2_t': '豊富な装飾',
+        'features.f2_d': '見出し H1〜H4、引用、コールアウト (4 色)、リスト、文字色、フォントサイズ、行間、整列、コードブロックなど、必要な装飾はすべて揃っています。',
+        'features.f3_t': '本格的なテーブル',
+        'features.f3_d': 'セル結合・分割、罫線スタイル個別指定、列幅ドラッグリサイズ、セル背景色。Dropbox Paper のような操作性。',
+        'features.f4_t': 'メディア対応',
+        'features.f4_d': '画像／動画／音声／YouTube・Vimeo 埋め込み。ドラッグ&ドロップ、クリップボード貼り付けにも対応。',
+        'features.f5_t': '特殊リンク記法',
+        'features.f5_d': '<code class="inline">[[slug]]</code>、<code class="inline">[[[slug]]]</code>、<code class="inline">[[slug|表示]]</code> で WiKi 風リンクをサポート。',
+        'features.f6_t': 'ダークモード固定',
+        'features.f6_d': '常に統一感のあるダーク UI。記事の色設定だけが反映され、UI 色は変動しない設計。',
+        'features.f7_t': '自動保存',
+        'features.f7_d': '任意の間隔で <code class="inline">onSave</code> コールバック発火。サーバー連携も自由自在。',
+        'features.f8_t': 'ソース編集',
+        'features.f8_d': 'WYSIWYG / HTML ソースのタブ切り替え。パワーユーザーは生 HTML で細かい調整もできます。',
+        'features.f9_t': '目次自動生成',
+        'features.f9_d': '見出しから右側パネルに目次を自動生成。クリックでスムーススクロール。',
+        'qs.heading': 'クイックスタート',
+        'qs.sub': '2 ファイル読み込むだけで使えます。',
+        'qs.s1_t': 'ファイルを設置',
+        'qs.s1_d': '<code class="inline">kuro-editor.js</code> と <code class="inline">kuro-editor.css</code> をサーバーに配置。',
+        'qs.s2_t': 'HTML に貼り付け',
+        'qs.s2_d': 'CSS を <code class="inline">&lt;head&gt;</code>、JS を <code class="inline">&lt;body&gt;</code> 末尾に。',
+        'qs.s3_t': 'マウント先を指定して初期化',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>。これだけ。',
+        'qs.code_c1': '&lt;!-- ① CSS を head に読み込み --&gt;',
+        'qs.code_c2': '&lt;!-- ② マウント先と JS --&gt;',
+        'qs.code_c3': '&lt;!-- ③ 初期化 --&gt;',
+        'qs.read_guide': '詳しい組込みガイドを読む →',
+        'cta.heading': '<span class="gradient-text">触ってみよう。</span>',
+        'cta.text': '百聞は一見にしかず。動作を実際に確かめてください。',
+        'cta.button': '🎮 サンプルを開く',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'サンプル',
+      },
+      en: {
+        'meta.title': 'KuroEditor — Vanilla JS WYSIWYG Editor',
+        'meta.desc': 'A dark-mode WYSIWYG editor with zero runtime dependencies, embeddable as a single file. Built with Vanilla JS + Tailwind CSS.',
+        'nav.features': 'Features',
+        'nav.quickstart': 'Quick Start',
+        'nav.sample': 'Demo',
+        'hero.badge': 'v0.3.6 — Available now',
+        'hero.title': 'Zero dependencies.<br><span class="gradient-text">Embed with a single file.</span><br>A WYSIWYG editor.',
+        'hero.subtitle': 'A WYSIWYG editor for embedding, written in Vanilla JS + Tailwind CSS.<br>No React, no Vue. Works with a single <code class="inline">&lt;script&gt;</code> tag.',
+        'hero.cta_demo': '🎮 Try the demo',
+        'hero.cta_github': 'View on GitHub',
+        'hero.stat_deps': 'runtime deps',
+        'hero.stat_files': 'files to embed',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'Dark mode',
+        'features.heading': 'Key Features',
+        'features.sub': 'A WYSIWYG editor crafted with care, designed for embedding.',
+        'features.f1_t': 'No libraries required',
+        'features.f1_d': 'No React, no Vue, no jQuery. Built purely on Vanilla JS and Tailwind CSS. Just load <code class="inline">kuro-editor.js</code> and you are ready to go.',
+        'features.f2_t': 'Rich formatting',
+        'features.f2_d': 'Headings H1–H4, blockquotes, callouts (4 colors), lists, text color, font size, line height, alignment, code blocks — all the formatting you need.',
+        'features.f3_t': 'Serious tables',
+        'features.f3_d': 'Cell merge/split, per-border style control, drag-to-resize column widths, cell background colors. Feels like Dropbox Paper.',
+        'features.f4_t': 'Media support',
+        'features.f4_d': 'Images, videos, audio, YouTube and Vimeo embeds. Drag &amp; drop and clipboard paste also supported.',
+        'features.f5_t': 'Special link syntax',
+        'features.f5_d': 'Wiki-style links via <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code>, and <code class="inline">[[slug|display]]</code>.',
+        'features.f6_t': 'Dark mode only',
+        'features.f6_d': 'A consistent dark UI at all times. Only article colors change — the chrome stays the same.',
+        'features.f7_t': 'Auto-save',
+        'features.f7_d': 'Fires an <code class="inline">onSave</code> callback at the interval you choose. Plug it into any backend.',
+        'features.f8_t': 'Source editing',
+        'features.f8_d': 'Toggle between WYSIWYG and raw HTML. Power users can fine-tune the markup directly.',
+        'features.f9_t': 'Auto outline',
+        'features.f9_d': 'A table of contents is generated automatically from headings. Click to smooth-scroll.',
+        'qs.heading': 'Quick Start',
+        'qs.sub': 'Load just two files and you are ready.',
+        'qs.s1_t': 'Place the files',
+        'qs.s1_d': 'Put <code class="inline">kuro-editor.js</code> and <code class="inline">kuro-editor.css</code> on your server.',
+        'qs.s2_t': 'Paste into your HTML',
+        'qs.s2_d': 'Load the CSS in <code class="inline">&lt;head&gt;</code> and the JS at the end of <code class="inline">&lt;body&gt;</code>.',
+        'qs.s3_t': 'Initialize with a mount element',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. That is it.',
+        'qs.code_c1': '&lt;!-- 1. Load CSS in head --&gt;',
+        'qs.code_c2': '&lt;!-- 2. Mount point and JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. Initialize --&gt;',
+        'qs.read_guide': 'Read the full integration guide →',
+        'cta.heading': '<span class="gradient-text">Give it a try.</span>',
+        'cta.text': 'Seeing is believing. Take it for a spin yourself.',
+        'cta.button': '🎮 Open the demo',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'Demo',
+      },
+      de: {
+        'meta.title': 'KuroEditor — Vanilla-JS-WYSIWYG-Editor',
+        'meta.desc': 'Ein Dark-Mode-WYSIWYG-Editor ohne Laufzeitabhängigkeiten, einbettbar als eine einzige Datei. Mit Vanilla JS + Tailwind CSS gebaut.',
+        'nav.features': 'Funktionen',
+        'nav.quickstart': 'Schnellstart',
+        'nav.sample': 'Demo',
+        'hero.badge': 'v0.3.6 — Jetzt verfügbar',
+        'hero.title': 'Keine Abhängigkeiten.<br><span class="gradient-text">In einer Datei einbettbar.</span><br>Ein WYSIWYG-Editor.',
+        'hero.subtitle': 'Ein WYSIWYG-Editor zum Einbetten, geschrieben in Vanilla JS + Tailwind CSS.<br>Kein React, kein Vue. Läuft mit einem einzigen <code class="inline">&lt;script&gt;</code>-Tag.',
+        'hero.cta_demo': '🎮 Demo testen',
+        'hero.cta_github': 'Auf GitHub ansehen',
+        'hero.stat_deps': 'Laufzeitabhängigkeiten',
+        'hero.stat_files': 'Dateien zum Einbetten',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'Dunkler Modus',
+        'features.heading': 'Hauptfunktionen',
+        'features.sub': 'Ein sorgfältig gestalteter, einbettbarer WYSIWYG-Editor.',
+        'features.f1_t': 'Keine Bibliotheken nötig',
+        'features.f1_d': 'Kein React, kein Vue, kein jQuery. Nur Vanilla JS und Tailwind CSS. Einfach <code class="inline">kuro-editor.js</code> laden und loslegen.',
+        'features.f2_t': 'Umfangreiche Formatierung',
+        'features.f2_d': 'Überschriften H1–H4, Zitate, Callouts (4 Farben), Listen, Textfarbe, Schriftgröße, Zeilenhöhe, Ausrichtung, Code-Blöcke — alles dabei.',
+        'features.f3_t': 'Echte Tabellen',
+        'features.f3_d': 'Zellen verbinden/teilen, Rahmenstile einzeln steuern, Spaltenbreite per Drag, Zellhintergrundfarbe. Wie Dropbox Paper.',
+        'features.f4_t': 'Medienunterstützung',
+        'features.f4_d': 'Bilder, Videos, Audio, YouTube- und Vimeo-Einbettungen. Drag &amp; Drop sowie Einfügen aus der Zwischenablage werden unterstützt.',
+        'features.f5_t': 'Sondersyntax für Links',
+        'features.f5_d': 'Wiki-Style-Links per <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> und <code class="inline">[[slug|Anzeige]]</code>.',
+        'features.f6_t': 'Nur Dunkelmodus',
+        'features.f6_d': 'Stets ein einheitliches dunkles UI. Nur die Artikelfarben ändern sich.',
+        'features.f7_t': 'Automatisches Speichern',
+        'features.f7_d': 'Ruft einen <code class="inline">onSave</code>-Callback in einem Intervall Ihrer Wahl auf.',
+        'features.f8_t': 'Quellcode-Bearbeitung',
+        'features.f8_d': 'Wechsel zwischen WYSIWYG und Roh-HTML jederzeit möglich.',
+        'features.f9_t': 'Automatisches Inhaltsverzeichnis',
+        'features.f9_d': 'Aus den Überschriften wird automatisch ein Inhaltsverzeichnis erzeugt — mit sanftem Scrollen beim Klick.',
+        'qs.heading': 'Schnellstart',
+        'qs.sub': 'Nur zwei Dateien laden — fertig.',
+        'qs.s1_t': 'Dateien platzieren',
+        'qs.s1_d': '<code class="inline">kuro-editor.js</code> und <code class="inline">kuro-editor.css</code> auf den Server legen.',
+        'qs.s2_t': 'Ins HTML einfügen',
+        'qs.s2_d': 'CSS im <code class="inline">&lt;head&gt;</code>, JS am Ende des <code class="inline">&lt;body&gt;</code> laden.',
+        'qs.s3_t': 'Mit Mount-Element initialisieren',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. Mehr nicht.',
+        'qs.code_c1': '&lt;!-- 1. CSS im head laden --&gt;',
+        'qs.code_c2': '&lt;!-- 2. Mount-Punkt und JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. Initialisierung --&gt;',
+        'qs.read_guide': 'Vollständige Integrationsanleitung lesen →',
+        'cta.heading': '<span class="gradient-text">Probier es aus.</span>',
+        'cta.text': 'Selbst sehen ist besser als hundertmal hören. Teste den Editor selbst.',
+        'cta.button': '🎮 Demo öffnen',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'Demo',
+      },
+      fr: {
+        'meta.title': 'KuroEditor — Éditeur WYSIWYG en Vanilla JS',
+        'meta.desc': 'Un éditeur WYSIWYG en mode sombre, sans dépendances, intégrable en un seul fichier. Construit avec Vanilla JS + Tailwind CSS.',
+        'nav.features': 'Fonctionnalités',
+        'nav.quickstart': 'Démarrage',
+        'nav.sample': 'Démo',
+        'hero.badge': 'v0.3.6 — Disponible',
+        'hero.title': 'Zéro dépendance.<br><span class="gradient-text">Intégrable en un seul fichier.</span><br>Un éditeur WYSIWYG.',
+        'hero.subtitle': 'Un éditeur WYSIWYG à intégrer, écrit en Vanilla JS + Tailwind CSS.<br>Ni React, ni Vue. Fonctionne avec une seule balise <code class="inline">&lt;script&gt;</code>.',
+        'hero.cta_demo': '🎮 Essayer la démo',
+        'hero.cta_github': 'Voir sur GitHub',
+        'hero.stat_deps': 'dépendances runtime',
+        'hero.stat_files': 'fichiers à intégrer',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'Mode sombre',
+        'features.heading': 'Principales fonctionnalités',
+        'features.sub': 'Un éditeur WYSIWYG soigneusement conçu, dédié à l\'intégration.',
+        'features.f1_t': 'Sans bibliothèques',
+        'features.f1_d': 'Ni React, ni Vue, ni jQuery. Uniquement Vanilla JS et Tailwind CSS. Il suffit de charger <code class="inline">kuro-editor.js</code>.',
+        'features.f2_t': 'Mise en forme riche',
+        'features.f2_d': 'Titres H1–H4, citations, callouts (4 couleurs), listes, couleurs, taille de police, interligne, alignement, blocs de code. Tout y est.',
+        'features.f3_t': 'Tableaux complets',
+        'features.f3_d': 'Fusion/scission de cellules, style de bordure par segment, redimensionnement des colonnes, couleur d\'arrière-plan.',
+        'features.f4_t': 'Support multimédia',
+        'features.f4_d': 'Images, vidéos, audio, intégrations YouTube et Vimeo. Glisser-déposer et collage depuis le presse-papiers.',
+        'features.f5_t': 'Syntaxe spéciale',
+        'features.f5_d': 'Liens style wiki via <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> et <code class="inline">[[slug|texte]]</code>.',
+        'features.f6_t': 'Mode sombre uniquement',
+        'features.f6_d': 'Une interface sombre cohérente en permanence. Seules les couleurs du contenu varient.',
+        'features.f7_t': 'Sauvegarde automatique',
+        'features.f7_d': 'Le callback <code class="inline">onSave</code> est appelé à l\'intervalle de votre choix.',
+        'features.f8_t': 'Édition source',
+        'features.f8_d': 'Bascule entre WYSIWYG et HTML brut. Pour les ajustements fins.',
+        'features.f9_t': 'Sommaire automatique',
+        'features.f9_d': 'Un sommaire est généré à partir des titres. Défilement fluide au clic.',
+        'qs.heading': 'Démarrage rapide',
+        'qs.sub': 'Chargez deux fichiers et c\'est parti.',
+        'qs.s1_t': 'Placer les fichiers',
+        'qs.s1_d': 'Mettez <code class="inline">kuro-editor.js</code> et <code class="inline">kuro-editor.css</code> sur le serveur.',
+        'qs.s2_t': 'Coller dans le HTML',
+        'qs.s2_d': 'CSS dans <code class="inline">&lt;head&gt;</code>, JS à la fin de <code class="inline">&lt;body&gt;</code>.',
+        'qs.s3_t': 'Initialiser avec un point de montage',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. C\'est tout.',
+        'qs.code_c1': '&lt;!-- 1. Chargement du CSS --&gt;',
+        'qs.code_c2': '&lt;!-- 2. Point de montage et JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. Initialisation --&gt;',
+        'qs.read_guide': 'Lire le guide d\'intégration complet →',
+        'cta.heading': '<span class="gradient-text">Essayez-le.</span>',
+        'cta.text': 'Voir, c\'est croire. Testez le fonctionnement vous-même.',
+        'cta.button': '🎮 Ouvrir la démo',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'Démo',
+      },
+      es: {
+        'meta.title': 'KuroEditor — Editor WYSIWYG en Vanilla JS',
+        'meta.desc': 'Un editor WYSIWYG en modo oscuro, sin dependencias, integrable como un solo archivo. Construido con Vanilla JS + Tailwind CSS.',
+        'nav.features': 'Características',
+        'nav.quickstart': 'Inicio rápido',
+        'nav.sample': 'Demo',
+        'hero.badge': 'v0.3.6 — Disponible',
+        'hero.title': 'Cero dependencias.<br><span class="gradient-text">Integrable en un solo archivo.</span><br>Un editor WYSIWYG.',
+        'hero.subtitle': 'Un editor WYSIWYG para integrar, escrito en Vanilla JS + Tailwind CSS.<br>Sin React, sin Vue. Funciona con una única etiqueta <code class="inline">&lt;script&gt;</code>.',
+        'hero.cta_demo': '🎮 Probar la demo',
+        'hero.cta_github': 'Ver en GitHub',
+        'hero.stat_deps': 'dependencias en runtime',
+        'hero.stat_files': 'archivos a integrar',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'Modo oscuro',
+        'features.heading': 'Características principales',
+        'features.sub': 'Un editor WYSIWYG cuidadosamente diseñado para integrarse.',
+        'features.f1_t': 'Sin librerías',
+        'features.f1_d': 'Sin React, sin Vue, sin jQuery. Solo Vanilla JS y Tailwind CSS. Carga <code class="inline">kuro-editor.js</code> y listo.',
+        'features.f2_t': 'Formato rico',
+        'features.f2_d': 'Encabezados H1–H4, citas, callouts (4 colores), listas, color de texto, tamaño de fuente, interlineado, alineación, bloques de código.',
+        'features.f3_t': 'Tablas serias',
+        'features.f3_d': 'Fusión/división de celdas, estilo de borde individual, redimensionamiento de columnas por arrastre, color de fondo de celda.',
+        'features.f4_t': 'Soporte multimedia',
+        'features.f4_d': 'Imágenes, vídeos, audio, embeds de YouTube y Vimeo. Soporta arrastrar y soltar y pegar desde el portapapeles.',
+        'features.f5_t': 'Sintaxis de enlace especial',
+        'features.f5_d': 'Enlaces estilo wiki con <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> y <code class="inline">[[slug|texto]]</code>.',
+        'features.f6_t': 'Solo modo oscuro',
+        'features.f6_d': 'Interfaz oscura siempre coherente. Solo cambian los colores del contenido.',
+        'features.f7_t': 'Autoguardado',
+        'features.f7_d': 'Llama al callback <code class="inline">onSave</code> en el intervalo que elijas.',
+        'features.f8_t': 'Edición de fuente',
+        'features.f8_d': 'Alterna entre WYSIWYG y HTML en bruto. Para ajustes finos.',
+        'features.f9_t': 'Índice automático',
+        'features.f9_d': 'Se genera un índice a partir de los encabezados. Desplazamiento suave al hacer clic.',
+        'qs.heading': 'Inicio rápido',
+        'qs.sub': 'Carga dos archivos y ya está.',
+        'qs.s1_t': 'Coloca los archivos',
+        'qs.s1_d': 'Pon <code class="inline">kuro-editor.js</code> y <code class="inline">kuro-editor.css</code> en tu servidor.',
+        'qs.s2_t': 'Pega en tu HTML',
+        'qs.s2_d': 'CSS en <code class="inline">&lt;head&gt;</code>, JS al final de <code class="inline">&lt;body&gt;</code>.',
+        'qs.s3_t': 'Inicializa con un elemento',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. Eso es todo.',
+        'qs.code_c1': '&lt;!-- 1. Cargar CSS --&gt;',
+        'qs.code_c2': '&lt;!-- 2. Punto de montaje y JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. Inicializar --&gt;',
+        'qs.read_guide': 'Leer la guía de integración completa →',
+        'cta.heading': '<span class="gradient-text">Pruébalo.</span>',
+        'cta.text': 'Ver para creer. Compruébalo tú mismo.',
+        'cta.button': '🎮 Abrir la demo',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'Demo',
+      },
+      it: {
+        'meta.title': 'KuroEditor — Editor WYSIWYG in Vanilla JS',
+        'meta.desc': 'Un editor WYSIWYG in modalità scura, senza dipendenze runtime, integrabile come singolo file. Costruito con Vanilla JS + Tailwind CSS.',
+        'nav.features': 'Caratteristiche',
+        'nav.quickstart': 'Avvio rapido',
+        'nav.sample': 'Demo',
+        'hero.badge': 'v0.3.6 — Disponibile',
+        'hero.title': 'Zero dipendenze.<br><span class="gradient-text">Integrabile con un singolo file.</span><br>Un editor WYSIWYG.',
+        'hero.subtitle': 'Un editor WYSIWYG da integrare, scritto in Vanilla JS + Tailwind CSS.<br>Niente React, niente Vue. Funziona con un singolo tag <code class="inline">&lt;script&gt;</code>.',
+        'hero.cta_demo': '🎮 Prova la demo',
+        'hero.cta_github': 'Vedi su GitHub',
+        'hero.stat_deps': 'dipendenze runtime',
+        'hero.stat_files': 'file da integrare',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'Modalità scura',
+        'features.heading': 'Caratteristiche principali',
+        'features.sub': 'Un editor WYSIWYG curato nei dettagli, pensato per l\'integrazione.',
+        'features.f1_t': 'Nessuna libreria',
+        'features.f1_d': 'Niente React, niente Vue, niente jQuery. Solo Vanilla JS e Tailwind CSS. Basta caricare <code class="inline">kuro-editor.js</code>.',
+        'features.f2_t': 'Formattazione ricca',
+        'features.f2_d': 'Titoli H1–H4, citazioni, callout (4 colori), liste, colore del testo, dimensione font, interlinea, allineamento, blocchi di codice.',
+        'features.f3_t': 'Tabelle complete',
+        'features.f3_d': 'Unione/divisione celle, stile bordo singolo, ridimensionamento colonne col trascinamento, colore di sfondo cella.',
+        'features.f4_t': 'Supporto media',
+        'features.f4_d': 'Immagini, video, audio, embed YouTube e Vimeo. Drag &amp; drop e incolla dagli appunti.',
+        'features.f5_t': 'Sintassi link speciale',
+        'features.f5_d': 'Link in stile wiki con <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> e <code class="inline">[[slug|testo]]</code>.',
+        'features.f6_t': 'Solo modalità scura',
+        'features.f6_d': 'Interfaccia scura sempre coerente. Solo i colori del contenuto cambiano.',
+        'features.f7_t': 'Salvataggio automatico',
+        'features.f7_d': 'Richiama il callback <code class="inline">onSave</code> all\'intervallo che preferisci.',
+        'features.f8_t': 'Modifica sorgente',
+        'features.f8_d': 'Passa tra WYSIWYG e HTML grezzo per ritocchi avanzati.',
+        'features.f9_t': 'Sommario automatico',
+        'features.f9_d': 'Sommario generato dai titoli. Scorrimento fluido al clic.',
+        'qs.heading': 'Avvio rapido',
+        'qs.sub': 'Carica due file e sei pronto.',
+        'qs.s1_t': 'Posiziona i file',
+        'qs.s1_d': 'Metti <code class="inline">kuro-editor.js</code> e <code class="inline">kuro-editor.css</code> sul tuo server.',
+        'qs.s2_t': 'Incolla nell\'HTML',
+        'qs.s2_d': 'CSS in <code class="inline">&lt;head&gt;</code>, JS alla fine del <code class="inline">&lt;body&gt;</code>.',
+        'qs.s3_t': 'Inizializza con un mount',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. Tutto qui.',
+        'qs.code_c1': '&lt;!-- 1. Caricamento CSS --&gt;',
+        'qs.code_c2': '&lt;!-- 2. Punto di mount e JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. Inizializzazione --&gt;',
+        'qs.read_guide': 'Leggi la guida completa →',
+        'cta.heading': '<span class="gradient-text">Provalo.</span>',
+        'cta.text': 'Vedere è credere. Mettilo alla prova.',
+        'cta.button': '🎮 Apri la demo',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'Demo',
+      },
+      uk: {
+        'meta.title': 'KuroEditor — WYSIWYG-редактор на Vanilla JS',
+        'meta.desc': 'WYSIWYG-редактор у темному режимі без runtime-залежностей, вбудовується одним файлом. Побудовано на Vanilla JS + Tailwind CSS.',
+        'nav.features': 'Можливості',
+        'nav.quickstart': 'Швидкий старт',
+        'nav.sample': 'Демо',
+        'hero.badge': 'v0.3.6 — Доступно',
+        'hero.title': 'Жодних залежностей.<br><span class="gradient-text">Вбудовується одним файлом.</span><br>WYSIWYG-редактор.',
+        'hero.subtitle': 'WYSIWYG-редактор для вбудовування, написаний на Vanilla JS + Tailwind CSS.<br>Без React, без Vue. Працює з одним тегом <code class="inline">&lt;script&gt;</code>.',
+        'hero.cta_demo': '🎮 Спробувати демо',
+        'hero.cta_github': 'Дивитися на GitHub',
+        'hero.stat_deps': 'runtime-залежностей',
+        'hero.stat_files': 'файли для вбудовування',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'Темний режим',
+        'features.heading': 'Основні можливості',
+        'features.sub': 'Ретельно створений WYSIWYG-редактор для вбудовування.',
+        'features.f1_t': 'Без бібліотек',
+        'features.f1_d': 'Без React, без Vue, без jQuery. Лише Vanilla JS і Tailwind CSS. Просто завантажте <code class="inline">kuro-editor.js</code>.',
+        'features.f2_t': 'Багате форматування',
+        'features.f2_d': 'Заголовки H1–H4, цитати, виноски (4 кольори), списки, колір тексту, розмір шрифту, інтервал, вирівнювання, блоки коду.',
+        'features.f3_t': 'Серйозні таблиці',
+        'features.f3_d': 'Об\'єднання/розділення клітинок, стиль рамки окремо, зміна ширини стовпців перетягуванням, колір тла клітинки.',
+        'features.f4_t': 'Підтримка медіа',
+        'features.f4_d': 'Зображення, відео, аудіо, вбудовування YouTube і Vimeo. Drag &amp; drop і вставка з буфера обміну.',
+        'features.f5_t': 'Спеціальний синтаксис посилань',
+        'features.f5_d': 'Wiki-посилання через <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> і <code class="inline">[[slug|текст]]</code>.',
+        'features.f6_t': 'Тільки темний режим',
+        'features.f6_d': 'Завжди узгоджений темний UI. Змінюються лише кольори вмісту.',
+        'features.f7_t': 'Автозбереження',
+        'features.f7_d': 'Викликає callback <code class="inline">onSave</code> з вашим інтервалом.',
+        'features.f8_t': 'Редагування коду',
+        'features.f8_d': 'Перемикання між WYSIWYG і чистим HTML для тонких налаштувань.',
+        'features.f9_t': 'Автозміст',
+        'features.f9_d': 'Зміст автоматично формується із заголовків. Плавна прокрутка по кліку.',
+        'qs.heading': 'Швидкий старт',
+        'qs.sub': 'Завантажте два файли — і готово.',
+        'qs.s1_t': 'Розмістіть файли',
+        'qs.s1_d': 'Помістіть <code class="inline">kuro-editor.js</code> і <code class="inline">kuro-editor.css</code> на сервер.',
+        'qs.s2_t': 'Вставте в HTML',
+        'qs.s2_d': 'CSS у <code class="inline">&lt;head&gt;</code>, JS у кінці <code class="inline">&lt;body&gt;</code>.',
+        'qs.s3_t': 'Ініціалізуйте з елементом',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. Усе.',
+        'qs.code_c1': '&lt;!-- 1. Завантаження CSS --&gt;',
+        'qs.code_c2': '&lt;!-- 2. Точка монтування і JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. Ініціалізація --&gt;',
+        'qs.read_guide': 'Читати повний посібник з інтеграції →',
+        'cta.heading': '<span class="gradient-text">Спробуйте.</span>',
+        'cta.text': 'Краще один раз побачити. Випробуйте самі.',
+        'cta.button': '🎮 Відкрити демо',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'Демо',
+      },
+      zh: {
+        'meta.title': 'KuroEditor — Vanilla JS 所见即所得编辑器',
+        'meta.desc': '零运行时依赖、单文件即可嵌入的暗色 WYSIWYG 编辑器。基于 Vanilla JS + Tailwind CSS 构建。',
+        'nav.features': '特性',
+        'nav.quickstart': '快速开始',
+        'nav.sample': '演示',
+        'hero.badge': 'v0.3.6 — 现已发布',
+        'hero.title': '零依赖。<br><span class="gradient-text">单文件即可嵌入。</span><br>WYSIWYG 编辑器。',
+        'hero.subtitle': '用 Vanilla JS + Tailwind CSS 编写的可嵌入 WYSIWYG 编辑器。<br>无需 React 或 Vue。一个 <code class="inline">&lt;script&gt;</code> 标签即可运行。',
+        'hero.cta_demo': '🎮 试用演示',
+        'hero.cta_github': '在 GitHub 上查看',
+        'hero.stat_deps': '运行时依赖',
+        'hero.stat_files': '嵌入文件数',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': '暗色模式',
+        'features.heading': '主要特性',
+        'features.sub': '精心打造的嵌入式 WYSIWYG 编辑器。',
+        'features.f1_t': '无需依赖库',
+        'features.f1_d': '无需 React、Vue 或 jQuery。仅基于 Vanilla JS 与 Tailwind CSS。加载 <code class="inline">kuro-editor.js</code> 即可运行。',
+        'features.f2_t': '丰富的格式化',
+        'features.f2_d': '标题 H1–H4、引用、callout(四色)、列表、文字颜色、字号、行高、对齐、代码块等一应俱全。',
+        'features.f3_t': '完整的表格',
+        'features.f3_d': '合并/拆分单元格、按段设置边框样式、列宽拖拽调整、单元格背景色。如 Dropbox Paper 般顺手。',
+        'features.f4_t': '媒体支持',
+        'features.f4_d': '图片、视频、音频、YouTube 与 Vimeo 嵌入。支持拖拽放置与从剪贴板粘贴。',
+        'features.f5_t': '特殊链接语法',
+        'features.f5_d': '通过 <code class="inline">[[slug]]</code>、<code class="inline">[[[slug]]]</code> 与 <code class="inline">[[slug|文本]]</code> 提供 Wiki 风格链接。',
+        'features.f6_t': '仅暗色模式',
+        'features.f6_d': '始终保持统一的暗色 UI。只有正文颜色会变化。',
+        'features.f7_t': '自动保存',
+        'features.f7_d': '按你设定的间隔触发 <code class="inline">onSave</code> 回调,可对接任意后端。',
+        'features.f8_t': '源码编辑',
+        'features.f8_d': '在 WYSIWYG 与原始 HTML 之间切换。便于精细调整。',
+        'features.f9_t': '目录自动生成',
+        'features.f9_d': '根据标题自动生成目录,点击平滑滚动。',
+        'qs.heading': '快速开始',
+        'qs.sub': '加载两个文件即可使用。',
+        'qs.s1_t': '放置文件',
+        'qs.s1_d': '将 <code class="inline">kuro-editor.js</code> 和 <code class="inline">kuro-editor.css</code> 放到服务器上。',
+        'qs.s2_t': '粘贴到 HTML',
+        'qs.s2_d': 'CSS 放入 <code class="inline">&lt;head&gt;</code>,JS 放在 <code class="inline">&lt;body&gt;</code> 末尾。',
+        'qs.s3_t': '指定挂载点初始化',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>。如此而已。',
+        'qs.code_c1': '&lt;!-- 1. 在 head 中加载 CSS --&gt;',
+        'qs.code_c2': '&lt;!-- 2. 挂载点和 JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. 初始化 --&gt;',
+        'qs.read_guide': '阅读完整集成指南 →',
+        'cta.heading': '<span class="gradient-text">来试试看。</span>',
+        'cta.text': '百闻不如一见。亲自体验吧。',
+        'cta.button': '🎮 打开演示',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': '演示',
+      },
+      ko: {
+        'meta.title': 'KuroEditor — Vanilla JS WYSIWYG 에디터',
+        'meta.desc': '런타임 의존성 제로, 단일 파일로 임베드 가능한 다크 모드 WYSIWYG 에디터. Vanilla JS + Tailwind CSS로 구축.',
+        'nav.features': '특징',
+        'nav.quickstart': '빠른 시작',
+        'nav.sample': '데모',
+        'hero.badge': 'v0.3.6 — 출시 중',
+        'hero.title': '의존성 제로.<br><span class="gradient-text">단일 파일로 임베드.</span><br>WYSIWYG 에디터.',
+        'hero.subtitle': 'Vanilla JS + Tailwind CSS로 작성된 임베드용 WYSIWYG 에디터.<br>React도 Vue도 필요 없습니다. <code class="inline">&lt;script&gt;</code> 태그 하나로 동작합니다.',
+        'hero.cta_demo': '🎮 데모 체험',
+        'hero.cta_github': 'GitHub에서 보기',
+        'hero.stat_deps': '런타임 의존성',
+        'hero.stat_files': '임베드 파일 수',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': '다크 모드',
+        'features.heading': '주요 특징',
+        'features.sub': '꼼꼼하게 만든 임베드용 WYSIWYG 에디터.',
+        'features.f1_t': '라이브러리 불필요',
+        'features.f1_d': 'React, Vue, jQuery 불필요. Vanilla JS와 Tailwind CSS만으로 구성. <code class="inline">kuro-editor.js</code>를 로드하면 바로 사용 가능.',
+        'features.f2_t': '풍부한 서식',
+        'features.f2_d': '제목 H1–H4, 인용, 콜아웃 (4색), 리스트, 글자색, 폰트 크기, 줄간격, 정렬, 코드 블록 등 필요한 서식이 모두 갖춰져 있습니다.',
+        'features.f3_t': '본격적인 테이블',
+        'features.f3_d': '셀 병합/분할, 테두리 스타일 개별 지정, 컬럼 폭 드래그 조정, 셀 배경색. Dropbox Paper 같은 조작감.',
+        'features.f4_t': '미디어 지원',
+        'features.f4_d': '이미지/동영상/오디오/YouTube·Vimeo 임베드. 드래그 앤 드롭, 클립보드 붙여넣기 지원.',
+        'features.f5_t': '특수 링크 문법',
+        'features.f5_d': '<code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code>, <code class="inline">[[slug|표시]]</code>로 위키 스타일 링크 지원.',
+        'features.f6_t': '다크 모드 전용',
+        'features.f6_d': '항상 일관된 다크 UI. 본문 색상만 변경되고 UI 색은 고정.',
+        'features.f7_t': '자동 저장',
+        'features.f7_d': '원하는 간격으로 <code class="inline">onSave</code> 콜백 호출. 어떤 백엔드와도 연동 가능.',
+        'features.f8_t': '소스 편집',
+        'features.f8_d': 'WYSIWYG / HTML 소스 탭 전환. 파워 유저는 직접 HTML을 미세 조정 가능.',
+        'features.f9_t': '목차 자동 생성',
+        'features.f9_d': '제목으로부터 목차를 자동 생성. 클릭 시 부드러운 스크롤.',
+        'qs.heading': '빠른 시작',
+        'qs.sub': '파일 두 개만 로드하면 끝.',
+        'qs.s1_t': '파일 배치',
+        'qs.s1_d': '<code class="inline">kuro-editor.js</code>와 <code class="inline">kuro-editor.css</code>를 서버에 배치.',
+        'qs.s2_t': 'HTML에 붙여넣기',
+        'qs.s2_d': 'CSS는 <code class="inline">&lt;head&gt;</code>에, JS는 <code class="inline">&lt;body&gt;</code> 끝에.',
+        'qs.s3_t': '마운트 요소로 초기화',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. 이게 전부.',
+        'qs.code_c1': '&lt;!-- 1. head에 CSS 로드 --&gt;',
+        'qs.code_c2': '&lt;!-- 2. 마운트 지점과 JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. 초기화 --&gt;',
+        'qs.read_guide': '자세한 통합 가이드 읽기 →',
+        'cta.heading': '<span class="gradient-text">사용해 보세요.</span>',
+        'cta.text': '백문이 불여일견. 직접 체험해 보세요.',
+        'cta.button': '🎮 데모 열기',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': '데모',
+      },
+    }
+
+    function applyLang(code) {
+      const dict = I18N[code] || I18N.ja
+      document.documentElement.lang = code
+      for (const el of document.querySelectorAll('[data-i18n]')) {
+        const key = el.getAttribute('data-i18n')
+        const val = dict[key]
+        if (val === undefined) continue
+        const attr = el.getAttribute('data-i18n-attr')
+        if (attr) {
+          el.setAttribute(attr, val.replace(/<[^>]+>/g, ''))
+        } else {
+          el.innerHTML = val
+        }
+      }
+      try { localStorage.setItem('kuroeditor-lang', code) } catch {}
+    }
+
+    function detectLang() {
+      try {
+        const saved = localStorage.getItem('kuroeditor-lang')
+        if (saved && I18N[saved]) return saved
+      } catch {}
+      const supported = Object.keys(I18N)
+      for (const want of navigator.languages || [navigator.language || 'ja']) {
+        const code = want.toLowerCase().split('-')[0]
+        if (supported.includes(code)) return code
+      }
+      return 'ja'
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const initial = detectLang()
+      const sel = document.getElementById('lang-select')
+      sel.value = initial
+      applyLang(initial)
+      sel.addEventListener('change', (e) => applyLang(e.target.value))
+    })
+  </script>
+
+</body>
+</html>
