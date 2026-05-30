@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+docs/
+.DS_Store
+*.local
+
+# AI assistant local notes / memory (per-developer, do not commit)
+.claude/
+.codex/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+AGENTS.local.md
+.aider*
+
+# Local helper scripts (per-developer)
+kuroeditor_push.sh

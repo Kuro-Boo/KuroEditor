@@ -1,0 +1,57 @@
+{
+  "name": "kuro-editor",
+  "version": "0.3.5",
+  "description": "WYSIWYG editor - Vanilla JS + HTML + Tailwind CSS, standalone embed",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "author": "Kuro-Boo",
+  "homepage": "https://github.com/Kuro-Boo/KuroEditor#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kuro-Boo/KuroEditor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Kuro-Boo/KuroEditor/issues"
+  },
+  "keywords": [
+    "wysiwyg",
+    "editor",
+    "vanilla-js",
+    "tailwindcss",
+    "embed",
+    "rich-text",
+    "kuroeditor"
+  ],
+  "files": [
+    "dist/",
+    "src/",
+    "LICENSE.txt",
+    "README.md"
+  ],
+  "main": "dist/kuro-editor.js",
+  "exports": {
+    ".": "./dist/kuro-editor.js",
+    "./css": "./dist/kuro-editor.css"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
+    "bup": "node scripts/bump.js",
+    "bup:minor": "node scripts/bump.js minor",
+    "bup:major": "node scripts/bump.js major"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.7",
+    "@vitest/coverage-v8": "^3.2.2",
+    "@vitest/ui": "^3.2.2",
+    "happy-dom": "^17.5.3",
+    "tailwindcss": "^4.1.7",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.2"
+  }
+}

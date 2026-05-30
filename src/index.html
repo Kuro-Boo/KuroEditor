@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KuroEditor — Dev</title>
+  <script type="module" src="./main.js"></script>
+  <style>
+    /* トースト風ログ */
+    #log {
+      transition: opacity 0.4s;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body class="bg-neutral-950 text-neutral-100 min-h-screen">
+
+  <!-- ヘッダー -->
+  <header class="sticky top-0 z-40 bg-neutral-900 border-b border-neutral-800
+                 px-6 py-3 flex items-center justify-between">
+    <h1 class="text-lg font-bold text-indigo-400">
+      ⬛ KuroEditor
+      <span class="text-neutral-500 text-sm font-normal ml-2">— 開発環境</span>
+    </h1>
+
+    <!-- 右側: トースト + バージョンバッジ -->
+    <div class="flex items-center gap-3">
+      <span id="log"
+            class="text-sm text-green-400 bg-neutral-800 px-3 py-1 rounded-full border border-neutral-700">
+      </span>
+      <span id="kuro-version"
+            class="text-xs font-mono text-indigo-300 bg-neutral-800 px-2.5 py-1
+                   rounded-full border border-indigo-800 select-none"
+            title="KuroEditor バージョン">
+        v…
+      </span>
+    </div>
+  </header>
+
+  <div class="flex" style="min-height: calc(100vh - 53px)">
+
+    <!-- エディター本体 -->
+    <main class="flex-1 p-6 overflow-y-auto">
+      <div id="kuro-editor-mount"></div>
+    </main>
+
+    <!-- サイドパネル（デバッグ情報） -->
+    <aside class="w-80 flex-shrink-0 border-l border-neutral-800
+                  bg-neutral-900 p-4 overflow-y-auto text-xs">
+
+      <!-- メディアログ -->
+      <section id="media-section" class="mb-5 hidden">
+        <h2 class="text-neutral-400 font-semibold mb-2 flex items-center gap-1">
+          🖼 アップロード済みメディア
+        </h2>
+        <ul id="media-list" class="text-neutral-300"></ul>
+      </section>
+
+      <!-- HTML 出力 -->
+      <section class="mb-2">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-neutral-400 font-semibold">HTML 出力</h2>
+          <label class="flex items-center gap-1.5 text-neutral-500 cursor-pointer">
+            <input id="auto-preview" type="checkbox" checked
+                   class="accent-indigo-500">
+            自動更新
+          </label>
+        </div>
+        <pre id="output"
+             class="bg-neutral-950 border border-neutral-800 rounded-lg p-3
+                    text-green-300 font-mono overflow-x-auto whitespace-pre-wrap
+                    max-h-96 text-xs leading-relaxed">
+        </pre>
+      </section>
+
+      <!-- 使い方メモ -->
+      <section class="mt-5 pt-4 border-t border-neutral-800 text-neutral-500 leading-relaxed">
+        <h2 class="font-semibold text-neutral-400 mb-2">テスト手順</h2>
+        <ol class="list-decimal list-inside space-y-1">
+          <li>テキストを入力・選択して popm を表示</li>
+          <li>下部モーダルの <strong class="text-neutral-300">🖼 メディア</strong> をクリック</li>
+          <li><strong class="text-neutral-300">ファイル選択</strong> で画像を選ぶ</li>
+          <li>⏳ プレースホルダー → 1.5 秒後に画像に差し替わることを確認</li>
+          <li>右パネルに <code class="text-indigo-400">mid-xxx</code> が表示される</li>
+          <li>保存ボタンで <code class="text-green-400">[[mid-xxx]]</code> に変換されることを確認</li>
+        </ol>
+
+        <div class="mt-3 p-2 bg-neutral-800 rounded text-neutral-400 text-xs">
+          💡 URL 欄に <code class="text-indigo-300">https://placehold.co/400x300</code>
+          などを入力して URL 挿入もテストできます
+        </div>
+      </section>
+
+    </aside>
+  </div>
+
+</body>
+</html>
