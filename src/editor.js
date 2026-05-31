@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.13'
+export const VERSION = '0.3.14'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -1733,10 +1733,14 @@ export class TableManager {
     // ── Main button row ──────────────────────────────────────────────────
     this._mainRow = createElement('div', { className: 'kuro-table-menu__main' })
 
-    // Background color button (red square icon)
+    // Background color button (colored square icon + label)
     this._colorBtn = createElement('button', {
       className: 'kuro-table-menu__btn kuro-table-menu__btn--color',
-      html: `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect x="0.5" y="0.5" width="12" height="12" rx="2" fill="#ef4444"/></svg>`,
+      html:
+        `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">` +
+          `<rect x="0.5" y="0.5" width="12" height="12" rx="2" fill="#ef4444"/>` +
+        `</svg>` +
+        `<span class="kuro-table-menu__btn-label">背景色</span>`,
       attrs: { type: 'button', title: 'セル背景色' },
     })
     this._colorBtn.addEventListener('mousedown', (e) => {
