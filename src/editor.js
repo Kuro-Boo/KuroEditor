@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.8'
+export const VERSION = '0.3.9'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -3174,6 +3174,11 @@ export class KuroEditor {
   // ═══════════════════════════════════════════════════════════════════════════
 
   _build() {
+    // Log the version on every editor instantiation so the developer can
+    // confirm the deployed bundle matches the source — useful when caching
+    // could hide a freshly-built update.
+    console.info(`%cKuroEditor v${VERSION}`, 'color:#818cf8;font-weight:bold;')
+
     this.root = createElement('div', {
       className: 'kuro-editor',
       attrs: { 'data-kuro-editor': VERSION },
