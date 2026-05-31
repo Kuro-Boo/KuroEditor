@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.14'
+export const VERSION = '0.3.15'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -1794,14 +1794,20 @@ export class TableManager {
   }
 
   _buildColorPanel() {
+    // mousedown のタイミングで対象セルを掴んでおく。
+    // onClear / onPick が呼ばれる時には selection が崩れていることがあり、
+    // 特に最初のヘッダー行 (<th>) で「解除できない」現象が起きる。
+    let target = null
     const picker = new ColorPicker({
+      onBeforePick: () => { target = this._cell() },
       onPick: (color) => {
-        const cell = this._cell()
+        const cell = target ?? this._cell()
         if (cell) cell.style.backgroundColor = color
         this._hideColorPanel()
       },
       onClear: () => {
-        this._cell()?.style.removeProperty('background-color')
+        const cell = target ?? this._cell()
+        cell?.style.removeProperty('background-color')
         this._hideColorPanel()
       },
     })
