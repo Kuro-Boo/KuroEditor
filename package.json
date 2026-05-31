@@ -1,6 +1,6 @@
 {
   "name": "kuro-editor",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "description": "WYSIWYG editor - Vanilla JS + HTML + Tailwind CSS, standalone embed",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -41,9 +41,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "bup": "node scripts/bump.js",
-    "bup:minor": "node scripts/bump.js minor",
-    "bup:major": "node scripts/bump.js major"
+    "bup": "node scripts/bump.js && npm run build",
+    "bup:minor": "node scripts/bump.js minor && npm run build",
+    "bup:major": "node scripts/bump.js major && npm run build"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.7",
