@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.16'
+export const VERSION = '0.3.17'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -2087,23 +2087,101 @@ export class TableInserter {
     this.colDelBtn.style.top  = `${Math.round(tableRect.bottom + GAP)}px`
   }
 
+  /**
+   * 行を削除する。rowspan を考慮:
+   *  ① 上の行から rowspan で削除対象を覆っているセル → rowspan を 1 減らす
+   *  ② 削除対象の行に rowspan>1 のセルがある → rowspan-1 で次の行に複製
+   *  ③ 行を remove
+   */
   _deleteRow() {
     const row   = this._currentCell?.closest('tr')
     const table = this.activeTable
     if (!row || !table || table.querySelectorAll('tr').length <= 1) return
+
+    const allRows = Array.from(table.querySelectorAll('tr'))
+    const rowIdx  = allRows.indexOf(row)
+
+    // ① 上の行から張り出している rowspan を 1 減らす
+    for (let i = 0; i < rowIdx; i++) {
+      for (const cell of Array.from(allRows[i].cells)) {
+        const rs = parseInt(cell.getAttribute('rowspan') || '1')
+        if (i + rs > rowIdx) {
+          const next = rs - 1
+          if (next <= 1) cell.removeAttribute('rowspan')
+          else           cell.setAttribute('rowspan', String(next))
+        }
+      }
+    }
+
+    // ② 削除対象の行に rowspan>1 のセルがあれば、次の行に「実体を引き継ぐ」
+    const nextRow = allRows[rowIdx + 1]
+    if (nextRow) {
+      for (const cell of Array.from(row.cells)) {
+        const rs = parseInt(cell.getAttribute('rowspan') || '1')
+        if (rs > 1) {
+          const clone = cell.cloneNode(true)
+          const next  = rs - 1
+          if (next <= 1) clone.removeAttribute('rowspan')
+          else           clone.setAttribute('rowspan', String(next))
+          // 次の行で同じ列位置に挿入 (cellIndex ベース、 失敗時は末尾)
+          const target = nextRow.cells[cell.cellIndex]
+          if (target) nextRow.insertBefore(clone, target)
+          else        nextRow.appendChild(clone)
+        }
+      }
+    }
+
     row.remove()
     this._currentCell = null
     this._updateDelBtns()
   }
 
+  /**
+   * 列を削除する。colspan を考慮:
+   *  ① 各行で「colIdx を覆っている」セルがあれば colspan を 1 減らす
+   *  ② colIdx そのものが先頭のセル (colspan を持つ場合の起点) なら remove
+   *  ③ それ以外は普通に colIdx 位置のセルを remove
+   */
   _deleteCol() {
     const cell  = this._currentCell
     const table = this.activeTable
     if (!cell || !table) return
-    const colIdx   = cell.cellIndex
+    const colIdx = cell.cellIndex
+    if (colIdx < 0) return
     const firstRow = table.querySelector('tr')
-    if (colIdx < 0 || !firstRow || firstRow.cells.length <= 1) return
-    table.querySelectorAll('tr').forEach(row => row.cells[colIdx]?.remove())
+    if (!firstRow || firstRow.cells.length <= 1) return
+
+    for (const row of Array.from(table.querySelectorAll('tr'))) {
+      // 各 cell について「論理列範囲」を走査して colIdx が含まれるものを探す
+      let logicalCol = 0
+      let removed = false
+      for (const c of Array.from(row.cells)) {
+        const cs = parseInt(c.getAttribute('colspan') || '1')
+        if (logicalCol === colIdx) {
+          // このセルが colIdx の起点 → colspan を 1 減らすか remove
+          if (cs > 1) {
+            const next = cs - 1
+            if (next <= 1) c.removeAttribute('colspan')
+            else           c.setAttribute('colspan', String(next))
+          } else {
+            c.remove()
+          }
+          removed = true
+          break
+        }
+        if (logicalCol < colIdx && logicalCol + cs > colIdx) {
+          // colspan で colIdx を覆っているセル → colspan を 1 減らす
+          const next = cs - 1
+          if (next <= 1) c.removeAttribute('colspan')
+          else           c.setAttribute('colspan', String(next))
+          removed = true
+          break
+        }
+        logicalCol += cs
+      }
+      // 何も該当しない (= rowspan で上から張り出している行) はそのまま
+      void removed
+    }
     this._currentCell = null
     this._updateDelBtns()
   }
