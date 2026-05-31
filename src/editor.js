@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.10'
+export const VERSION = '0.3.11'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -2008,9 +2008,14 @@ export class TableInserter {
   }
 
   _makeInsertBtn(title, onClick) {
+    // 「+」を SVG で描画。フォント依存の縦ズレを排除してピクセル単位で中心に揃える。
+    const icon = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">` +
+      `<rect x="0" y="4" width="10" height="2" rx="1" fill="currentColor"/>` +
+      `<rect x="4" y="0" width="2" height="10" rx="1" fill="currentColor"/>` +
+    `</svg>`
     const btn = createElement('button', {
       className: 'kuro-table-insert-btn',
-      html: '+',
+      html: icon,
       attrs: { type: 'button', title },
     })
     btn.style.display = 'none'
@@ -2019,9 +2024,13 @@ export class TableInserter {
   }
 
   _makeDelBtn(title, onClick) {
+    // 「−」を SVG で描画。文字「−」はフォントごとに baseline が違って中心ズレが起きやすい。
+    const icon = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">` +
+      `<rect x="1" y="4" width="8" height="2" rx="1" fill="currentColor"/>` +
+    `</svg>`
     const btn = createElement('button', {
       className: 'kuro-table-delete-btn',
-      html: '−',
+      html: icon,
       attrs: { type: 'button', title },
     })
     btn.style.display = 'none'
