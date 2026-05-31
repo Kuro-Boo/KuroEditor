@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.6'
+export const VERSION = '0.3.8'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -37,6 +37,23 @@ const FONT_SIZE_OPTIONS = [
   { label: '150%', value: '150%' },
   { label: '175%', value: '175%' },
   { label: '200%', value: '200%' },
+]
+
+/**
+ * Font family presets — system fonts only, no web font loading required.
+ * "ゴシック" (default) and "明朝" cover virtually all reading scenarios.
+ * Mono-space stays exclusive to code blocks (already styled in <pre><code>).
+ */
+const FONT_FAMILY_OPTIONS = [
+  {
+    label: 'ゴシック',
+    value: "'Hiragino Sans','Yu Gothic UI','Noto Sans CJK JP','Meiryo',sans-serif",
+    base:  true,
+  },
+  {
+    label: '明朝',
+    value: "'Hiragino Mincho ProN','Yu Mincho','YuMincho','Noto Serif CJK JP','MS PMincho',serif",
+  },
 ]
 
 /** Line-height presets.  1.6 = editor default (leading-relaxed). */
@@ -1087,6 +1104,109 @@ export class PopupMenu {
   _toggleLineHeights() {
     this._lhPanel?.classList.contains('kuro-popm__sizes--visible')
       ? this._hideLineHeights() : this._showLineHeights()
+  }
+
+  /**
+   * Font family button — opens a small picker (default "ゴシック" vs "明朝").
+   * Same active-state lifecycle as font-size and line-height.
+   *
+   * @param {function(string):void} applyFn  receives the font-family CSS value
+   * @returns {this}
+   */
+  addFontFamilyButton(applyFn) {
+    // ── Toggle button ─────────────────────────────────────────────────────
+    // Italic serif "F" — visually evokes "font/typography".
+    const btn = createElement('button', {
+      className: 'kuro-popm__btn kuro-popm__btn--font',
+      html: '<span class="kuro-font-indicator">F</span>',
+      attrs: { type: 'button', 'aria-label': 'フォント', title: 'フォント' },
+    })
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      this._hideColors()
+      this._hideSizes()
+      this._hideLineHeights()
+      this._hideListStyles()
+      this._hideULStyles()
+      this._hideCalloutPanel()
+      this._toggleFontFamily()
+    })
+    this._mainRow.appendChild(btn)
+
+    // ── Picker panel ──────────────────────────────────────────────────────
+    this._fontFamilyPanel = createElement('div', { className: 'kuro-popm__sizes' })
+    this._fontFamilyBtns  = []
+
+    for (const { label, value, base } of FONT_FAMILY_OPTIONS) {
+      const fb = createElement('button', {
+        className: 'kuro-size-btn' + (base ? ' kuro-size-btn--base' : ''),
+        html: label,
+        attrs: { type: 'button', title: label, 'data-font': value },
+      })
+      // Preview each label using the very font it represents
+      fb.style.fontFamily = value
+      this._bindSubBtn(fb, () => { applyFn(value); this._hideFontFamily() })
+      this._fontFamilyBtns.push({ el: fb, value })
+      this._fontFamilyPanel.appendChild(fb)
+    }
+
+    this.el.appendChild(this._fontFamilyPanel)
+    return this
+  }
+
+  _showFontFamily()   { this._fontFamilyPanel?.classList.add('kuro-popm__sizes--visible') }
+  _hideFontFamily()   { this._fontFamilyPanel?.classList.remove('kuro-popm__sizes--visible') }
+  _toggleFontFamily() {
+    this._fontFamilyPanel?.classList.contains('kuro-popm__sizes--visible')
+      ? this._hideFontFamily() : this._showFontFamily()
+  }
+
+  /**
+   * Highlight the font-family picker button matching the selection's effective
+   * font. Uses the same caret-position detection as _updateSizeLabel().
+   */
+  _updateFontFamilyLabel() {
+    if (!this._fontFamilyBtns) return
+    const baseValue = FONT_FAMILY_OPTIONS.find(o => o.base)?.value ?? ''
+    let label = baseValue
+    try {
+      const sel = window.getSelection()
+      if (sel?.rangeCount) {
+        const range = sel.getRangeAt(0)
+        let node = range.startContainer
+
+        // ── Case B: range is at the parent level, span is a child ─────────
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const atCursor = node.childNodes[range.startOffset]
+          if (atCursor?.style?.fontFamily) {
+            label = atCursor.style.fontFamily
+          } else {
+            const before = node.childNodes[range.startOffset - 1]
+            if (before?.style?.fontFamily) label = before.style.fontFamily
+          }
+        }
+
+        // ── Case A: walk up from the text node's parent ───────────────────
+        if (label === baseValue) {
+          if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
+          const stop = this.constraintEl ?? document.documentElement
+          while (node) {
+            if (node.style?.fontFamily) { label = node.style.fontFamily; break }
+            if (node === stop) break
+            node = node.parentElement
+          }
+        }
+      }
+    } catch {}
+
+    // Highlight the matching picker button.
+    // Compare with both the literal CSS string AND a "normalized" form, since
+    // browsers may strip quotes / spaces when echoing back style.fontFamily.
+    const normalize = (s) => (s || '').replace(/['"\s]/g, '').toLowerCase()
+    const labelN = normalize(label)
+    for (const { el, value } of this._fontFamilyBtns) {
+      el.classList.toggle('kuro-size-btn--active', normalize(value) === labelN)
+    }
   }
 
   /**
@@ -3248,9 +3368,21 @@ export class KuroEditor {
     // --- ToC panel ---
     this.tocPanelEl = createElement('nav', { className: 'kuro-toc' })
 
+    // --- Resizer between pane and ToC ---
+    // ドラッグで目次の幅を変更できる。幅はインスタンス内で保持され、
+    // 目次を一度閉じて再表示しても同じ幅で復元される。
+    this.tocResizer = createElement('div', {
+      className: 'kuro-toc-resizer',
+      attrs: { 'aria-hidden': 'true', title: '目次の幅を変更' },
+    })
+    this._tocWidth = null   // px — set on first drag
+
     this.body.appendChild(this.pane)
+    this.body.appendChild(this.tocResizer)
     this.body.appendChild(this.tocPanelEl)
     this.root.appendChild(this.body)
+
+    this._bindTocResizer()
 
     // --- Sub-managers ---
     this.toc = new TableOfContents(this.tocPanelEl, this.wysiwyg)
@@ -3528,14 +3660,8 @@ export class KuroEditor {
       this._detectAutoList(e)
       this._detectSpecialLink(e)
       if (this.imageMenu.isVisible) this.imageMenu.deactivate()
-      // Inside a code block: normalise any browser-inserted block wrappers
-      // (<div>, <p>, <br>) into plain "\n" so the line model stays flat,
-      // then rebuild the gutter.
-      const pre = e.target?.closest?.('.kuro-code')
-      if (pre) {
-        this._normalizeCodeContent(pre)
-        this._updateCodeGutter(pre)
-      }
+      // Code blocks are <textarea>-based now; their own input listener handles
+      // gutter sync. Nothing to do at the wysiwyg level.
     })
 
     // Remember caret before losing focus (for emoji insert after panel opens)
@@ -3834,6 +3960,9 @@ export class KuroEditor {
       }
     }
 
+    // Code-block handling is no longer needed here — code is now a real
+    // <textarea> inside a non-editable wrapper, so Enter/Tab work natively.
+
     // ── Tab → block indent / Shift+Tab → outdent ──────────────────────────
     // Per spec §段落1: Tab indents the containing block element by one level
     // (2 em), Shift+Tab outdents.  We use padding-left on the block rather than
@@ -3842,34 +3971,6 @@ export class KuroEditor {
       e.preventDefault()
       this._shiftBlockIndent(e.shiftKey ? -1 : 1)
       return
-    }
-
-    // ── Enter inside a code block → insert a plain "\n" via DOM ───────────
-    // contenteditable defaults to wrapping new lines in <div>/<p> on Enter,
-    // which corrupts our line-based code model.  execCommand('insertText','\n')
-    // is unreliable in <pre><code> (Safari may still insert a <div>).
-    // Direct DOM insertion of a literal "\n" text node guarantees correctness.
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-      const sel = window.getSelection()
-      if (sel?.rangeCount) {
-        const range0 = sel.getRangeAt(0)
-        let cur = range0.startContainer
-        if (cur.nodeType === Node.TEXT_NODE) cur = cur.parentElement
-        const pre = cur?.closest?.('.kuro-code')
-        if (pre) {
-          e.preventDefault()
-          range0.deleteContents()
-          const tn = document.createTextNode('\n')
-          range0.insertNode(tn)
-          const after = document.createRange()
-          after.setStartAfter(tn)
-          after.collapse(true)
-          sel.removeAllRanges()
-          sel.addRange(after)
-          this._updateCodeGutter(pre)
-          return
-        }
-      }
     }
 
     // ── Enter at empty line of blockquote / callout → exit the wrapper ────
@@ -3932,8 +4033,10 @@ export class KuroEditor {
     if (this._mode === mode) return
 
     if (mode === 'source') {
-      // WYSIWYG → Source: reverse-render special links
-      this.sourceArea.value = prettifyHTML(unrenderSpecialLinks(this.wysiwyg.innerHTML))
+      // WYSIWYG → Source: serialize code-block textareas, then reverse-render
+      const clone = this.wysiwyg.cloneNode(true)
+      this._serializeCodeBlocksToHtml(clone)
+      this.sourceArea.value = prettifyHTML(unrenderSpecialLinks(clone.innerHTML))
       this.pane.classList.add('kuro-pane--source')
       this.tabWysiwyg.classList.remove('kuro-tab--active')
       this.tabSource.classList.add('kuro-tab--active')
@@ -3946,7 +4049,7 @@ export class KuroEditor {
       this.tabWysiwyg.classList.add('kuro-tab--active')
       this.tocPanelEl.classList.remove('kuro-toc--hidden')
       this.toc._doUpdate()
-      this._updateCodeGutters()
+      this._initAllCodeBlocks()
     }
 
     this._mode = mode
@@ -4785,10 +4888,47 @@ export class KuroEditor {
     this.tabTocBtn.classList.toggle('kuro-tabs__toc-btn--active', this._tocEnabled)
     if (this._tocEnabled) {
       this.tocPanelEl.classList.remove('kuro-toc--user-hidden')
+      // Restore the user-chosen width (if any) from the previous session
+      if (this._tocWidth !== null) this.tocPanelEl.style.width = `${this._tocWidth}px`
       this.toc._doUpdate()   // re-evaluate heading-based visibility
     } else {
       this.tocPanelEl.classList.add('kuro-toc--user-hidden')
     }
+  }
+
+  /**
+   * Hook up drag-resize on the small handle between the edit pane and the ToC.
+   * The chosen width is held on the editor instance (this._tocWidth) so the
+   * value survives toggling the ToC closed/open within the same session.
+   */
+  _bindTocResizer() {
+    const MIN = 140   // px
+    const MAX = 600   // px
+
+    this.tocResizer.addEventListener('mousedown', (e) => {
+      // Only react to the primary mouse button
+      if (e.button !== 0) return
+      e.preventDefault()
+
+      const startX     = e.clientX
+      const startWidth = this.tocPanelEl.getBoundingClientRect().width
+
+      const onMove = (ev) => {
+        // Dragging left widens the ToC; dragging right shrinks it
+        const delta = startX - ev.clientX
+        const w = Math.max(MIN, Math.min(MAX, startWidth + delta))
+        this.tocPanelEl.style.width = `${w}px`
+        this._tocWidth = w
+      }
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup',   onUp)
+        document.body.classList.remove('kuro-toc-resizing')
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup',   onUp)
+      document.body.classList.add('kuro-toc-resizing')
+    })
   }
 
   _handleMMenu(id, anchorEl = null) {
@@ -4814,164 +4954,127 @@ export class KuroEditor {
     execFormat('insertHTML', createTableHtml(3, 3) + '<p><br></p>')
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CODE BLOCK (textarea-based — simple and reliable)
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // DOM:
+  //   <div class="kuro-code-wrap" contenteditable="false">
+  //     <div class="kuro-code__gutter">1</div>
+  //     <textarea class="kuro-code__area"></textarea>
+  //   </div>
+  //
+  // The <textarea> handles all editing natively — Enter inserts "\n",
+  // Tab is intercepted to insert "\t" instead of jumping focus, gutter is
+  // synced on every input.  Save form is <pre><code>…</code></pre>.
+
   _insertCodeBlock() {
     this.wysiwyg.focus()
-    execFormat('insertHTML',
-      `<pre class="kuro-code" spellcheck="false"><code contenteditable="true"></code></pre><p><br></p>`)
+    execFormat('insertHTML', this._buildCodeBlockHtml('') + '<p><br></p>')
     requestAnimationFrame(() => {
-      const codes = this.wysiwyg.querySelectorAll('.kuro-code code')
-      const code  = codes[codes.length - 1]
-      if (code) {
-        const pre = code.closest('.kuro-code')
-        if (pre) this._updateCodeGutter(pre)
-        const sel   = window.getSelection()
-        const range = document.createRange()
-        range.setStart(code, 0)
-        range.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(range)
-      }
+      const wraps = this.wysiwyg.querySelectorAll('.kuro-code-wrap')
+      const wrap  = wraps[wraps.length - 1]
+      if (!wrap) return
+      this._wireCodeBlock(wrap)
+      wrap.querySelector('.kuro-code__area')?.focus()
     })
   }
 
-  /**
-   * Rebuild the line-number gutter for a single code block.
-   *
-   * Line counting needs to handle BOTH cases:
-   *   - plain text with embedded "\n"  (our preferred form, after Enter is fixed)
-   *   - DOM with <br> or block children (legacy / pasted / corrupted content)
-   *
-   * Strategy: count text-node newlines + count <br> + count block descendants
-   * minus 1, then take max(1).
-   */
-  _updateCodeGutter(pre) {
-    let gutter = pre.querySelector('.kuro-code__gutter')
-    if (!gutter) {
-      gutter = createElement('div', { className: 'kuro-code__gutter', attrs: { 'aria-hidden': 'true' } })
-      pre.insertBefore(gutter, pre.firstChild)
-    }
-    const code = pre.querySelector('code')
-    if (!code) return
-
-    // Walk all text nodes inside <code>, joining them with line breaks
-    // wherever a <br> or a block-level element boundary occurs.
-    let text = ''
-    const walk = (node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        text += node.textContent
-        return
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) return
-      const tag = node.tagName
-      if (tag === 'BR') { text += '\n'; return }
-      const isBlock = tag === 'DIV' || tag === 'P'
-      if (isBlock && text && !text.endsWith('\n')) text += '\n'
-      for (const child of node.childNodes) walk(child)
-      if (isBlock && !text.endsWith('\n')) text += '\n'
-    }
-    for (const child of code.childNodes) walk(child)
-    // Trim a single trailing newline (presented blockwise gives a phantom line)
-    if (text.endsWith('\n')) text = text.slice(0, -1)
-
-    const lineCount = Math.max(1, text.split('\n').length)
-    gutter.innerHTML = Array.from({ length: lineCount }, (_, i) => `<span>${i + 1}</span>`).join('')
+  /** Build initial HTML for a (possibly pre-filled) code block. */
+  _buildCodeBlockHtml(content) {
+    const escaped = (content || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+    return (
+      `<div class="kuro-code-wrap" contenteditable="false">` +
+        `<div class="kuro-code__gutter" aria-hidden="true">1</div>` +
+        `<textarea class="kuro-code__area" spellcheck="false" cols="1" rows="1" wrap="off">${escaped}</textarea>` +
+      `</div>`
+    )
   }
 
-  /** Rebuild gutters for all code blocks in the wysiwyg. */
-  _updateCodeGutters() {
-    for (const pre of this.wysiwyg.querySelectorAll('.kuro-code')) {
-      this._normalizeCodeContent(pre)
-      this._updateCodeGutter(pre)
-    }
-  }
+  /** Attach input / Tab / autosize handlers to a code-block textarea. */
+  _wireCodeBlock(wrap) {
+    const ta = wrap.querySelector('.kuro-code__area')
+    if (!ta || ta._kuroWired) return
+    ta._kuroWired = true
 
-  /**
-   * Flatten any block-wrapper junk Chrome / Safari injected into a code block
-   * back to a single text node with embedded "\n".  Preserves caret position
-   * relative to the user's typed character offset within the code's text.
-   *
-   * Without this, the structure can end up as
-   *   <code><div>line1</div><div>line2</div></code>
-   * which visually breaks lines but reports the wrong textContent length and
-   * line count to our gutter renderer.
-   */
-  _normalizeCodeContent(pre) {
-    const code = pre.querySelector('code')
-    if (!code) return
-
-    // Build the flat text representation by walking children
-    let flat = ''
-    const walk = (node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        flat += node.textContent
-        return
+    const sync = () => {
+      ta.style.height = 'auto'
+      ta.style.height = (ta.scrollHeight + 2) + 'px'
+      const gutter = wrap.querySelector('.kuro-code__gutter')
+      if (gutter) {
+        const n = Math.max(1, ta.value.split('\n').length)
+        gutter.textContent = Array.from({ length: n }, (_, i) => i + 1).join('\n')
       }
-      if (node.nodeType !== Node.ELEMENT_NODE) return
-      const tag = node.tagName
-      if (tag === 'BR') { flat += '\n'; return }
-      const isBlock = tag === 'DIV' || tag === 'P'
-      if (isBlock && flat && !flat.endsWith('\n')) flat += '\n'
-      for (const child of node.childNodes) walk(child)
-      if (isBlock && !flat.endsWith('\n')) flat += '\n'
-    }
-    for (const child of code.childNodes) walk(child)
-    if (flat.endsWith('\n')) flat = flat.slice(0, -1)
-
-    // If <code> already contains only a single text node equal to `flat`, nothing to do.
-    if (code.childNodes.length === 1 &&
-        code.firstChild.nodeType === Node.TEXT_NODE &&
-        code.firstChild.textContent === flat) {
-      return
     }
 
-    // Capture caret offset relative to the START of the code element's text
-    const sel = window.getSelection()
-    let caretOffset = -1
-    if (sel?.rangeCount) {
-      const r = sel.getRangeAt(0)
-      if (code.contains(r.startContainer) || code === r.startContainer) {
-        const tmp = document.createRange()
-        tmp.setStart(code, 0)
-        tmp.setEnd(r.startContainer, r.startOffset)
-        caretOffset = tmp.toString().length
-        // Adjust: tmp.toString() doesn't include \n for block boundaries
-        // so we recompute properly by walking up to the caret container.
-        let acc = ''
-        const walkToCaret = (node, stopNode, stopOffset) => {
-          if (node === stopNode) {
-            if (node.nodeType === Node.TEXT_NODE) acc += node.textContent.slice(0, stopOffset)
-            return true
-          }
-          if (node.nodeType === Node.TEXT_NODE) { acc += node.textContent; return false }
-          if (node.nodeType !== Node.ELEMENT_NODE) return false
-          const tag = node.tagName
-          if (tag === 'BR') { acc += '\n'; return false }
-          const isBlock = tag === 'DIV' || tag === 'P'
-          if (isBlock && acc && !acc.endsWith('\n')) acc += '\n'
-          for (const child of node.childNodes) {
-            if (walkToCaret(child, stopNode, stopOffset)) return true
-          }
-          if (isBlock && !acc.endsWith('\n')) acc += '\n'
-          return false
+    ta.addEventListener('input', sync)
+
+    ta.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return
+      e.preventDefault()
+      const start = ta.selectionStart
+      const end   = ta.selectionEnd
+      if (e.shiftKey) {
+        // Shift+Tab → outdent the current line by one tab or two spaces
+        const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1
+        let remove = 0
+        if (ta.value[lineStart] === '\t') remove = 1
+        else if (ta.value.slice(lineStart, lineStart + 2) === '  ') remove = 2
+        else if (ta.value[lineStart] === ' ') remove = 1
+        if (remove > 0) {
+          ta.value = ta.value.slice(0, lineStart) + ta.value.slice(lineStart + remove)
+          ta.selectionStart = ta.selectionEnd = Math.max(lineStart, start - remove)
+          sync()
         }
-        walkToCaret(code, r.startContainer, r.startOffset)
-        caretOffset = acc.length
+      } else {
+        ta.value = ta.value.slice(0, start) + '\t' + ta.value.slice(end)
+        ta.selectionStart = ta.selectionEnd = start + 1
+        sync()
       }
-    }
+    })
 
-    // Replace contents with a single text node
-    code.textContent = flat
+    sync()   // initial autosize + gutter
+  }
 
-    // Restore caret
-    if (caretOffset >= 0 && code.firstChild) {
-      const tn = code.firstChild
-      const off = Math.min(caretOffset, tn.textContent.length)
-      const nr = document.createRange()
-      nr.setStart(tn, off)
-      nr.collapse(true)
-      sel?.removeAllRanges()
-      sel?.addRange(nr)
+  /**
+   * Convert any legacy <pre.kuro-code><code> back to the new wrap, then wire
+   * every wrap (including freshly-loaded HTML).
+   */
+  _initAllCodeBlocks() {
+    // ① Migrate legacy pre+code to the wrap structure
+    for (const pre of this.wysiwyg.querySelectorAll('pre.kuro-code')) {
+      if (pre.closest('.kuro-code-wrap')) continue
+      const code = pre.querySelector('code')
+      const tmp = document.createElement('div')
+      tmp.innerHTML = this._buildCodeBlockHtml(code ? code.textContent : '')
+      pre.replaceWith(tmp.firstChild)
     }
+    // ② Wire all wraps
+    for (const wrap of this.wysiwyg.querySelectorAll('.kuro-code-wrap')) {
+      this._wireCodeBlock(wrap)
+    }
+  }
+
+  /**
+   * Replace each <textarea>-based wrap in `root` with a serialisable
+   * <pre><code>…</code></pre> capturing the live textarea value (which
+   * is not present in innerHTML for cloned trees).
+   */
+  _serializeCodeBlocksToHtml(root) {
+    const live  = Array.from(this.wysiwyg.querySelectorAll('.kuro-code-wrap'))
+    const clone = Array.from(root.querySelectorAll('.kuro-code-wrap'))
+    clone.forEach((wrap, i) => {
+      const value = live[i]?.querySelector('.kuro-code__area')?.value ?? ''
+      const pre  = document.createElement('pre')
+      pre.className = 'kuro-code'
+      const code = document.createElement('code')
+      code.textContent = value
+      pre.appendChild(code)
+      wrap.replaceWith(pre)
+    })
   }
 
   _insertHR() {
@@ -5005,7 +5108,7 @@ export class KuroEditor {
     this.wysiwyg.innerHTML = rendered
     if (this._mode === 'source') this.sourceArea.value = html ?? ''
     this.toc._doUpdate()
-    this._updateCodeGutters()
+    this._initAllCodeBlocks()
   }
 
   /**
@@ -5014,7 +5117,10 @@ export class KuroEditor {
    */
   getContent() {
     if (this._mode === 'source') return this.sourceArea.value
-    return unrenderSpecialLinks(this.wysiwyg.innerHTML)
+    // Clone the live tree, then serialize code-block textareas to <pre><code>.
+    const clone = this.wysiwyg.cloneNode(true)
+    this._serializeCodeBlocksToHtml(clone)
+    return unrenderSpecialLinks(clone.innerHTML)
   }
 
   /**
