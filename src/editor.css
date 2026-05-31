@@ -271,6 +271,44 @@
     @apply hidden;
   }
 
+  /* ── ToC resizer ─────────────────────────────────────────────────── */
+  /* Sits between the edit pane and the ToC. Drag to resize the ToC width.
+     Hover shows an indigo highlight band; the hit area is wider than the
+     visible line for easier grabbing. */
+  .kuro-toc-resizer {
+    flex-shrink: 0;
+    width: 6px;
+    cursor: col-resize;
+    position: relative;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .kuro-toc-resizer::before {
+    content: '';
+    position: absolute;
+    inset: 0 2px;
+    background: theme('colors.neutral.700');
+    transition: background 0.15s;
+  }
+  .kuro-toc-resizer:hover::before {
+    background: theme('colors.indigo.500');
+  }
+
+  /* When the ToC is hidden, hide the resizer too.
+     :has() is supported in Chrome 105+, Safari 15.4+, Firefox 121+ — which
+     covers all KuroEditor target browsers. */
+  .kuro-body:has(.kuro-toc.kuro-toc--hidden) .kuro-toc-resizer,
+  .kuro-body:has(.kuro-toc.kuro-toc--user-hidden) .kuro-toc-resizer {
+    display: none;
+  }
+
+  /* Freeze cursor + disable text selection while dragging */
+  body.kuro-toc-resizing,
+  body.kuro-toc-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
   .kuro-toc__title {
     @apply px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-neutral-500;
   }
@@ -850,52 +888,80 @@
     border-top: 2px solid theme('colors.neutral.600');
   }
 
-  /* ── Code block ── */
-  .kuro-code {
+  /* ── Code block ──
+     Structure (textarea-based):
+       <div.kuro-code-wrap contenteditable="false">
+         <div.kuro-code__gutter>1\n2\n3</div>
+         <textarea.kuro-code__area>...</textarea>
+     The <textarea> is the actual editor; the contenteditable wrap protects
+     it from wysiwyg-level selection/keyboard behaviour. */
+  .kuro-code-wrap {
     @apply my-4 rounded-xl overflow-hidden
-           bg-neutral-950 border border-neutral-700
-           flex;
+           bg-neutral-950 border border-neutral-700;
+    /* grid is strict about column widths. minmax(0, 1fr) bypasses the implicit
+       min-content (= textarea's internal content width) so the gutter column
+       never grows beyond 3rem regardless of how long lines in the textarea get. */
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  /* Both gutter and textarea must share identical font / line-height / padding-top
+     so their lines align exactly. box-sizing: border-box keeps padding inside the
+     measured height. */
+  .kuro-code__gutter,
+  .kuro-code__area {
+    box-sizing: border-box;
+    font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 0.875rem;
+    line-height: 1.5rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    margin: 0;
   }
 
   .kuro-code__gutter {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    min-width: 2.75rem;
-    padding: 1rem 0.5rem 1rem 0.75rem;
+    /* In grid, the column is fixed at 3rem above — no flex tweaks needed */
+    padding-left: 0.75rem;
+    padding-right: 0.5rem;
     background-color: #0c0c0f;
     border-right: 1px solid theme('colors.neutral.700');
     color: theme('colors.neutral.600');
-    font-size: 0.75rem;
-    font-family: ui-monospace, monospace;
-    line-height: 1.5rem;
-    user-select: none;
-    flex-shrink: 0;
-  }
-
-  .kuro-code__gutter span {
-    display: block;
-    line-height: 1.5rem;
-  }
-
-  .kuro-code code {
-    @apply block p-4 text-sm font-mono text-green-300 overflow-x-auto outline-none;
+    text-align: right;
     white-space: pre;
-    flex: 1;
+    user-select: none;
+    overflow: hidden;
     min-width: 0;
-    line-height: 1.5rem;
   }
 
-  /* Code is ALWAYS left-aligned, even if the parent paragraph had text-align:justify
-     and Chrome's contenteditable inserted <div>/<p> children on Enter that would
-     otherwise inherit it.  !important defeats inline styles inherited from above. */
-  .kuro-code,
-  .kuro-code *,
-  .kuro-code code,
-  .kuro-code code * {
-    text-align: left !important;
-    text-align-last: left !important;
-    text-justify: auto !important;
+  .kuro-code__area {
+    width: 100%;        /* fill the grid cell */
+    min-width: 0;       /* allow shrinking inside grid cell */
+    padding-left: 1rem;
+    padding-right: 1rem;
+    background: transparent;
+    color: theme('colors.green.300');
+    border: 0;
+    outline: 0;
+    resize: none;
+    overflow-x: auto;   /* long lines scroll horizontally inside the cell */
+    overflow-y: hidden; /* height is JS-managed */
+    white-space: pre;
+    word-wrap: normal;
+    tab-size: 2;
+    -moz-tab-size: 2;
+    caret-color: theme('colors.green.300');
+    vertical-align: top;
+    display: block;
+  }
+
+  /* Legacy <pre.kuro-code> fallback (for HTML content rendered as-is) */
+  pre.kuro-code:not(.kuro-code-wrap pre.kuro-code) {
+    @apply my-4 rounded-xl overflow-hidden
+           bg-neutral-950 border border-neutral-700
+           p-4 text-sm font-mono text-green-300 overflow-x-auto;
+    white-space: pre;
+    tab-size: 2;
   }
 
   /* ── Table ── */

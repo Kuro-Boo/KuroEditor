@@ -35,10 +35,16 @@
     .sample-header__left  { display: flex; align-items: center; gap: 1rem; }
     .sample-header__right { display: flex; align-items: center; gap: 0.75rem; }
     .sample-logo {
-      font-size: 1.125rem; font-weight: 700; color: #818cf8;
-      transition: color 0.2s;
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-size: 1.25rem; font-weight: 700;
+      font-style: italic;
+      transition: opacity 0.2s;
     }
-    .sample-logo:hover { color: #a5b4fc; }
+    .sample-logo:hover { opacity: 0.85; }
+    .sample-logo__icon { width: 1.75rem; height: 1.75rem; flex-shrink: 0; }
+    .sample-logo__name   { white-space: nowrap; }
+    .sample-logo__kuro   { color: #ffffff; }
+    .sample-logo__editor { color: #818cf8; }
     .sample-subtitle { font-size: 0.875rem; color: #71717a; }
     .sample-version {
       font-size: 0.75rem; font-family: monospace;
@@ -168,7 +174,10 @@
   <!-- ヘッダー -->
   <header class="sample-header">
     <div class="sample-header__left">
-      <a href="../" class="sample-logo">⬛ KuroEditor</a>
+      <a href="../" class="sample-logo">
+        <img src="../assets/favicon.svg" alt="" class="sample-logo__icon">
+        <span class="sample-logo__name"><span class="sample-logo__kuro">Kuro</span><span class="sample-logo__editor">Editor</span></span>
+      </a>
       <span class="sample-subtitle">— サンプル / 動作確認</span>
     </div>
     <div class="sample-header__right">
