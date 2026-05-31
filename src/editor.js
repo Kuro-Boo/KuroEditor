@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.15'
+export const VERSION = '0.3.16'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -609,9 +609,11 @@ function applyMediaLayout(figure, size, align) {
  * @returns {string}
  */
 export function createTableHtml(rows = 2, cols = 2) {
-  const th    = Array.from({ length: cols }, () => '<th contenteditable="true"><br></th>').join('')
-  const tdRow = Array.from({ length: cols }, () => '<td contenteditable="true"><br></td>').join('')
-  const allRows = `<tr>${th}</tr>` + Array.from({ length: rows - 1 }, () => `<tr>${tdRow}</tr>`).join('')
+  // ヘッダー行 (<th> / <thead>) の概念は廃止。全セル <td> で統一する。
+  // <th> 固有の background-color が inline スタイルの解除をマスクする問題と、
+  // <thead>/<tbody> の境界が縦方向の rowspan を妨げる問題を同時に解消する。
+  const tdRow   = Array.from({ length: cols }, () => '<td contenteditable="true"><br></td>').join('')
+  const allRows = Array.from({ length: rows }, () => `<tr>${tdRow}</tr>`).join('')
   return `<table class="kuro-table"><tbody>${allRows}</tbody></table>`
 }
 
@@ -1794,20 +1796,14 @@ export class TableManager {
   }
 
   _buildColorPanel() {
-    // mousedown のタイミングで対象セルを掴んでおく。
-    // onClear / onPick が呼ばれる時には selection が崩れていることがあり、
-    // 特に最初のヘッダー行 (<th>) で「解除できない」現象が起きる。
-    let target = null
     const picker = new ColorPicker({
-      onBeforePick: () => { target = this._cell() },
       onPick: (color) => {
-        const cell = target ?? this._cell()
+        const cell = this._cell()
         if (cell) cell.style.backgroundColor = color
         this._hideColorPanel()
       },
       onClear: () => {
-        const cell = target ?? this._cell()
-        cell?.style.removeProperty('background-color')
+        this._cell()?.style.removeProperty('background-color')
         this._hideColorPanel()
       },
     })
@@ -2219,14 +2215,14 @@ export class TableInserter {
   }
 
   _insertRow(index) {
+    // ヘッダー行廃止: 新規セルは常に <td>。
     const rows = Array.from(this.activeTable.querySelectorAll('tr'))
     if (!rows.length) return
     const refRow = rows[Math.min(index, rows.length - 1)]
-    const isHead = refRow.closest('thead') !== null
     const cols   = refRow.cells.length
     const newRow = document.createElement('tr')
     for (let i = 0; i < cols; i++) {
-      const cell = document.createElement(isHead ? 'th' : 'td')
+      const cell = document.createElement('td')
       cell.setAttribute('contenteditable', 'true')
       cell.innerHTML = '<br>'
       newRow.appendChild(cell)
@@ -2239,10 +2235,10 @@ export class TableInserter {
   }
 
   _insertCol(index) {
+    // ヘッダー行廃止: 新規セルは常に <td>。
     Array.from(this.activeTable.querySelectorAll('tr')).forEach(row => {
-      const cells  = row.cells
-      const isHead = row.closest('thead') !== null
-      const cell   = document.createElement(isHead ? 'th' : 'td')
+      const cells = row.cells
+      const cell  = document.createElement('td')
       cell.setAttribute('contenteditable', 'true')
       cell.innerHTML = '<br>'
       if (index >= cells.length) {
