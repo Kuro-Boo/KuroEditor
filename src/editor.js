@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.9'
+export const VERSION = '0.3.10'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -5015,6 +5015,16 @@ export class KuroEditor {
       }
     }
 
+    // ── Stop all keyboard / input / mouse events from bubbling to wysiwyg ──
+    // The outer .kuro-code-wrap is contenteditable="false" but events still
+    // propagate.  Without stopPropagation, wysiwyg-level Tab handler would
+    // run and add padding-left to the wrap on every Tab press.
+    const stop = (e) => e.stopPropagation()
+    ;['input', 'keydown', 'keyup', 'keypress', 'paste', 'cut', 'copy',
+      'mousedown', 'mouseup', 'click'].forEach(evt => {
+      ta.addEventListener(evt, stop)
+    })
+
     ta.addEventListener('input', sync)
 
     ta.addEventListener('keydown', (e) => {
@@ -5023,7 +5033,6 @@ export class KuroEditor {
       const start = ta.selectionStart
       const end   = ta.selectionEnd
       if (e.shiftKey) {
-        // Shift+Tab → outdent the current line by one tab or two spaces
         const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1
         let remove = 0
         if (ta.value[lineStart] === '\t') remove = 1
