@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.20'
+export const VERSION = '0.3.21'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -1226,6 +1226,11 @@ export class PopupMenu {
         attrs: { type: 'button', title: label },
       })
       fb.style.fontFamily = value   // ← each row renders in its own font
+      // Web フォントが unloaded のままだとプレビューに反映されない。
+      // .load() で先読みすると、 解決後に再描画されてフォント自体で表示される。
+      if (typeof document.fonts?.load === 'function') {
+        document.fonts.load(`1rem "${label}"`).catch(() => {})
+      }
       this._bindSubBtn(fb, () => {
         this._selectedWebFont = label
         this._updateWebFontsBtnLabel()
@@ -1237,7 +1242,14 @@ export class PopupMenu {
     }
   }
 
-  _showWebFontList()   { this._webFontListPanel?.classList.add('kuro-popm__web-fonts--visible') }
+  _showWebFontList() {
+    if (!this._webFontListPanel || !this._webFontsBtn) return
+    // Web-Fonts ボタンの直右に隙間なしで貼り付ける (popm 自体が position:fixed)。
+    const r = this._webFontsBtn.getBoundingClientRect()
+    this._webFontListPanel.style.left = `${Math.round(r.right + 2)}px`
+    this._webFontListPanel.style.top  = `${Math.round(r.top)}px`
+    this._webFontListPanel.classList.add('kuro-popm__web-fonts--visible')
+  }
   _hideWebFontList()   { this._webFontListPanel?.classList.remove('kuro-popm__web-fonts--visible') }
   _toggleWebFontList() {
     this._webFontListPanel?.classList.contains('kuro-popm__web-fonts--visible')
@@ -1264,7 +1276,11 @@ export class PopupMenu {
 
     if (typeof document.fonts?.[Symbol.iterator] === 'function') {
       for (const ff of document.fonts) {
-        if (ff.status !== 'loaded') continue
+        // 'loaded' に加えて 'unloaded' も含める。
+        // Google Fonts (display=swap) はページで実際に使われるまで unloaded のまま。
+        // 候補リストには出した上で、 ボタンに対して .load() を呼んで即プリロード
+        // することでプレビューもライブで表示される。
+        if (ff.status === 'error') continue
         const family = ff.family
         if (!family || blacklist.has(family) || seen.has(family)) continue
         seen.add(family)
