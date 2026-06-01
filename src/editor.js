@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.18'
+export const VERSION = '0.3.19'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -1139,27 +1139,87 @@ export class PopupMenu {
     this._mainRow.appendChild(btn)
 
     // ── Picker panel ──────────────────────────────────────────────────────
-    this._fontFamilyPanel = createElement('div', { className: 'kuro-popm__sizes' })
-    this._fontFamilyBtns  = []
+    this._fontFamilyPanel    = createElement('div', { className: 'kuro-popm__sizes' })
+    this._fontFamilyBtns     = []
+    this._fontFamilyApplyFn  = applyFn   // used by re-render on each open
 
-    for (const { label, value, base } of FONT_FAMILY_OPTIONS) {
+    this._renderFontFamilyList()         // initial render
+    this.el.appendChild(this._fontFamilyPanel)
+    return this
+  }
+
+  /**
+   * (Re-)render the font picker panel. Pulls in:
+   *   ① FONT_FAMILY_OPTIONS   — built-in system-font categories (ゴシック / 明朝)
+   *   ② document.fonts        — loaded web fonts (auto-detected at render time)
+   * The web fonts are listed after a divider so the host's "extras" are
+   * visually separated from the always-available base options.
+   */
+  _renderFontFamilyList() {
+    if (!this._fontFamilyPanel || !this._fontFamilyApplyFn) return
+    this._fontFamilyPanel.innerHTML = ''
+    this._fontFamilyBtns = []
+
+    const addBtn = (label, value, base = false) => {
       const fb = createElement('button', {
         className: 'kuro-size-btn' + (base ? ' kuro-size-btn--base' : ''),
         html: label,
         attrs: { type: 'button', title: label, 'data-font': value },
       })
-      // Preview each label using the very font it represents
       fb.style.fontFamily = value
-      this._bindSubBtn(fb, () => { applyFn(value); this._hideFontFamily() })
+      this._bindSubBtn(fb, () => { this._fontFamilyApplyFn(value); this._hideFontFamily() })
       this._fontFamilyBtns.push({ el: fb, value })
       this._fontFamilyPanel.appendChild(fb)
     }
 
-    this.el.appendChild(this._fontFamilyPanel)
-    return this
+    // ① Static categories
+    for (const { label, value, base } of FONT_FAMILY_OPTIONS) addBtn(label, value, base)
+
+    // ② Auto-detected loaded web fonts
+    const webFonts = this._detectLoadedWebFonts()
+    if (webFonts.length > 0) {
+      this._fontFamilyPanel.appendChild(
+        createElement('div', { className: 'kuro-popm__sub-divider' }),
+      )
+      for (const { label, value } of webFonts) addBtn(label, value, false)
+    }
   }
 
-  _showFontFamily()   { this._fontFamilyPanel?.classList.add('kuro-popm__sizes--visible') }
+  /**
+   * Scan `document.fonts` for currently-loaded web fonts and return them as
+   * {label, value} entries. Family names that are already referenced by the
+   * built-in FONT_FAMILY_OPTIONS (Hiragino etc.) are skipped to avoid
+   * duplication, since those are system fonts, not "custom" web fonts.
+   */
+  _detectLoadedWebFonts() {
+    const out  = []
+    const seen = new Set()
+
+    // Family names already used inside the static OS-font categories
+    const blacklist = new Set()
+    for (const { value } of FONT_FAMILY_OPTIONS) {
+      for (const part of value.split(',')) {
+        blacklist.add(part.trim().replace(/^["']|["']$/g, ''))
+      }
+    }
+
+    if (typeof document.fonts?.[Symbol.iterator] === 'function') {
+      for (const ff of document.fonts) {
+        if (ff.status !== 'loaded') continue
+        const family = ff.family
+        if (!family || blacklist.has(family) || seen.has(family)) continue
+        seen.add(family)
+        out.push({ label: family, value: `"${family}", sans-serif` })
+      }
+    }
+    return out
+  }
+
+  _showFontFamily()   {
+    // Web fonts can be loaded after the editor was created — re-detect on open.
+    this._renderFontFamilyList()
+    this._fontFamilyPanel?.classList.add('kuro-popm__sizes--visible')
+  }
   _hideFontFamily()   { this._fontFamilyPanel?.classList.remove('kuro-popm__sizes--visible') }
   _toggleFontFamily() {
     this._fontFamilyPanel?.classList.contains('kuro-popm__sizes--visible')
