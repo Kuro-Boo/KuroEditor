@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.19'
+export const VERSION = '0.3.20'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -1138,51 +1138,110 @@ export class PopupMenu {
     })
     this._mainRow.appendChild(btn)
 
-    // ── Picker panel ──────────────────────────────────────────────────────
-    this._fontFamilyPanel    = createElement('div', { className: 'kuro-popm__sizes' })
-    this._fontFamilyBtns     = []
-    this._fontFamilyApplyFn  = applyFn   // used by re-render on each open
+    // ── Main panel: [ゴシック] [明朝] [Web-Fonts] ─────────────────────────
+    this._fontFamilyPanel   = createElement('div', { className: 'kuro-popm__sizes' })
+    this._fontFamilyBtns    = []
+    this._fontFamilyApplyFn = applyFn
+    this._selectedWebFont   = null
 
-    this._renderFontFamilyList()         // initial render
+    // ── Secondary panel: scrollable web-fonts list (popm の右に出る) ──────
+    this._webFontListPanel  = createElement('div', { className: 'kuro-popm__web-fonts' })
+
+    this._renderFontFamilyMain()
+
     this.el.appendChild(this._fontFamilyPanel)
+    this.el.appendChild(this._webFontListPanel)
     return this
   }
 
   /**
-   * (Re-)render the font picker panel. Pulls in:
-   *   ① FONT_FAMILY_OPTIONS   — built-in system-font categories (ゴシック / 明朝)
-   *   ② document.fonts        — loaded web fonts (auto-detected at render time)
-   * The web fonts are listed after a divider so the host's "extras" are
-   * visually separated from the always-available base options.
+   * Render the 3-button main panel: ゴシック / 明朝 / Web-Fonts.
+   * The Web-Fonts button is disabled when no web font is detected on the page.
    */
-  _renderFontFamilyList() {
+  _renderFontFamilyMain() {
     if (!this._fontFamilyPanel || !this._fontFamilyApplyFn) return
     this._fontFamilyPanel.innerHTML = ''
     this._fontFamilyBtns = []
 
-    const addBtn = (label, value, base = false) => {
+    // ① Static categories (each rendered in its own font for preview)
+    for (const { label, value, base } of FONT_FAMILY_OPTIONS) {
       const fb = createElement('button', {
         className: 'kuro-size-btn' + (base ? ' kuro-size-btn--base' : ''),
         html: label,
         attrs: { type: 'button', title: label, 'data-font': value },
       })
       fb.style.fontFamily = value
-      this._bindSubBtn(fb, () => { this._fontFamilyApplyFn(value); this._hideFontFamily() })
+      this._bindSubBtn(fb, () => {
+        this._selectedWebFont = null
+        this._updateWebFontsBtnLabel()
+        this._fontFamilyApplyFn(value)
+        this._hideWebFontList()
+        this._hideFontFamily()
+      })
       this._fontFamilyBtns.push({ el: fb, value })
       this._fontFamilyPanel.appendChild(fb)
     }
 
-    // ① Static categories
-    for (const { label, value, base } of FONT_FAMILY_OPTIONS) addBtn(label, value, base)
-
-    // ② Auto-detected loaded web fonts
+    // ② Web-Fonts button
     const webFonts = this._detectLoadedWebFonts()
-    if (webFonts.length > 0) {
-      this._fontFamilyPanel.appendChild(
-        createElement('div', { className: 'kuro-popm__sub-divider' }),
-      )
-      for (const { label, value } of webFonts) addBtn(label, value, false)
+    this._webFontsBtn = createElement('button', {
+      className: 'kuro-size-btn kuro-size-btn--webfonts',
+      html: this._webFontsLabel(),
+      attrs: { type: 'button' },
+    })
+    if (webFonts.length === 0) {
+      this._webFontsBtn.disabled = true
+      this._webFontsBtn.title    = '読み込まれている Web フォントがありません'
+      this._webFontsBtn.classList.add('kuro-size-btn--disabled')
+    } else {
+      this._webFontsBtn.title = `${webFonts.length} 個の Web フォントが利用可能`
+      this._webFontsBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        this._toggleWebFontList()
+      })
     }
+    this._fontFamilyPanel.appendChild(this._webFontsBtn)
+
+    // ③ Build the scrollable web-fonts list
+    this._renderWebFontList(webFonts)
+  }
+
+  _webFontsLabel() {
+    return this._selectedWebFont
+      ? `Web-Fonts: ${this._selectedWebFont}`
+      : 'Web-Fonts'
+  }
+  _updateWebFontsBtnLabel() {
+    if (this._webFontsBtn) this._webFontsBtn.innerHTML = this._webFontsLabel()
+  }
+
+  /** Build the scrollable web-fonts list (each entry rendered in its own font). */
+  _renderWebFontList(webFonts) {
+    if (!this._webFontListPanel) return
+    this._webFontListPanel.innerHTML = ''
+    for (const { label, value } of webFonts) {
+      const fb = createElement('button', {
+        className: 'kuro-web-font-btn',
+        html: label,
+        attrs: { type: 'button', title: label },
+      })
+      fb.style.fontFamily = value   // ← each row renders in its own font
+      this._bindSubBtn(fb, () => {
+        this._selectedWebFont = label
+        this._updateWebFontsBtnLabel()
+        this._fontFamilyApplyFn(value)
+        this._hideWebFontList()
+        this._hideFontFamily()
+      })
+      this._webFontListPanel.appendChild(fb)
+    }
+  }
+
+  _showWebFontList()   { this._webFontListPanel?.classList.add('kuro-popm__web-fonts--visible') }
+  _hideWebFontList()   { this._webFontListPanel?.classList.remove('kuro-popm__web-fonts--visible') }
+  _toggleWebFontList() {
+    this._webFontListPanel?.classList.contains('kuro-popm__web-fonts--visible')
+      ? this._hideWebFontList() : this._showWebFontList()
   }
 
   /**
@@ -1217,10 +1276,13 @@ export class PopupMenu {
 
   _showFontFamily()   {
     // Web fonts can be loaded after the editor was created — re-detect on open.
-    this._renderFontFamilyList()
+    this._renderFontFamilyMain()
     this._fontFamilyPanel?.classList.add('kuro-popm__sizes--visible')
   }
-  _hideFontFamily()   { this._fontFamilyPanel?.classList.remove('kuro-popm__sizes--visible') }
+  _hideFontFamily()   {
+    this._fontFamilyPanel?.classList.remove('kuro-popm__sizes--visible')
+    this._hideWebFontList()
+  }
   _toggleFontFamily() {
     this._fontFamilyPanel?.classList.contains('kuro-popm__sizes--visible')
       ? this._hideFontFamily() : this._showFontFamily()
