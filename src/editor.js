@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.17'
+export const VERSION = '0.3.18'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -934,6 +934,7 @@ export class PopupMenu {
       this._hideListStyles()
       this._hideULStyles()
       this._hideCalloutPanel()
+      this._hideFontFamily()
       this._toggleColors()
     })
     this._mainRow.appendChild(btn)
@@ -964,6 +965,7 @@ export class PopupMenu {
       this._hideListStyles()
       this._hideULStyles()
       this._hideCalloutPanel()
+      this._hideFontFamily()
       this._toggleSizes()
     })
     this._mainRow.appendChild(btn)
@@ -1080,6 +1082,7 @@ export class PopupMenu {
       this._hideListStyles()
       this._hideULStyles()
       this._hideCalloutPanel()
+      this._hideFontFamily()
       this._toggleLineHeights()
     })
     this._mainRow.appendChild(btn)
@@ -1652,6 +1655,7 @@ export class PopupMenu {
     this._hideListStyles()
     this._hideULStyles()
     this._hideCalloutPanel()
+    this._hideFontFamily()
   }
 
   _updateActiveStates() {
@@ -3527,6 +3531,7 @@ export class KuroEditor {
       .addDivider()
       .addColorButton()
       .addFontSizeButton((size) => this._applyFontSize(size))
+      .addFontFamilyButton((family) => this._applyFontFamily(family))
       .addLineHeightButton((lh) => this._applyLineHeight(lh))
       .addDivider()
       .addButton(ICON.alignLeft,    'justifyLeft',   () => this._format('justifyLeft'))
@@ -4663,6 +4668,69 @@ export class KuroEditor {
       if (!range.intersectsNode(span)) continue
 
       span.style.removeProperty('font-size')
+
+      const hasStyle = span.style.cssText.trim() !== ''
+      const hasClass = span.className !== ''
+      const hasExtra = Array.from(span.attributes).some(a => a.name !== 'style' && a.name !== 'class')
+      if (!hasStyle && !hasClass && !hasExtra) {
+        const parent = span.parentNode
+        while (span.firstChild) parent.insertBefore(span.firstChild, span)
+        span.remove()
+      }
+    }
+  }
+
+  /**
+   * Apply a font-family (CSS value, e.g. "'Hiragino Mincho ProN', serif") to
+   * the current selection. Mirrors _applyFontSize: clear any existing
+   * font-family spans first, then wrap in a new span — unless the chosen
+   * value is the base (= default), in which case clearing alone is enough.
+   */
+  _applyFontFamily(family) {
+    this._clearFontFamily()
+
+    const baseValue = FONT_FAMILY_OPTIONS.find(o => o.base)?.value ?? ''
+    if (family === baseValue) return    // 既定 (= ゴシック) はクリアのみで十分
+
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return
+    const range = sel.getRangeAt(0)
+    if (range.collapsed) return
+
+    const span = document.createElement('span')
+    span.style.fontFamily = family
+
+    try {
+      range.surroundContents(span)
+    } catch {
+      span.appendChild(range.extractContents())
+      range.insertNode(span)
+      try {
+        sel.setBaseAndExtent(span, 0, span, span.childNodes.length)
+      } catch {
+        try {
+          const nr = document.createRange()
+          nr.selectNodeContents(span)
+          sel.removeAllRanges()
+          sel.addRange(nr)
+        } catch (_) {}
+      }
+    }
+    if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
+  }
+
+  /** Remove font-family from every span inside the selection that carries one. */
+  _clearFontFamily() {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return
+    const range = sel.getRangeAt(0)
+
+    const spans = Array.from(this.wysiwyg.querySelectorAll('span[style]'))
+    for (const span of spans) {
+      if (!span.style.fontFamily) continue
+      if (!range.intersectsNode(span)) continue
+
+      span.style.removeProperty('font-family')
 
       const hasStyle = span.style.cssText.trim() !== ''
       const hasClass = span.className !== ''
