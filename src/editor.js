@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.25'
+export const VERSION = '0.3.26'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -3772,17 +3772,29 @@ export class KuroEditor {
       attrs: { type: 'button', title: '目次パネル (Alt+T)', 'aria-label': '目次パネルの表示切り替え' },
     })
 
-    this.tabBar.appendChild(versionBadge)
-    this.tabBar.appendChild(this.tabWysiwyg)
-    this.tabBar.appendChild(this.tabSource)
-    this.tabBar.appendChild(tabSep)
-    this.tabBar.appendChild(tabActions)
-    this.tabBar.appendChild(tabSpacer)
-    this.tabBar.appendChild(tabAutoWrap)
-    this.tabBar.appendChild(this.tabSaveBtn)
-    this.tabBar.appendChild(tocSep)
-    this.tabBar.appendChild(this.tabTocBtn)
+    // 左右 2 グループ構造 — flex-wrap で改行されても綺麗に分かれる。
+    //  左: バージョン + タブ + アクション
+    //  右: 自動保存 + 保存 + ToC
+    const leftGroup  = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--left' })
+    const rightGroup = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--right' })
+
+    leftGroup.appendChild(versionBadge)
+    leftGroup.appendChild(this.tabWysiwyg)
+    leftGroup.appendChild(this.tabSource)
+    leftGroup.appendChild(tabSep)
+    leftGroup.appendChild(tabActions)
+
+    rightGroup.appendChild(tabAutoWrap)
+    rightGroup.appendChild(this.tabSaveBtn)
+    rightGroup.appendChild(tocSep)
+    rightGroup.appendChild(this.tabTocBtn)
+
+    this.tabBar.appendChild(leftGroup)
+    this.tabBar.appendChild(rightGroup)
     this.root.appendChild(this.tabBar)
+
+    // unused now but keep the variable declarations from causing warnings
+    void tabSpacer
   }
 
   // ── Body = pane (edit) + ToC panel ───────────────────────────────────────
