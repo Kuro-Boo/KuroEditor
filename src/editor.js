@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.23'
+export const VERSION = '0.3.24'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -143,6 +143,16 @@ const ICON = {
     `<rect x="5.3" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
     `<rect x="8.2" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
     `<rect x="2.4" y="7.6" width="7.5" height="1.3" rx="0.3" fill="currentColor" stroke="none"/>` +
+  `</svg>`,
+  // Eye — Preview tab
+  eye: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<path d="M1 8 c2,-4 5,-5 7,-5 s5,1 7,5 c-2,4 -5,5 -7,5 s-5,-1 -7,-5z"/>` +
+    `<circle cx="8" cy="8" r="2"/>` +
+  `</svg>`,
+  // Angle brackets — HTML source tab
+  source: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<polyline points="5,3 1,8 5,13"/>` +
+    `<polyline points="11,3 15,8 11,13"/>` +
   `</svg>`,
   // Blockquote — left vertical bar + three horizontal text lines
   quote: _icn(
@@ -3667,13 +3677,13 @@ export class KuroEditor {
 
     this.tabWysiwyg = createElement('button', {
       className: 'kuro-tab kuro-tab--active',
-      html: 'プレビュー表示',
-      attrs: { type: 'button', 'data-tab': 'wysiwyg' },
+      html: ICON.eye,
+      attrs: { type: 'button', 'data-tab': 'wysiwyg', title: 'プレビュー表示', 'aria-label': 'プレビュー表示' },
     })
     this.tabSource = createElement('button', {
       className: 'kuro-tab',
-      html: 'HTML表示',
-      attrs: { type: 'button', 'data-tab': 'source' },
+      html: ICON.source,
+      attrs: { type: 'button', 'data-tab': 'source', title: 'HTML 表示', 'aria-label': 'HTML 表示' },
     })
 
     // ── Inline action buttons — mirrors mmenu so host's modalToolbar is optional ──
