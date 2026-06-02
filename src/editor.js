@@ -196,6 +196,30 @@ const EMOJI_LIST = [
  * 入力中に `:word:` を検知すると自動で絵文字に置換される。
  * 必要に応じて自由に追加・編集可能。
  */
+/**
+ * popm の addButton() に渡されるコマンド名 → ホバー時に表示する日本語ツールチップ。
+ * `addButton(label, command, handler)` のとき第 4 引数で個別指定しなくても、
+ * ここに登録されていれば自動で title / aria-label に流れる。
+ */
+const POPM_TITLES = {
+  bold:                '太字 (Ctrl/⌘+B)',
+  italic:              '斜体 (Ctrl/⌘+I)',
+  underline:           '下線 (Ctrl/⌘+U)',
+  strikeThrough:       '取り消し線',
+  h1:                  '見出し 1',
+  h2:                  '見出し 2',
+  h3:                  '見出し 3',
+  h4:                  '見出し 4',
+  blockquote:          '引用',
+  kbd:                 'キー表記 <kbd>',
+  justifyLeft:         '左寄せ',
+  justifyCenter:       '中央寄せ',
+  justifyRight:        '右寄せ',
+  justifyFull:         '両端揃え',
+  insertUnorderedList: '箇条書きリスト',
+  insertOrderedList:   '番号付きリスト',
+}
+
 const EMOJI_SHORTCODES = {
   ':smile:': '😊', ':laugh:': '😂', ':wink:': '😉', ':heart_eyes:': '😍',
   ':kiss:': '😘', ':thinking:': '🤔', ':cool:': '😎', ':sob:': '😭',
@@ -947,11 +971,12 @@ export class PopupMenu {
    * @param {function} handler
    * @returns {this}
    */
-  addButton(label, command, handler) {
+  addButton(label, command, handler, title = null) {
+    const tip = title ?? POPM_TITLES[command] ?? command
     const btn = createElement('button', {
       className: 'kuro-popm__btn',
       html: label,
-      attrs: { type: 'button', 'aria-label': command, 'data-command': command },
+      attrs: { type: 'button', title: tip, 'aria-label': tip, 'data-command': command },
     })
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -1799,6 +1824,19 @@ export class PopupMenu {
     const _sel = window.getSelection()
     if (_sel?.rangeCount) this._activeRange = _sel.getRangeAt(0).cloneRange()
 
+    // ── Width constraint ───────────────────────────────────────────────────
+    // popm を pane (constraintEl) の幅に合わせて max-width 制約をかける。
+    // 中身ボタン群は既に flex-wrap なので、 全ボタンが横並びに入りきらない
+    // 場合は 2 行 (以上) に自動で折り返される。 viewport にも保険のクランプ。
+    const VMARGIN = 4    // viewport margin
+    const INSET   = 20   // pane の左右 10px ずつインセットと揃える
+    let maxW = window.innerWidth - VMARGIN * 2
+    if (this.constraintEl) {
+      const paneW = this.constraintEl.getBoundingClientRect().width
+      maxW = Math.min(maxW, Math.max(200, paneW - INSET))
+    }
+    this.el.style.maxWidth = `${maxW}px`
+
     // Measure popup size (invisible pass so layout is up-to-date)
     this.el.classList.add('kuro-popm--measuring')
     const popW = this.el.offsetWidth  || 420
@@ -1827,6 +1865,11 @@ export class PopupMenu {
       left = Math.max(8, rect.left + rect.width / 2 - popW / 2)
       if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8
     }
+    // Final viewport clamp — popm が画面右に飛び出ないよう保険。
+    // pane が viewport より右にはみ出すような特殊配置でも popm 自体は必ず内側に。
+    const VPM = 4   // viewport margin
+    if (left + popW > window.innerWidth - VPM) left = window.innerWidth - popW - VPM
+    if (left < VPM) left = VPM
 
     this.el.style.top  = `${top}px`
     this.el.style.left = `${left}px`
@@ -1978,17 +2021,6 @@ export class TableManager {
     })
     this._splitRightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitRight(); this._updateSplitBtns() })
     this._mainRow.appendChild(this._splitRightBtn)
-
-    this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
-
-    // ── CSV インポート ──────────────────────────────────────────────────
-    const csvBtn = createElement('button', {
-      className: 'kuro-table-menu__btn',
-      html: '📋 CSV',
-      attrs: { type: 'button', title: 'CSV テキストを貼り付けて表を置き換え' },
-    })
-    csvBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._importCsv() })
-    this._mainRow.appendChild(csvBtn)
 
     this.el.appendChild(this._mainRow)
 
@@ -2757,19 +2789,28 @@ export class LinePopupMenu {
       const popW  = this.el.offsetWidth  || 220
       const popH  = this.el.offsetHeight || 140
       const GAP   = 6
+      const M     = 4  // viewport margin
 
-      // Default: place to the right of the anchor (for row buttons)
-      // or below the anchor (for col buttons)
       let top, left
       if (target.axis === 'row') {
-        top  = Math.max(4, Math.min(aRect.top + aRect.height / 2 - popH / 2, window.innerHeight - popH - 4))
+        // 行ボタン: 通常は右に表示。 右がはみ出るなら左に。
+        top  = Math.max(M, Math.min(aRect.top + aRect.height / 2 - popH / 2, window.innerHeight - popH - M))
         left = aRect.right + GAP
-        if (left + popW > window.innerWidth - 4) left = aRect.left - popW - GAP
+        if (left + popW > window.innerWidth - M) left = aRect.left - popW - GAP
       } else {
-        left = Math.max(4, Math.min(aRect.left + aRect.width / 2 - popW / 2, window.innerWidth - popW - 4))
+        // 列ボタン: 通常はアンカー中央に揃えて下に表示。
+        //   水平: 中央 → 右端はみ出し → 左寄せ → 左端はみ出し
+        //   垂直: 下 → はみ出すなら上
+        left = aRect.left + aRect.width / 2 - popW / 2
+        if (left + popW > window.innerWidth - M) left = window.innerWidth - popW - M
+        if (left < M) left = M
         top  = aRect.bottom + GAP
-        if (top + popH > window.innerHeight - 4) top = aRect.top - popH - GAP
+        if (top + popH > window.innerHeight - M) top = aRect.top - popH - GAP
       }
+
+      // 最終クランプ: どの軸でも viewport 内に収める
+      left = Math.max(M, Math.min(left, window.innerWidth  - popW - M))
+      top  = Math.max(M, Math.min(top,  window.innerHeight - popH - M))
 
       this.el.style.top  = `${top}px`
       this.el.style.left = `${left}px`
@@ -3550,7 +3591,7 @@ export class KuroEditor {
       ...options,
     }
     this._mode          = 'wysiwyg'
-    this._tocEnabled              = false  // user's ToC on/off preference (hidden by default)
+    this._tocEnabled              = true   // user's ToC on/off preference (shown by default; auto-hidden when no headings)
     this._savedRange              = null   // last known caret range (for emoji insert)
     this._imageMenuJustDeactivated = false // deactivated by mousedown; skip re-activate on click
     this._autoSaveTimer = null
@@ -3635,7 +3676,7 @@ export class KuroEditor {
     // ── 文字数表示 ────────────────────────────────────────────────────
     this._mmenuCharCount = createElement('span', {
       className: 'kuro-mmenu__char-count',
-      html: '0 字',
+      html: '文字数 0',
       attrs: { title: '本文の文字数' },
     })
 
@@ -3713,7 +3754,7 @@ export class KuroEditor {
     const tabActionDefs = [
       { label: '😊',       id: 'emoji', title: '絵文字' },
       { label: ICON.table, id: 'table', title: 'テーブル' },
-      { label: '🖼',       id: 'media', title: 'メディア' },
+      { label: '🖼',        id: 'media', title: 'メディア' },
       { label: ICON.code,  id: 'code',  title: 'コード' },
       { label: ICON.hr,    id: 'hr',    title: '水平線' },
     ]
@@ -3722,19 +3763,18 @@ export class KuroEditor {
       const btn = createElement('button', {
         className: 'kuro-tabs__action',
         html: label,
-        attrs: { type: 'button', title, 'data-action': id },
+        attrs: { type: 'button', title, 'aria-label': title, 'data-action': id },
       })
       tabActions.appendChild(btn)
       this._tabActionBtns[id] = btn
     }
 
-    // 文字数表示 (タブバー用)
+    // 文字数表示 — HTML 表示アイコンの右側 (row1Left 末尾) に配置
     this._tabCharCount = createElement('span', {
       className: 'kuro-tabs__char-count',
-      html: '0 字',
+      html: '文字数 0',
       attrs: { title: '本文の文字数' },
     })
-    tabActions.appendChild(this._tabCharCount)
 
     // Spacer pushes autosave + save to the right edge
     const tabSpacer = createElement('div', { className: 'kuro-tabs__spacer' })
@@ -3764,7 +3804,7 @@ export class KuroEditor {
     // ── ToC toggle button ─────────────────────────────────────────────────
     const tocSep = createElement('div', { className: 'kuro-tabs__sep' })
     this.tabTocBtn = createElement('button', {
-      className: 'kuro-tabs__toc-btn',
+      className: 'kuro-tabs__toc-btn kuro-tabs__toc-btn--active',
       html: `<svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor" aria-hidden="true">
         <rect x="0" y="0" width="10" height="12" rx="1.5" opacity="0.4"/>
         <rect x="11.5" y="0" width="4.5" height="12" rx="1.5"/>
@@ -3772,28 +3812,38 @@ export class KuroEditor {
       attrs: { type: 'button', title: '目次パネル (Alt+T)', 'aria-label': '目次パネルの表示切り替え' },
     })
 
-    // 左右 2 グループ構造 — flex-wrap で改行されても綺麗に分かれる。
-    //  左: バージョン + タブ + アクション
-    //  右: 自動保存 + 保存 + ToC
-    const leftGroup  = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--left' })
-    const rightGroup = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--right' })
+    // ── 2 段構造 ──────────────────────────────────────────────────────────
+    //   row1 (上): バージョン + タブ ┃ 自動保存 + 保存 + ToC
+    //   row2 (下): アクション (Undo/Redo/絵文字/テーブル/メディア/コード/HR) + 文字数
+    //
+    // スマホでも上段は常に 1 行 (justify-between)、 下段は flex-wrap で
+    // 必要に応じて折返し。 結果として「最悪 3 行 → 2 段 + α」になる。
+    const row1Left  = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--left' })
+    const row1Right = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--right' })
 
-    leftGroup.appendChild(versionBadge)
-    leftGroup.appendChild(this.tabWysiwyg)
-    leftGroup.appendChild(this.tabSource)
-    leftGroup.appendChild(tabSep)
-    leftGroup.appendChild(tabActions)
+    row1Left.appendChild(versionBadge)
+    row1Left.appendChild(this.tabWysiwyg)
+    row1Left.appendChild(this.tabSource)
+    row1Left.appendChild(this._tabCharCount)
 
-    rightGroup.appendChild(tabAutoWrap)
-    rightGroup.appendChild(this.tabSaveBtn)
-    rightGroup.appendChild(tocSep)
-    rightGroup.appendChild(this.tabTocBtn)
+    row1Right.appendChild(tabAutoWrap)
+    row1Right.appendChild(this.tabSaveBtn)
+    row1Right.appendChild(tocSep)
+    row1Right.appendChild(this.tabTocBtn)
 
-    this.tabBar.appendChild(leftGroup)
-    this.tabBar.appendChild(rightGroup)
+    const row1 = createElement('div', { className: 'kuro-tabs__row kuro-tabs__row--top' })
+    row1.appendChild(row1Left)
+    row1.appendChild(row1Right)
+
+    const row2 = createElement('div', { className: 'kuro-tabs__row kuro-tabs__row--bottom' })
+    row2.appendChild(tabActions)
+
+    this.tabBar.appendChild(row1)
+    this.tabBar.appendChild(row2)
     this.root.appendChild(this.tabBar)
 
-    // unused now but keep the variable declarations from causing warnings
+    // legacy refs (no longer attached) — silence "unused" lint
+    void tabSep
     void tabSpacer
   }
 
@@ -4222,21 +4272,75 @@ export class KuroEditor {
 
     // ── Paste image from clipboard (Ctrl+V) ───────────────────────────────
     this.wysiwyg.addEventListener('paste', (e) => {
+      // ① 画像ペースト
       const items = [...(e.clipboardData?.items ?? [])]
         .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
-      if (!items.length) return   // no image → let default text paste proceed
-
-      e.preventDefault()
-      for (const item of items) {
-        const file = item.getAsFile()
-        if (!file) continue
-        if (this.options.onMediaUpload) {
-          this._insertMediaFile(file)
-        } else {
-          this._insertMediaURL(URL.createObjectURL(file))
+      if (items.length) {
+        e.preventDefault()
+        for (const item of items) {
+          const file = item.getAsFile()
+          if (!file) continue
+          if (this.options.onMediaUpload) this._insertMediaFile(file)
+          else                            this._insertMediaURL(URL.createObjectURL(file))
         }
+        return
       }
+
+      // ② テキストペースト — CSV / TSV ならテーブルに変換
+      const text = e.clipboardData?.getData('text/plain') ?? ''
+      if (text && this._looksLikeTabularData(text)) {
+        e.preventDefault()
+        this._pasteTabularData(text)
+        return
+      }
+      // それ以外は通常のテキストペーストを通す
     })
+  }
+
+  /**
+   * 「CSV / TSV っぽいテキスト」かどうかを判定する。
+   * 条件: 2 行以上 + 全行がほぼ同じ区切り数 (tab か comma) を持つ。
+   */
+  _looksLikeTabularData(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.length > 0)
+    if (lines.length < 2) return false
+
+    const hasTab   = lines[0].includes('\t')
+    const hasComma = lines[0].includes(',')
+    if (!hasTab && !hasComma) return false
+    const sep = hasTab ? '\t' : ','
+
+    const firstCount = lines[0].split(sep).length
+    if (firstCount < 2) return false
+
+    // 全行で区切り数がほぼ一致 (1 個までの差を許容)
+    return lines.every(l => Math.abs(l.split(sep).length - firstCount) <= 1)
+  }
+
+  /** CSV / TSV テキストをテーブルに変換して挿入。 */
+  _pasteTabularData(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.length > 0)
+    const useTab = lines[0].includes('\t')
+    const rows = lines.map(line => useTab ? line.split('\t') : line.split(','))
+
+    // セル内容を HTML エスケープ
+    const escape = (s) => s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+
+    const html =
+      `<table class="kuro-table"><tbody>` +
+        rows.map(row =>
+          `<tr>` + row.map(cell => {
+            const txt = escape(cell.trim())
+            return `<td contenteditable="true">${txt || '<br>'}</td>`
+          }).join('') + `</tr>`
+        ).join('') +
+      `</tbody></table><p><br></p>`
+
+    this.wysiwyg.focus()
+    execFormat('insertHTML', html)
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -5553,10 +5657,10 @@ export class KuroEditor {
         this._saveRange()
         this.emojiPanel.toggle(anchorEl ?? this._mmenuBtns.emoji)
         break
-      case 'table':  this._insertTable();     break
-      case 'code':   this._insertCodeBlock(); break
-      case 'hr':     this._insertHR();        break
-      case 'media':  this._promptMedia();     break
+      case 'table':  this._insertTable();      break
+      case 'code':   this._insertCodeBlock();  break
+      case 'hr':     this._insertHR();         break
+      case 'media':  this._promptMedia();      break
     }
   }
 
@@ -5762,7 +5866,7 @@ export class KuroEditor {
     // Array.from で書記素クラスタを 1 文字として扱う（絵文字なども 1 字）
     const text = (this.wysiwyg.textContent || '').replace(/\s+/g, ' ').trim()
     const n = Array.from(text).length
-    const label = `${n.toLocaleString('ja-JP')} 字`
+    const label = `文字数 ${n.toLocaleString('ja-JP')}`
     if (this._mmenuCharCount) this._mmenuCharCount.textContent = label
     if (this._tabCharCount)   this._tabCharCount.textContent   = label
   }

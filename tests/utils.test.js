@@ -280,23 +280,24 @@ describe('createElement', () => {
 describe('createTableHtml', () => {
   it('generates a <table> string', () => {
     const html = createTableHtml(3, 4)
-    expect(html).toContain('<table')   // matches <table> or <table class="...">
-    expect(html).toContain('<thead>')
+    expect(html).toContain('<table')      // matches <table> or <table class="...">
     expect(html).toContain('<tbody>')
+    expect(html).not.toContain('<thead>') // <thead> 廃止: 全行を <tbody> に統合
   })
 
-  it('creates the right number of columns in header', () => {
+  it('creates the right number of columns', () => {
     const html = createTableHtml(2, 3)
-    const thCount = (html.match(/<th /g) || []).length
-    expect(thCount).toBe(3)
+    // ヘッダー行廃止: 全セル <td>。2 行 × 3 列 = 6 個
+    const tdCount = (html.match(/<td /g) || []).length
+    expect(tdCount).toBe(6)
+    // <th> は生成しない
+    expect(html).not.toMatch(/<th\b/)
   })
 
-  it('creates the right number of body rows', () => {
+  it('creates the right number of rows', () => {
     const html = createTableHtml(4, 2)
     const trCount = (html.match(/<tr>/g) || []).length
-    // 1 header row (inside thead) + 3 body rows = but <tr> in thead is outside tbody
-    // header row uses <tr> inside <thead>, body has rows - 1
-    expect(trCount).toBeGreaterThanOrEqual(3) // 1 header + 3 body
+    expect(trCount).toBe(4)
   })
 
   it('cells are contenteditable', () => {
@@ -304,12 +305,11 @@ describe('createTableHtml', () => {
     expect(html).toContain('contenteditable="true"')
   })
 
-  it('defaults to 2×2', () => {
+  it('defaults to 2×2 with all <td>', () => {
     const html = createTableHtml()
-    const thCount = (html.match(/<th /g) || []).length
     const tdCount = (html.match(/<td /g) || []).length
-    expect(thCount).toBe(2)
-    expect(tdCount).toBe(2)
+    expect(tdCount).toBe(4)   // 2 rows × 2 cols
+    expect(html).not.toMatch(/<th\b/)
   })
 })
 

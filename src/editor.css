@@ -63,24 +63,35 @@
      ════════════════════════════════════════════════════════ */
 
   .kuro-mmenu {
-    @apply fixed z-50 flex items-center gap-2
+    @apply fixed z-50 flex flex-wrap items-center gap-2
            px-4 py-2
            bg-neutral-800 border border-neutral-600
            rounded-2xl shadow-2xl;
     bottom: 1.25rem;
     left: 50%;
     transform: translateX(-50%);
-    white-space: nowrap;
+    max-width: calc(100vw - 2rem);   /* 狭い画面でも overflow しない */
     /* Indigo glow subtly brands the floating toolbar (#6366f1 = indigo-500 @ 40%) */
     box-shadow: 0 0 0 1px rgba(99,102,241,.4), 0 8px 32px rgba(0,0,0,.5);
   }
 
   .kuro-mmenu__actions {
-    @apply flex items-center gap-0.5;
+    @apply flex flex-wrap items-center gap-0.5;
   }
 
   .kuro-mmenu__divider {
     @apply w-px h-4 bg-neutral-600 mx-1 flex-shrink-0;
+  }
+
+  /* 文字数 (mmenu) — actions と divider の間に控えめに表示 */
+  .kuro-mmenu__char-count {
+    @apply text-xs text-neutral-400 px-2 select-none whitespace-nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  /* タブバー版 — actions の末尾、 やや小さめ */
+  .kuro-tabs__char-count {
+    @apply text-xs text-neutral-500 ml-2 select-none whitespace-nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   .kuro-mmenu__btn {
@@ -141,8 +152,34 @@
      TAB BAR
      ════════════════════════════════════════════════════════ */
 
+  /* ── 2 段固定 ──────────────────────────────────────────────
+     row1 (top)   : タブ ┃ 自動保存・保存・ToC を両端配置
+     row2 (bottom): 基本アクション群 — 必要に応じて折り返し
+  */
   .kuro-tabs {
-    @apply flex border-b border-neutral-700 bg-neutral-800 flex-shrink-0;
+    @apply flex flex-col
+           border-b border-neutral-700 bg-neutral-800 flex-shrink-0;
+  }
+
+  .kuro-tabs__row {
+    @apply flex items-center w-full min-w-0;
+  }
+  .kuro-tabs__row--top {
+    @apply justify-between flex-wrap;
+    row-gap: 0.125rem;
+  }
+  .kuro-tabs__row--bottom {
+    @apply flex-wrap;
+    border-top: 1px solid theme('colors.neutral.700');
+    row-gap: 0.125rem;
+  }
+
+  /* 左右グループ */
+  .kuro-tabs__group {
+    @apply flex flex-wrap items-center;
+  }
+  .kuro-tabs__group--right {
+    @apply ml-auto;
   }
 
   /* Version badge — leftmost element in the tab bar */
@@ -156,10 +193,13 @@
   }
 
   .kuro-tab {
-    @apply px-5 py-2 text-sm text-neutral-400 cursor-pointer
+    @apply px-3 py-2 text-sm text-neutral-400 cursor-pointer
            border-b-2 border-transparent
-           hover:text-neutral-200 transition-colors select-none;
+           hover:text-neutral-200 transition-colors select-none
+           flex items-center justify-center;
+    min-width: 2.5rem;
   }
+  .kuro-tab svg { display: block; }
 
   .kuro-tab--active {
     @apply text-neutral-100 border-indigo-500;
@@ -170,9 +210,11 @@
     @apply self-stretch border-l border-neutral-700 mx-2 my-1;
   }
 
-  /* Inline action buttons container */
+  /* Inline action buttons container — wraps to next row on narrow screens */
   .kuro-tabs__actions {
-    @apply flex items-center;
+    @apply flex flex-wrap items-center;
+    column-gap: 0.125rem;
+    row-gap: 0.125rem;
   }
 
   /* Individual inline action button */
@@ -320,11 +362,32 @@
   .kuro-toc__item {
     @apply block py-1 pr-3 text-xs text-neutral-400
            hover:text-indigo-400 hover:bg-neutral-800
-           transition-colors truncate cursor-pointer no-underline;
+           transition-colors truncate cursor-pointer no-underline flex-1;
   }
 
   .kuro-toc__item--h1 { @apply font-semibold text-neutral-300; }
   .kuro-toc__item--h2 { @apply font-medium; }
+
+  /* ── Hierarchical collapse ── */
+  .kuro-toc__row {
+    @apply flex items-center;
+  }
+  .kuro-toc__row--hidden { display: none; }
+
+  .kuro-toc__toggle {
+    @apply w-4 h-4 mr-1 flex-shrink-0
+           text-neutral-500 hover:text-indigo-400
+           transition-transform cursor-pointer
+           bg-transparent border-0 text-xs leading-none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .kuro-toc__toggle--collapsed { transform: rotate(-90deg); }
+
+  .kuro-toc__toggle-spacer {
+    @apply w-4 h-4 mr-1 flex-shrink-0;
+  }
 
   /* ════════════════════════════════════════════════════════
      POPUP MENU (popm) — fixed position, over selection
@@ -403,6 +466,54 @@
     @apply hidden flex-wrap gap-1 px-2.5 pb-2 pt-1 border-t border-neutral-700;
   }
   .kuro-popm__sizes--visible { @apply flex; }
+
+  /* Vertical divider inside the font sub-panel — kept for legacy callers. */
+  .kuro-popm__sub-divider {
+    @apply w-px self-stretch mx-1 bg-neutral-700;
+  }
+
+  /* "Web-Fonts" main-panel button — wider, ellipsis when label is "Web-Fonts: ..." */
+  .kuro-size-btn--webfonts {
+    max-width: 16rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kuro-size-btn--disabled {
+    @apply opacity-40 cursor-not-allowed pointer-events-none;
+  }
+
+  /* Scrollable web-font list — pinned to the right edge of the Web-Fonts button.
+     Position (top / left) is set by _showWebFontList() dynamically. */
+  .kuro-popm__web-fonts {
+    display: none;
+    position: fixed;
+    max-height: 16.5rem;            /* ~10 行 (each row ≈ 1.65rem) */
+    overflow-y: auto;
+    background: theme('colors.neutral.800');
+    border: 1px solid theme('colors.neutral.600');
+    border-radius: 0.5rem;
+    padding: 0.375rem;
+    min-width: 12rem;
+    max-width: 18rem;
+    z-index: 60;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+  .kuro-popm__web-fonts--visible {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .kuro-web-font-btn {
+    @apply px-3 py-1.5 rounded text-sm text-neutral-200
+           hover:bg-neutral-700 hover:text-white
+           text-left cursor-pointer transition-colors whitespace-nowrap;
+    border: 0;
+    background: transparent;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .kuro-size-btn {
     @apply px-2 py-0.5 rounded text-xs text-neutral-300
@@ -495,9 +606,6 @@
     height: 18px;
     border-radius: 50%;
     @apply bg-indigo-500 hover:bg-indigo-400 text-white;
-    font-size: 15px;
-    font-weight: 700;
-    line-height: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -520,9 +628,6 @@
     height: 18px;
     border-radius: 50%;
     @apply bg-red-600 hover:bg-red-500 text-white;
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -534,6 +639,13 @@
     user-select: none;
   }
   .kuro-table-delete-btn:hover { transform: scale(1.25); }
+
+  /* Inline SVG は baseline 配置になるため、flex 中央寄せでも実測上わずかに
+     上にずれる。block 化すると leading space が消えて確実に中央に揃う。 */
+  .kuro-table-insert-btn svg,
+  .kuro-table-delete-btn svg {
+    display: block;
+  }
 
   /* Border cycle button — placed further out than the delete button */
   .kuro-table-border-btn {
@@ -648,7 +760,11 @@
   }
 
   .kuro-table-menu__btn--color {
-    @apply px-1.5;
+    @apply px-1.5 inline-flex items-center gap-1;
+  }
+
+  .kuro-table-menu__btn-label {
+    @apply text-xs text-neutral-300;
   }
 
   .kuro-table-menu__divider {
@@ -809,6 +925,24 @@
   }
   .kuro-content blockquote p { @apply my-1; }
 
+  /* ── Keyboard key (<kbd>) — physical key look ───────────────────────── */
+  .kuro-content kbd {
+    display: inline-block;
+    padding: 0.1em 0.5em;
+    min-width: 1.2em;
+    text-align: center;
+    background: theme('colors.neutral.800');
+    color: theme('colors.neutral.100');
+    border: 1px solid theme('colors.neutral.500');
+    border-bottom-width: 2px;
+    border-radius: 0.3em;
+    font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
+    font-size: 0.85em;
+    line-height: 1.2;
+    vertical-align: baseline;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  }
+
   /* ── Callout / admonition blocks ─────────────────────────────────────── */
   /* Layout: icon column on the left + content; left vertical accent bar */
   .kuro-content .kuro-callout {
@@ -904,6 +1038,32 @@
     display: grid;
     grid-template-columns: 3rem minmax(0, 1fr);
     align-items: stretch;
+    position: relative;
+  }
+
+  /* Copy button — pinned to the top-right of the code wrap */
+  .kuro-code__copy {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.5rem;
+    z-index: 5;
+    padding: 0.125rem 0.4rem;
+    border: 1px solid theme('colors.neutral.600');
+    border-radius: 0.3rem;
+    background: rgba(23, 23, 27, 0.85);
+    color: theme('colors.neutral.200');
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
+  }
+  .kuro-code__copy:hover {
+    background: theme('colors.neutral.700');
+    color: theme('colors.white');
+  }
+  .kuro-code__copy--flash {
+    background: theme('colors.emerald.700');
+    color: theme('colors.white');
   }
 
   /* Both gutter and textarea must share identical font / line-height / padding-top

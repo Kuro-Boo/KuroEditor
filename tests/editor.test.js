@@ -139,11 +139,11 @@ describe('KuroEditor', () => {
     expect(document.execCommand).toHaveBeenCalledWith('insertHTML', false, expect.stringContaining('<table'))
   })
 
-  it('code button calls execCommand with pre/code', () => {
+  it('code button calls execCommand with the code-block wrap', () => {
     const codeBtn = document.querySelector('[data-mmenu="code"]')
     codeBtn.click()
-    // Match '<pre' (with or without class attribute)
-    expect(document.execCommand).toHaveBeenCalledWith('insertHTML', false, expect.stringContaining('<pre'))
+    // textarea-based code block uses .kuro-code-wrap
+    expect(document.execCommand).toHaveBeenCalledWith('insertHTML', false, expect.stringContaining('kuro-code-wrap'))
   })
 
   // ── Popup menu ──────────────────────────────────────────────────────────────
