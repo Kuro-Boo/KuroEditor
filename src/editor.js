@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.24'
+export const VERSION = '0.3.25'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -149,10 +149,12 @@ const ICON = {
     `<path d="M1 8 c2,-4 5,-5 7,-5 s5,1 7,5 c-2,4 -5,5 -7,5 s-5,-1 -7,-5z"/>` +
     `<circle cx="8" cy="8" r="2"/>` +
   `</svg>`,
-  // Angle brackets — HTML source tab
-  source: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
-    `<polyline points="5,3 1,8 5,13"/>` +
-    `<polyline points="11,3 15,8 11,13"/>` +
+  // HTML source — document frame containing </>  (distinct from raw <> code icon)
+  source: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<rect x="1.5" y="2" width="13" height="12" rx="1.5"/>` +
+    `<polyline points="6,6.5 4.2,9 6,11.5"/>` +
+    `<polyline points="10,6.5 11.8,9 10,11.5"/>` +
+    `<line x1="8.6" y1="5.5" x2="7.4" y2="12.5" opacity="0.7"/>` +
   `</svg>`,
   // Blockquote — left vertical bar + three horizontal text lines
   quote: _icn(
