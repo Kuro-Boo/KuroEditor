@@ -84,7 +84,7 @@ console.log(`  src/editor.js  export const VERSION = '${next}'`)
 // ── 6. Git commit (no push — remote may not be configured) ───────────────────
 const label = bump === 'sync' ? `sync version to ${next}` : `bump version ${prev} → ${next}`
 try {
-  execSync('git add VERSION package.json src/editor.js', { cwd: root, stdio: 'inherit' })
+  execSync('git add VERSION package.json src/editor.js src/editor.css', { cwd: root, stdio: 'inherit' })
   execSync(`git commit -m "chore: ${label}"`, { cwd: root, stdio: 'inherit' })
   console.log('✓ Committed')
 } catch (e) {
