@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.21'
+export const VERSION = '0.3.22'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -132,6 +132,10 @@ const ICON = {
   ),
   code: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,1 1,7 5,13"/><polyline points="11,1 15,7 11,13"/></svg>`,
   hr:   _icn(`<rect x="0" y="6" width="14" height="2" rx="1"/>`),
+  // Undo: 矢印が左に折れ曲がってカーブ
+  undo: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,4 2,4 2,1"/><path d="M2 4 a5 5 0 0 1 5 -1 h2 a4 4 0 0 1 0 8 h-3"/></svg>`,
+  // Redo: undo の左右対称
+  redo: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9,4 12,4 12,1"/><path d="M12 4 a5 5 0 0 0 -5 -1 h-2 a4 4 0 0 0 0 8 h3"/></svg>`,
   // Blockquote — left vertical bar + three horizontal text lines
   quote: _icn(
     `<rect x="0" y="0" width="2" height="14" rx="1"/>` +
@@ -3439,6 +3443,24 @@ export class KuroEditor {
     this.mmenu        = createElement('div', { className: 'kuro-mmenu' })
     this.mmenuActions = createElement('div', { className: 'kuro-mmenu__actions' })
 
+    // ── Undo / Redo (mmenu の先頭) ────────────────────────────────────
+    this._mmenuUndoBtn = createElement('button', {
+      className: 'kuro-mmenu__btn',
+      html: ICON.undo,
+      attrs: { type: 'button', 'data-mmenu': 'undo', title: '元に戻す (Ctrl/⌘+Z)' },
+    })
+    this._mmenuUndoBtn.addEventListener('click', () => this._undo())
+    this.mmenuActions.appendChild(this._mmenuUndoBtn)
+
+    this._mmenuRedoBtn = createElement('button', {
+      className: 'kuro-mmenu__btn',
+      html: ICON.redo,
+      attrs: { type: 'button', 'data-mmenu': 'redo', title: 'やり直す (Ctrl/⌘+Shift+Z)' },
+    })
+    this._mmenuRedoBtn.addEventListener('click', () => this._redo())
+    this.mmenuActions.appendChild(this._mmenuRedoBtn)
+
+    // ── 既存アクション ────────────────────────────────────────────────
     const defs = [
       { label: '😊',          id: 'emoji', title: '絵文字' },
       { label: ICON.table,    id: 'table', title: 'テーブル' },
@@ -3458,6 +3480,13 @@ export class KuroEditor {
       this._mmenuBtns[id] = btn
     }
 
+    // ── 文字数表示 ────────────────────────────────────────────────────
+    this._mmenuCharCount = createElement('span', {
+      className: 'kuro-mmenu__char-count',
+      html: '0 字',
+      attrs: { title: '本文の文字数' },
+    })
+
     this.saveBtn = createElement('button', {
       className: 'kuro-mmenu__save',
       html: '保存',
@@ -3468,6 +3497,7 @@ export class KuroEditor {
     const divider = createElement('div', { className: 'kuro-mmenu__divider' })
 
     this.mmenu.appendChild(this.mmenuActions)
+    this.mmenu.appendChild(this._mmenuCharCount)
     this.mmenu.appendChild(divider)
     this.mmenu.appendChild(this.saveBtn)
 
@@ -3510,6 +3540,24 @@ export class KuroEditor {
     const tabSep = createElement('div', { className: 'kuro-tabs__sep' })
 
     const tabActions = createElement('div', { className: 'kuro-tabs__actions' })
+
+    // Undo / Redo (mmenu と同じ)
+    this._tabUndoBtn = createElement('button', {
+      className: 'kuro-tabs__action',
+      html: ICON.undo,
+      attrs: { type: 'button', title: '元に戻す (Ctrl/⌘+Z)' },
+    })
+    this._tabUndoBtn.addEventListener('click', () => this._undo())
+    tabActions.appendChild(this._tabUndoBtn)
+
+    this._tabRedoBtn = createElement('button', {
+      className: 'kuro-tabs__action',
+      html: ICON.redo,
+      attrs: { type: 'button', title: 'やり直す (Ctrl/⌘+Shift+Z)' },
+    })
+    this._tabRedoBtn.addEventListener('click', () => this._redo())
+    tabActions.appendChild(this._tabRedoBtn)
+
     const tabActionDefs = [
       { label: '😊',       id: 'emoji', title: '絵文字' },
       { label: ICON.table, id: 'table', title: 'テーブル' },
@@ -3527,6 +3575,14 @@ export class KuroEditor {
       tabActions.appendChild(btn)
       this._tabActionBtns[id] = btn
     }
+
+    // 文字数表示 (タブバー用)
+    this._tabCharCount = createElement('span', {
+      className: 'kuro-tabs__char-count',
+      html: '0 字',
+      attrs: { title: '本文の文字数' },
+    })
+    tabActions.appendChild(this._tabCharCount)
 
     // Spacer pushes autosave + save to the right edge
     const tabSpacer = createElement('div', { className: 'kuro-tabs__spacer' })
@@ -3900,6 +3956,7 @@ export class KuroEditor {
       this.toc._update()
       this._detectAutoList(e)
       this._detectSpecialLink(e)
+      this._updateCharCount()
       if (this.imageMenu.isVisible) this.imageMenu.deactivate()
       // Code blocks are <textarea>-based now; their own input listener handles
       // gutter sync. Nothing to do at the wysiwyg level.
@@ -4198,6 +4255,14 @@ export class KuroEditor {
         case 'b': e.preventDefault(); this._format('bold');      return
         case 'i': e.preventDefault(); this._format('italic');    return
         case 'u': e.preventDefault(); this._format('underline'); return
+        case 'z':
+          e.preventDefault()
+          e.shiftKey ? this._redo() : this._undo()
+          return
+        case 'y':
+          e.preventDefault()
+          this._redo()
+          return
       }
     }
 
@@ -5390,6 +5455,44 @@ export class KuroEditor {
     })
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // UNDO / REDO  (browser-provided history via execCommand)
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // Chrome / Safari / Firefox all maintain a per-element undo stack for
+  // contenteditable. execCommand('undo'/'redo') is stable enough for typical
+  // editing operations; complex DOM manipulations we do (table merge, callout
+  // wrap, etc.) may not be perfectly reversible, but a single undo always
+  // brings the user closer to the previous state.
+
+  _undo() {
+    this.wysiwyg.focus()
+    try { document.execCommand('undo') } catch (_) {}
+    this._updateCharCount()
+  }
+
+  _redo() {
+    this.wysiwyg.focus()
+    try { document.execCommand('redo') } catch (_) {}
+    this._updateCharCount()
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CHARACTER COUNT
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // 「字」表示は textContent ベース。スペース・改行・全角半角を区別せず
+  // 単純に code unit 数 (Array.from で書記素も 1 字としてカウント)。
+
+  _updateCharCount() {
+    // Array.from で書記素クラスタを 1 文字として扱う（絵文字なども 1 字）
+    const text = (this.wysiwyg.textContent || '').replace(/\s+/g, ' ').trim()
+    const n = Array.from(text).length
+    const label = `${n.toLocaleString('ja-JP')} 字`
+    if (this._mmenuCharCount) this._mmenuCharCount.textContent = label
+    if (this._tabCharCount)   this._tabCharCount.textContent   = label
+  }
+
   _insertHR() {
     this.wysiwyg.focus()
     execFormat('insertHTML', '<hr class="kuro-hr"><p><br></p>')
@@ -5422,6 +5525,7 @@ export class KuroEditor {
     if (this._mode === 'source') this.sourceArea.value = html ?? ''
     this.toc._doUpdate()
     this._initAllCodeBlocks()
+    this._updateCharCount()
   }
 
   /**
