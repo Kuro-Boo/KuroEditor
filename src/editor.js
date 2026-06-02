@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.28'
+export const VERSION = '0.3.29'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -17,9 +17,6 @@ export const LINK_RE = {
   wiki:  /\[\[([^\]|]+)\|([^\]]+)\]\]/g,
   hyper: /\[\[([^\]]+)\]\]/g,
 }
-
-/** Supported heading levels */
-export const HEADING_LEVELS = [1, 2, 3, 4, 5]
 
 /** Preset text colours for the colour picker */
 const PRESET_COLORS = [
@@ -820,11 +817,6 @@ export class ColorPicker {
       this.el.appendChild(customRow)
     }
   }
-
-  /** Update the native color picker's displayed value (does not fire any callback). */
-  setCustomValue(color) {
-    if (this._customInput && color) this._customInput.value = color
-  }
 }
 
 export class PopupMenu {
@@ -951,7 +943,6 @@ export class PopupMenu {
         requestAnimationFrame(() => this._updateActiveStates())
       },
     })
-    this._colorInput = picker._customInput   // kept for backwards compatibility
     this._colorPanel.appendChild(picker.el)
   }
 
@@ -1422,8 +1413,25 @@ export class PopupMenu {
     // browsers may strip quotes / spaces when echoing back style.fontFamily.
     const normalize = (s) => (s || '').replace(/['"\s]/g, '').toLowerCase()
     const labelN = normalize(label)
+
+    // ① Static options (ゴシック / 明朝) — exact normalized match.
+    let staticMatched = false
     for (const { el, value } of this._fontFamilyBtns) {
-      el.classList.toggle('kuro-size-btn--active', normalize(value) === labelN)
+      const on = normalize(value) === labelN
+      if (on) staticMatched = true
+      el.classList.toggle('kuro-size-btn--active', on)
+    }
+
+    // ② Web fonts — when the effective font is neither static option (and not
+    //    the bare default), a web font is active. The ゴシック button keeps its
+    //    permanent baseline ring (--base), but the *active* highlight must move
+    //    onto the Web-Fonts button so ゴシック no longer looks "selected".
+    const webActive = !staticMatched && !!labelN && labelN !== normalize(baseValue)
+    this._webFontsBtn?.classList.toggle('kuro-size-btn--active', webActive)
+    // Mark the matching row in the scrollable list (if currently rendered).
+    for (const fb of this._webFontListPanel?.children ?? []) {
+      fb.classList.toggle('kuro-web-font-btn--active',
+        webActive && normalize(fb.style.fontFamily) === labelN)
     }
   }
 
@@ -1450,6 +1458,7 @@ export class PopupMenu {
       this._hideLineHeights()
       this._hideListStyles()
       this._hideULStyles()
+      this._hideFontFamily()
       this._toggleCalloutPanel()
     })
     this._mainRow.appendChild(this._calloutBtn)
@@ -1591,7 +1600,6 @@ export class PopupMenu {
       },
     })
     this._olMarkerColorInput = olPicker._customInput
-    this._olMarkerColorPicker = olPicker
     this._olMarkerColorSection.appendChild(olPicker.el)
     this._listStylePanel.appendChild(this._olMarkerColorSection)
 
@@ -1734,7 +1742,6 @@ export class PopupMenu {
       },
     })
     this._ulMarkerColorInput = ulPicker._customInput
-    this._ulMarkerColorPicker = ulPicker
     this._ulMarkerColorSection.appendChild(ulPicker.el)
     this._ulStylePanel.appendChild(this._ulMarkerColorSection)
 
@@ -1939,6 +1946,8 @@ export class PopupMenu {
 
     // Update the font-size indicator label to reflect the current selection
     this._updateSizeLabel()
+    // Update the font-family picker active state for the current selection
+    this._updateFontFamilyLabel()
     // Update the OL style indicator (which class is on the nearest <ol>)
     this._updateListStyleLabel()
     // Update the UL style indicator (which class is on the nearest <ul>)
@@ -2042,7 +2051,6 @@ export class TableManager {
         this._hideColorPanel()
       },
     })
-    this._bgColorInput = picker._customInput
     this._colorPanel.appendChild(picker.el)
   }
 
@@ -2156,44 +2164,6 @@ export class TableManager {
       const ref = row.cells[colIdx]
       ref ? row.insertBefore(c, ref) : row.appendChild(c)
       row = row.nextElementSibling
-    }
-  }
-
-  /**
-   * Replace the active table with one built from a CSV/TSV paste.
-   * The user is prompted for the text (clipboard API is async + permission-gated
-   * so a synchronous prompt is more reliable). Cells are split by tab when
-   * present, otherwise by comma. Quoted commas inside fields are not parsed —
-   * for simple cases this is sufficient; complex CSV can be cleaned up first.
-   */
-  _importCsv() {
-    if (!this.activeTable) return
-    const csv = window.prompt(
-      'CSV または TSV テキストを貼り付けてください\n(改行で行、 タブまたはカンマで列を区切り)',
-      '',
-    )
-    if (!csv) return
-
-    const lines = csv.split(/\r?\n/).filter(l => l.length > 0)
-    if (lines.length === 0) return
-    const useTab = lines[0].includes('\t')
-    const rows = lines.map(line => useTab ? line.split('\t') : line.split(','))
-
-    // 既存 <tbody> をクリアして CSV から再構築
-    const tbody = this.activeTable.querySelector('tbody') || this.activeTable
-    tbody.innerHTML = ''
-    for (const row of rows) {
-      const tr = document.createElement('tr')
-      for (const cell of row) {
-        const td = document.createElement('td')
-        td.setAttribute('contenteditable', 'true')
-        const content = cell.trim()
-        // 空セルは <br> で枠を保つ。 中身があればそのまま textContent。
-        if (content) td.textContent = content
-        else td.innerHTML = '<br>'
-        tr.appendChild(td)
-      }
-      tbody.appendChild(tr)
     }
   }
 
@@ -3730,8 +3700,6 @@ export class KuroEditor {
     })
 
     // ── Inline action buttons — mirrors mmenu so host's modalToolbar is optional ──
-    const tabSep = createElement('div', { className: 'kuro-tabs__sep' })
-
     const tabActions = createElement('div', { className: 'kuro-tabs__actions' })
 
     // Undo / Redo (mmenu と同じ)
@@ -3775,9 +3743,6 @@ export class KuroEditor {
       html: '文字数 0',
       attrs: { title: '本文の文字数' },
     })
-
-    // Spacer pushes autosave + save to the right edge
-    const tabSpacer = createElement('div', { className: 'kuro-tabs__spacer' })
 
     // Autosave checkbox (synced with mmenu's checkbox)
     const tabAutoId = `kuro-tab-autosave-${Math.random().toString(36).slice(2, 7)}`
@@ -3841,10 +3806,6 @@ export class KuroEditor {
     this.tabBar.appendChild(row1)
     this.tabBar.appendChild(row2)
     this.root.appendChild(this.tabBar)
-
-    // legacy refs (no longer attached) — silence "unused" lint
-    void tabSep
-    void tabSpacer
   }
 
   // ── Body = pane (edit) + ToC panel ───────────────────────────────────────
@@ -3955,6 +3916,7 @@ export class KuroEditor {
         this.popm._hideLineHeights()
         this.popm._hideListStyles()
         this.popm._hideCalloutPanel()
+        this.popm._hideFontFamily()
         this.popm._toggleULStyles()
       })
       .initULStylePanel(
@@ -3967,6 +3929,7 @@ export class KuroEditor {
         this.popm._hideLineHeights()
         this.popm._hideULStyles()
         this.popm._hideCalloutPanel()
+        this.popm._hideFontFamily()
         this.popm._toggleListStyles()
       })
       .initOLStylePanel(
@@ -4423,9 +4386,9 @@ export class KuroEditor {
       // Capture the typed number so the OL starts at the right counter value.
       // e.g. "2. " → <ol start="2"> so the first visible item shows "2."
       const startNum = parseInt(olMatch[1], 10)
-      this._replaceLinePrefix(node, lineText, () => this._insertList('OL', startNum))
+      this._replaceLinePrefix(node, lineText, offset, () => this._insertList('OL', startNum))
     } else if (/^[-*]\s$/.test(lineText)) {
-      this._replaceLinePrefix(node, lineText, () => this._insertList('UL'))
+      this._replaceLinePrefix(node, lineText, offset, () => this._insertList('UL'))
     }
   }
 
@@ -4532,13 +4495,16 @@ export class KuroEditor {
     sel.addRange(nr)
   }
 
-  _replaceLinePrefix(textNode, prefix, insertCmd) {
-    // Remove the prefix characters from the text node
+  _replaceLinePrefix(textNode, prefix, caretOffset, insertCmd) {
+    // Remove the prefix characters immediately BEFORE the caret. We must not key
+    // off textNode.textContent.length: the same text node can hold text after
+    // the caret on the line (e.g. typing "1. " in front of existing text), and
+    // deleting the node tail would eat that trailing text instead of the prefix.
     const prefixLen = prefix.length
     const sel = window.getSelection()
     const range = document.createRange()
-    range.setStart(textNode, textNode.textContent.length - prefixLen)
-    range.setEnd(textNode, textNode.textContent.length)
+    range.setStart(textNode, caretOffset - prefixLen)
+    range.setEnd(textNode, caretOffset)
     range.deleteContents()
     sel.removeAllRanges()
     sel.addRange(range)

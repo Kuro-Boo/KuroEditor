@@ -514,6 +514,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Currently active web font (matches the selection) */
+  .kuro-web-font-btn--active {
+    @apply bg-indigo-600 text-white;
+  }
 
   .kuro-size-btn {
     @apply px-2 py-0.5 rounded text-xs text-neutral-300
