@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.22'
+export const VERSION = '0.3.23'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -136,6 +136,14 @@ const ICON = {
   undo: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,4 2,4 2,1"/><path d="M2 4 a5 5 0 0 1 5 -1 h2 a4 4 0 0 1 0 8 h-3"/></svg>`,
   // Redo: undo の左右対称
   redo: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9,4 12,4 12,1"/><path d="M12 4 a5 5 0 0 0 -5 -1 h-2 a4 4 0 0 0 0 8 h3"/></svg>`,
+  // Keyboard key (kbd) — minimalistic keyboard outline + dot keys
+  kbd: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true">` +
+    `<rect x="0.5" y="3.5" width="13" height="7" rx="1.2"/>` +
+    `<rect x="2.4" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
+    `<rect x="5.3" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
+    `<rect x="8.2" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
+    `<rect x="2.4" y="7.6" width="7.5" height="1.3" rx="0.3" fill="currentColor" stroke="none"/>` +
+  `</svg>`,
   // Blockquote — left vertical bar + three horizontal text lines
   quote: _icn(
     `<rect x="0" y="0" width="2" height="14" rx="1"/>` +
@@ -170,6 +178,32 @@ const EMOJI_LIST = [
   '☀️','🌙','🌤️','☁️','🌧️','⛈️','🌩️','🌨️','🌪️','🌫️',
   '🍕','🍔','🍟','🌮','🍜','🍣','🍱','🍰','🎂','☕',
 ]
+
+/**
+ * Emoji shortcodes (`:smile:` → 😄) — GitHub / Slack 風の入力支援。
+ * 入力中に `:word:` を検知すると自動で絵文字に置換される。
+ * 必要に応じて自由に追加・編集可能。
+ */
+const EMOJI_SHORTCODES = {
+  ':smile:': '😊', ':laugh:': '😂', ':wink:': '😉', ':heart_eyes:': '😍',
+  ':kiss:': '😘', ':thinking:': '🤔', ':cool:': '😎', ':sob:': '😭',
+  ':angry:': '😠', ':rage:': '😡', ':confused:': '😕', ':eyes:': '👀',
+  ':sleepy:': '😴', ':sick:': '🤒', ':sweat:': '😅', ':party:': '🥳',
+  ':heart:': '❤️', ':broken_heart:': '💔', ':sparkles:': '✨', ':fire:': '🔥',
+  ':star:': '⭐', ':100:': '💯', ':+1:': '👍', ':-1:': '👎',
+  ':ok:': '👌', ':clap:': '👏', ':muscle:': '💪', ':pray:': '🙏',
+  ':rocket:': '🚀', ':tada:': '🎉', ':warning:': '⚠️', ':white_check_mark:': '✅',
+  ':check:': '✅', ':x:': '❌', ':no:': '🚫', ':bulb:': '💡',
+  ':bug:': '🐛', ':wrench:': '🔧', ':hammer:': '🔨', ':lock:': '🔒',
+  ':unlock:': '🔓', ':key:': '🔑', ':computer:': '💻', ':phone:': '📱',
+  ':bell:': '🔔', ':mute:': '🔕', ':mag:': '🔍', ':link:': '🔗',
+  ':paperclip:': '📎', ':books:': '📚', ':book:': '📖', ':memo:': '📝',
+  ':calendar:': '📅', ':clock:': '🕐', ':sun:': '☀️', ':moon:': '🌙',
+  ':rain:': '🌧️', ':snow:': '❄️', ':rainbow:': '🌈', ':cherry_blossom:': '🌸',
+  ':rose:': '🌹', ':rabbit:': '🐰', ':cat:': '🐱', ':dog:': '🐶',
+  ':bear:': '🐻', ':panda:': '🐼', ':coffee:': '☕', ':beer:': '🍺',
+  ':cake:': '🍰', ':sushi:': '🍣', ':pizza:': '🍕', ':apple:': '🍎',
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UTILITIES
@@ -1933,6 +1967,17 @@ export class TableManager {
     this._splitRightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitRight(); this._updateSplitBtns() })
     this._mainRow.appendChild(this._splitRightBtn)
 
+    this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
+
+    // ── CSV インポート ──────────────────────────────────────────────────
+    const csvBtn = createElement('button', {
+      className: 'kuro-table-menu__btn',
+      html: '📋 CSV',
+      attrs: { type: 'button', title: 'CSV テキストを貼り付けて表を置き換え' },
+    })
+    csvBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._importCsv() })
+    this._mainRow.appendChild(csvBtn)
+
     this.el.appendChild(this._mainRow)
 
     // ── Color panel ──────────────────────────────────────────────────────
@@ -2067,6 +2112,44 @@ export class TableManager {
       const ref = row.cells[colIdx]
       ref ? row.insertBefore(c, ref) : row.appendChild(c)
       row = row.nextElementSibling
+    }
+  }
+
+  /**
+   * Replace the active table with one built from a CSV/TSV paste.
+   * The user is prompted for the text (clipboard API is async + permission-gated
+   * so a synchronous prompt is more reliable). Cells are split by tab when
+   * present, otherwise by comma. Quoted commas inside fields are not parsed —
+   * for simple cases this is sufficient; complex CSV can be cleaned up first.
+   */
+  _importCsv() {
+    if (!this.activeTable) return
+    const csv = window.prompt(
+      'CSV または TSV テキストを貼り付けてください\n(改行で行、 タブまたはカンマで列を区切り)',
+      '',
+    )
+    if (!csv) return
+
+    const lines = csv.split(/\r?\n/).filter(l => l.length > 0)
+    if (lines.length === 0) return
+    const useTab = lines[0].includes('\t')
+    const rows = lines.map(line => useTab ? line.split('\t') : line.split(','))
+
+    // 既存 <tbody> をクリアして CSV から再構築
+    const tbody = this.activeTable.querySelector('tbody') || this.activeTable
+    tbody.innerHTML = ''
+    for (const row of rows) {
+      const tr = document.createElement('tr')
+      for (const cell of row) {
+        const td = document.createElement('td')
+        td.setAttribute('contenteditable', 'true')
+        const content = cell.trim()
+        // 空セルは <br> で枠を保つ。 中身があればそのまま textContent。
+        if (content) td.textContent = content
+        else td.innerHTML = '<br>'
+        tr.appendChild(td)
+      }
+      tbody.appendChild(tr)
     }
   }
 
@@ -2847,6 +2930,9 @@ export class TableOfContents {
     this.contentEl = contentEl
     this._update   = debounce(() => this._doUpdate(), 250)
 
+    // 折りたたみ状態 (heading id の Set)
+    this._collapsed = new Set()
+
     this._observer = new MutationObserver(this._update)
     this._observer.observe(contentEl, { childList: true, subtree: true, characterData: true })
 
@@ -2861,16 +2947,34 @@ export class TableOfContents {
     }
     if (headings.length === 0) return
 
-    let html = '<p class="kuro-toc__title">目次</p>'
-    headings.forEach((h, i) => {
+    // 各見出しに id を付与し、子(より深いレベル)があるか確認
+    const items = headings.map((h, i) => {
       if (!h.id) h.id = `kuro-h-${i}`
-      const level  = parseInt(h.tagName[1], 10)
-      const indent = (level - 1) * 10
-      html += `<a href="#${h.id}" class="kuro-toc__item kuro-toc__item--h${level}" style="padding-left:${indent + 10}px">${h.textContent || '（無題）'}</a>`
+      return { el: h, id: h.id, level: parseInt(h.tagName[1], 10) }
     })
+    for (let i = 0; i < items.length; i++) {
+      const next = items[i + 1]
+      items[i].hasChildren = !!(next && next.level > items[i].level)
+    }
+
+    let html = '<p class="kuro-toc__title">目次</p>'
+    for (const it of items) {
+      const indent = (it.level - 1) * 10
+      const collapsed = this._collapsed.has(it.id)
+      const toggle = it.hasChildren
+        ? `<button class="kuro-toc__toggle ${collapsed ? 'kuro-toc__toggle--collapsed' : ''}" data-toc-id="${it.id}" aria-label="${collapsed ? '展開' : '折りたたみ'}">▾</button>`
+        : `<span class="kuro-toc__toggle-spacer"></span>`
+      html +=
+        `<div class="kuro-toc__row" data-toc-id="${it.id}" data-toc-level="${it.level}" style="padding-left:${indent + 4}px">` +
+          toggle +
+          `<a href="#${it.id}" class="kuro-toc__item kuro-toc__item--h${it.level}">${it.el.textContent || '（無題）'}</a>` +
+        `</div>`
+    }
 
     this.panelEl.innerHTML = html
+    this._applyCollapse()
 
+    // スクロール (見出しクリック)
     this.panelEl.querySelectorAll('.kuro-toc__item').forEach(a => {
       a.addEventListener('click', (e) => {
         e.preventDefault()
@@ -2878,6 +2982,42 @@ export class TableOfContents {
         target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
     })
+
+    // 折りたたみトグル
+    this.panelEl.querySelectorAll('.kuro-toc__toggle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const id = btn.dataset.tocId
+        if (this._collapsed.has(id)) this._collapsed.delete(id)
+        else                          this._collapsed.add(id)
+        this._doUpdate()
+      })
+    })
+  }
+
+  /**
+   * Hide rows that are below a collapsed parent.
+   * 線形に走査して、 collapsed の見出しの level より深い行を hidden に。
+   * 次に同レベル以下の行が出たら hidden を解除。
+   */
+  _applyCollapse() {
+    const rows = Array.from(this.panelEl.querySelectorAll('.kuro-toc__row'))
+    let hideBelow = null    // この level より深いものを hide
+    for (const row of rows) {
+      const level = parseInt(row.dataset.tocLevel, 10)
+      const id    = row.dataset.tocId
+
+      if (hideBelow !== null && level > hideBelow) {
+        row.classList.add('kuro-toc__row--hidden')
+      } else {
+        row.classList.remove('kuro-toc__row--hidden')
+        hideBelow = null
+      }
+      if (this._collapsed.has(id)) {
+        hideBelow = hideBelow === null ? level : Math.min(hideBelow, level)
+      }
+    }
   }
 
   destroy() { this._observer.disconnect() }
@@ -3722,6 +3862,7 @@ export class KuroEditor {
       .addButton('H4', 'h4', () => this._formatBlock('h4'))
       .addButton(ICON.quote, 'blockquote', () => this._formatBlock('blockquote'))
       .addCalloutButton((type) => this._applyCallout(type))
+      .addButton(ICON.kbd, 'kbd', () => this._toggleKbd())
       .addDivider()
       .addColorButton()
       .addFontSizeButton((size) => this._applyFontSize(size))
@@ -3956,6 +4097,7 @@ export class KuroEditor {
       this.toc._update()
       this._detectAutoList(e)
       this._detectSpecialLink(e)
+      this._detectEmojiShortcode(e)
       this._updateCharCount()
       if (this.imageMenu.isVisible) this.imageMenu.deactivate()
       // Code blocks are <textarea>-based now; their own input listener handles
@@ -4220,6 +4362,48 @@ export class KuroEditor {
     sentinel.remove()
   }
 
+  /**
+   * Detect a `:shortcode:` pattern ending at the caret and replace it with
+   * the corresponding emoji. Triggered on every ':' input.
+   */
+  _detectEmojiShortcode(e) {
+    if (this._mode !== 'wysiwyg' || e.data !== ':') return
+
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return
+    const range = sel.getRangeAt(0)
+    const node  = range.startContainer
+    if (node.nodeType !== Node.TEXT_NODE) return
+    if (node.parentElement?.closest('.kuro-code-wrap, .kuro-code')) return
+
+    const text   = node.textContent
+    const offset = range.startOffset
+    const before = text.slice(0, offset)
+    // 末尾が :word: で終わるパターン
+    const m = before.match(/:([a-z0-9_+-]+):$/i)
+    if (!m) return
+
+    const shortcode = m[0]
+    const emoji = EMOJI_SHORTCODES[shortcode.toLowerCase()]
+    if (!emoji) return
+
+    // 置換
+    const start = offset - shortcode.length
+    const r = document.createRange()
+    r.setStart(node, start)
+    r.setEnd(node, offset)
+    r.deleteContents()
+
+    const tn = document.createTextNode(emoji)
+    r.insertNode(tn)
+
+    const nr = document.createRange()
+    nr.setStartAfter(tn)
+    nr.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(nr)
+  }
+
   _replaceLinePrefix(textNode, prefix, insertCmd) {
     // Remove the prefix characters from the text node
     const prefixLen = prefix.length
@@ -4367,6 +4551,45 @@ export class KuroEditor {
   // ═══════════════════════════════════════════════════════════════════════════
   // FORMATTING
   // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Wrap or unwrap the current selection with <kbd> (keyboard-key style).
+   * If the caret is already inside a <kbd>, the element is unwrapped instead.
+   */
+  _toggleKbd() {
+    this.wysiwyg.focus()
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return
+    const range = sel.getRangeAt(0)
+
+    // 既に <kbd> 内なら unwrap
+    let node = range.startContainer
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
+    const existing = node?.closest?.('kbd')
+    if (existing) {
+      const parent = existing.parentNode
+      while (existing.firstChild) parent.insertBefore(existing.firstChild, existing)
+      existing.remove()
+      return
+    }
+
+    if (range.collapsed) return
+    const kbd = document.createElement('kbd')
+    try {
+      range.surroundContents(kbd)
+      sel.setBaseAndExtent(kbd, 0, kbd, kbd.childNodes.length)
+    } catch {
+      kbd.appendChild(range.extractContents())
+      range.insertNode(kbd)
+      try {
+        const nr = document.createRange()
+        nr.selectNodeContents(kbd)
+        sel.removeAllRanges()
+        sel.addRange(nr)
+      } catch (_) {}
+    }
+    if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
+  }
 
   _format(command) {
     // Alignment commands use a custom DOM approach because execCommand('justifyFull')
@@ -5359,6 +5582,7 @@ export class KuroEditor {
       `<div class="kuro-code-wrap" contenteditable="false">` +
         `<div class="kuro-code__gutter" aria-hidden="true">1</div>` +
         `<textarea class="kuro-code__area" spellcheck="false" cols="1" rows="1" wrap="off">${escaped}</textarea>` +
+        `<button class="kuro-code__copy" type="button" title="コードをコピー" aria-label="コードをコピー">📋</button>` +
       `</div>`
     )
   }
@@ -5388,6 +5612,32 @@ export class KuroEditor {
       'mousedown', 'mouseup', 'click'].forEach(evt => {
       ta.addEventListener(evt, stop)
     })
+
+    // ── Copy button ────────────────────────────────────────────────────────
+    const copyBtn = wrap.querySelector('.kuro-code__copy')
+    if (copyBtn) {
+      copyBtn.addEventListener('mousedown', (e) => e.stopPropagation())
+      copyBtn.addEventListener('click', async (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const txt = ta.value
+        let ok = false
+        try {
+          await navigator.clipboard.writeText(txt)
+          ok = true
+        } catch {
+          // フォールバック: 古いブラウザ / 非 HTTPS 環境
+          try { ta.select(); ok = document.execCommand('copy'); ta.selectionEnd = ta.selectionStart } catch {}
+        }
+        const original = copyBtn.textContent
+        copyBtn.textContent = ok ? '✓' : '✗'
+        copyBtn.classList.add('kuro-code__copy--flash')
+        setTimeout(() => {
+          copyBtn.textContent = original
+          copyBtn.classList.remove('kuro-code__copy--flash')
+        }, 1500)
+      })
+    }
 
     ta.addEventListener('input', sync)
 
