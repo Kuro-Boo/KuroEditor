@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.30'
+export const VERSION = '0.3.31'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -1360,6 +1360,11 @@ export class PopupMenu {
     // Web fonts can be loaded after the editor was created — re-detect on open.
     this._renderFontFamilyMain()
     this._fontFamilyPanel?.classList.add('kuro-popm__sizes--visible')
+    // _renderFontFamilyMain() rebuilds every button fresh (no active class), so
+    // re-apply the active highlight for the current selection — otherwise the
+    // panel always shows the default (ゴシック ring) even when a web font / 明朝
+    // is actually in effect.
+    this._updateFontFamilyLabel()
   }
   _hideFontFamily()   {
     this._fontFamilyPanel?.classList.remove('kuro-popm__sizes--visible')
