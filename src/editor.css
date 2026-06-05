@@ -293,6 +293,7 @@
   .kuro-pane__source {
     @apply hidden flex-1 p-4 bg-neutral-950 text-green-400
            font-mono text-sm resize-none outline-none border-0 overflow-auto;
+    min-height: 16rem;
   }
 
   /* Source mode: swap panels */
@@ -796,6 +797,18 @@
     @apply bg-indigo-700 text-neutral-100;
   }
 
+  .kuro-table-menu__btn--valign {
+    @apply px-1.5 inline-flex items-center;
+  }
+
+  .kuro-table-menu__btn--deltbl {
+    @apply text-red-500;
+  }
+  .kuro-table-menu__btn--deltbl:hover {
+    @apply bg-red-950 text-red-300;
+    border-color: theme('colors.red.700');
+  }
+
   /* ════════════════════════════════════════════════════════
      EMOJI PANEL
      ════════════════════════════════════════════════════════ */
@@ -1045,6 +1058,27 @@
     position: relative;
   }
 
+  /* Delete button — left of copy button */
+  .kuro-code__del {
+    position: absolute;
+    top: 0.375rem;
+    right: 2.5rem;
+    z-index: 5;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid theme('colors.neutral.600');
+    border-radius: 0.3rem;
+    background: rgba(23, 23, 27, 0.85);
+    color: theme('colors.red.500');
+    cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .kuro-code__del:hover {
+    background: theme('colors.red.950');
+    color: theme('colors.red.400');
+    border-color: theme('colors.red.700');
+  }
+
   /* Copy button — pinned to the top-right of the code wrap */
   .kuro-code__copy {
     position: absolute;
@@ -1079,12 +1113,13 @@
     font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', Consolas, monospace;
     font-size: 0.875rem;
     line-height: 1.5rem;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
     margin: 0;
   }
 
   .kuro-code__gutter {
+    cursor: grab;
     /* In grid, the column is fixed at 3rem above — no flex tweaks needed */
     padding-left: 0.75rem;
     padding-right: 0.5rem;
@@ -1117,6 +1152,19 @@
     caret-color: theme('colors.green.300');
     vertical-align: top;
     display: block;
+  }
+
+  .kuro-code-wrap--dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+
+  .kuro-code-drop-indicator {
+    height: 2px;
+    margin: 2px 0;
+    background: theme('colors.indigo.400');
+    border-radius: 1px;
+    pointer-events: none;
   }
 
   /* Legacy <pre.kuro-code> fallback (for HTML content rendered as-is) */

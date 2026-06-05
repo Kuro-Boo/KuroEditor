@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.31'
+export const VERSION = '0.3.32'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -2036,6 +2036,47 @@ export class TableManager {
     this._splitRightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitRight(); this._updateSplitBtns() })
     this._mainRow.appendChild(this._splitRightBtn)
 
+    this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
+
+    // Vertical align buttons
+    const SVG_TOP    = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><rect x="0.75" y="0.75" width="12.5" height="12.5" rx="1.5"/><line x1="3" y1="3.75" x2="11" y2="3.75"/><line x1="3" y1="6.25" x2="11" y2="6.25"/></svg>`
+    const SVG_MIDDLE = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><rect x="0.75" y="0.75" width="12.5" height="12.5" rx="1.5"/><line x1="3" y1="5.75" x2="11" y2="5.75"/><line x1="3" y1="8.25" x2="11" y2="8.25"/></svg>`
+    const SVG_BOTTOM = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><rect x="0.75" y="0.75" width="12.5" height="12.5" rx="1.5"/><line x1="3" y1="7.75" x2="11" y2="7.75"/><line x1="3" y1="10.25" x2="11" y2="10.25"/></svg>`
+    const valignDefs = [
+      { value: 'top',    title: '上揃え',   icon: SVG_TOP    },
+      { value: 'middle', title: '中央揃え', icon: SVG_MIDDLE },
+      { value: 'bottom', title: '下揃え',   icon: SVG_BOTTOM },
+    ]
+    this._valignBtns = []
+    for (const def of valignDefs) {
+      const btn = createElement('button', {
+        className: 'kuro-table-menu__btn kuro-table-menu__btn--valign',
+        html: def.icon,
+        attrs: { type: 'button', title: def.title },
+      })
+      btn._valignValue = def.value
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        const cell = this._cell()
+        if (!cell) return
+        cell.style.verticalAlign = def.value
+        this._updateValignBtns()
+      })
+      this._valignBtns.push(btn)
+      this._mainRow.appendChild(btn)
+    }
+
+    this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
+
+    // Delete table button
+    const delTableBtn = createElement('button', {
+      className: 'kuro-table-menu__btn kuro-table-menu__btn--valign kuro-table-menu__btn--deltbl',
+      html: `<svg width="11" height="12" viewBox="0 0 11 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="0.5,2.5 10.5,2.5"/><path d="M3.5,2.5v-1h4v1"/><path d="M1.5,2.5l.7,8h6.6l.7-8"/><line x1="4" y1="5" x2="4" y2="8.5"/><line x1="7" y1="5" x2="7" y2="8.5"/></svg>`,
+      attrs: { type: 'button', title: 'テーブルを削除' },
+    })
+    delTableBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._deleteTable() })
+    this._mainRow.appendChild(delTableBtn)
+
     this.el.appendChild(this._mainRow)
 
     // ── Color panel ──────────────────────────────────────────────────────
@@ -2075,6 +2116,15 @@ export class TableManager {
     this._splitDownBtn.disabled  = rowspan <= 1
   }
 
+  /** Highlight the active vertical-align button for the focused cell. */
+  _updateValignBtns() {
+    const cell    = this._cell()
+    const current = cell?.style.verticalAlign || 'middle'
+    for (const btn of this._valignBtns) {
+      btn.classList.toggle('kuro-table-menu__btn--active', btn._valignValue === current)
+    }
+  }
+
   /** Show toolbar anchored above (or below) the cursor position. */
   /** Show toolbar anchored above (or below) the cursor position. */
   activate(table) {
@@ -2100,6 +2150,7 @@ export class TableManager {
       this.el.style.left = `${left}px`
       this.el.classList.add('kuro-table-menu--visible')
       this._updateSplitBtns()
+      this._updateValignBtns()
     })
   }
 
@@ -2170,6 +2221,21 @@ export class TableManager {
       ref ? row.insertBefore(c, ref) : row.appendChild(c)
       row = row.nextElementSibling
     }
+  }
+
+  _deleteTable() {
+    const table = this.activeTable
+    if (!table || !table.isConnected) return
+    const wysiwyg = this.editor.wysiwyg
+    const p = document.createElement('p')
+    p.innerHTML = '<br>'
+    table.before(p)
+    table.remove()
+    this.deactivate()
+    this.editor.tableInserter.deactivate()
+    wysiwyg.focus()
+    window.getSelection().setBaseAndExtent(p, 0, p, 0)
+    wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
 
   destroy() { this.el.remove() }
@@ -2344,7 +2410,8 @@ export class TableInserter {
   _deleteRow() {
     const row   = this._currentCell?.closest('tr')
     const table = this.activeTable
-    if (!row || !table || table.querySelectorAll('tr').length <= 1) return
+    if (!row || !table) return
+    if (table.querySelectorAll('tr').length <= 1) { this._deleteTable(); return }
 
     const allRows = Array.from(table.querySelectorAll('tr'))
     const rowIdx  = allRows.indexOf(row)
@@ -4112,16 +4179,16 @@ export class KuroEditor {
       }
     })
 
-    // selectionchange fires whenever the caret moves (even without mouseup/keyup),
-    // so we use it to keep active-state indicators in sync while the popm is visible.
-    // Also refresh _activeRange so sub-panel ops always target the latest selection.
-    // Stored under a distinct name (_onDocSelChange) so it does NOT shadow the class
-    // method _onSelectionChange(), which mouseup/keyup rely on to show/hide the popm.
+    // selectionchange fires after the selection has actually changed — more reliable
+    // than mouseup for detecting collapse (e.g. click inside table cell to deselect).
     this._onDocSelChange = () => {
       if (this._mode === 'wysiwyg' && this.popm.el.classList.contains('kuro-popm--visible')) {
-        this.popm._updateActiveStates()
         const sel = window.getSelection()
-        if (sel?.rangeCount && !sel.isCollapsed) {
+        if (!sel?.rangeCount || sel.isCollapsed || sel.toString().length === 0) {
+          // Selection collapsed: hide popm unless focus is inside it (e.g. color input)
+          if (!this.popm.el.contains(document.activeElement)) this.popm.hide()
+        } else {
+          this.popm._updateActiveStates()
           this.popm._activeRange = sel.getRangeAt(0).cloneRange()
         }
       }
@@ -4130,9 +4197,19 @@ export class KuroEditor {
     }
     document.addEventListener('selectionchange', this._onDocSelChange)
 
-    // Cursor position → table context
-    this.wysiwyg.addEventListener('mouseup', () => this._updateTableContext())
-    this.wysiwyg.addEventListener('keyup',   () => this._updateTableContext())
+    // Cursor position → table context (document-level so it fires even when
+    // mouseup lands on a floating menu element rather than the wysiwyg itself).
+    // Skip when mouseup is ON the table menu — those buttons manage their own
+    // state and re-running _updateTableContext would race with delete actions.
+    this._onDocMouseup = (e) => {
+      if (this._mode === 'wysiwyg' &&
+          !this.tableManager.el.contains(e.target) &&
+          !this.tableInserter.container.contains(e.target)) {
+        this._updateTableContext()
+      }
+    }
+    document.addEventListener('mouseup', this._onDocMouseup)
+    this.wysiwyg.addEventListener('keyup', () => this._updateTableContext())
 
     // Content change → ToC + auto-list + special-link detection
     this.wysiwyg.addEventListener('input', (e) => {
@@ -5681,6 +5758,7 @@ export class KuroEditor {
       `<div class="kuro-code-wrap" contenteditable="false">` +
         `<div class="kuro-code__gutter" aria-hidden="true">1</div>` +
         `<textarea class="kuro-code__area" spellcheck="false" cols="1" rows="1" wrap="off">${escaped}</textarea>` +
+        `<button class="kuro-code__del" type="button" title="コードブロックを削除" aria-label="コードブロックを削除"><svg width="11" height="12" viewBox="0 0 11 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="0.5,2.5 10.5,2.5"/><path d="M3.5,2.5v-1h4v1"/><path d="M1.5,2.5l.7,8h6.6l.7-8"/><line x1="4" y1="5" x2="4" y2="8.5"/><line x1="7" y1="5" x2="7" y2="8.5"/></svg></button>` +
         `<button class="kuro-code__copy" type="button" title="コードをコピー" aria-label="コードをコピー">📋</button>` +
       `</div>`
     )
@@ -5693,8 +5771,8 @@ export class KuroEditor {
     ta._kuroWired = true
 
     const sync = () => {
-      ta.style.height = 'auto'
-      ta.style.height = (ta.scrollHeight + 2) + 'px'
+      ta.style.height = '0'
+      ta.style.height = ta.scrollHeight + 'px'
       const gutter = wrap.querySelector('.kuro-code__gutter')
       if (gutter) {
         const n = Math.max(1, ta.value.split('\n').length)
@@ -5711,6 +5789,22 @@ export class KuroEditor {
       'mousedown', 'mouseup', 'click'].forEach(evt => {
       ta.addEventListener(evt, stop)
     })
+
+    // ── Delete button ──────────────────────────────────────────────────────
+    const delBtn = wrap.querySelector('.kuro-code__del')
+    if (delBtn) {
+      delBtn.addEventListener('mousedown', (e) => e.stopPropagation())
+      delBtn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const p = document.createElement('p')
+        p.innerHTML = '<br>'
+        wrap.replaceWith(p)
+        const sel = window.getSelection()
+        sel.setBaseAndExtent(p, 0, p, 0)
+        this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
 
     // ── Copy button ────────────────────────────────────────────────────────
     const copyBtn = wrap.querySelector('.kuro-code__copy')
@@ -5764,6 +5858,58 @@ export class KuroEditor {
     })
 
     sync()   // initial autosize + gutter
+    this._bindCodeBlockDrag(wrap)
+  }
+
+  _bindCodeBlockDrag(wrap) {
+    const gutter = wrap.querySelector('.kuro-code__gutter')
+    if (!gutter || gutter._kuroDragWired) return
+    gutter._kuroDragWired = true
+
+    const wysiwyg = this.wysiwyg
+
+    gutter.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+
+      const indicator = document.createElement('div')
+      indicator.className = 'kuro-code-drop-indicator'
+      wrap.classList.add('kuro-code-wrap--dragging')
+
+      let dropTarget = null
+
+      const getDropTarget = (clientY) => {
+        const siblings = Array.from(wysiwyg.children).filter(c => c !== wrap && c !== indicator)
+        for (const el of siblings) {
+          const rect = el.getBoundingClientRect()
+          if (clientY <= rect.top + rect.height / 2) return { el, before: true }
+          if (clientY <= rect.bottom)                 return { el, before: false }
+        }
+        const last = siblings[siblings.length - 1]
+        return last ? { el: last, before: false } : null
+      }
+
+      const onMouseMove = (e) => {
+        dropTarget = getDropTarget(e.clientY)
+        if (!dropTarget) { indicator.remove(); return }
+        dropTarget.before ? dropTarget.el.before(indicator) : dropTarget.el.after(indicator)
+      }
+
+      const onMouseUp = () => {
+        wrap.classList.remove('kuro-code-wrap--dragging')
+        indicator.remove()
+        if (dropTarget) {
+          dropTarget.before ? dropTarget.el.before(wrap) : dropTarget.el.after(wrap)
+        }
+        document.removeEventListener('mousemove', onMouseMove)
+        document.removeEventListener('mouseup',   onMouseUp)
+        wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+
+      document.addEventListener('mousemove', onMouseMove)
+      document.addEventListener('mouseup',   onMouseUp)
+    })
   }
 
   /**
@@ -5921,6 +6067,7 @@ export class KuroEditor {
     // Remove document-level listeners registered in _bindEvents()
     document.removeEventListener('selectionchange', this._onDocSelChange)
     document.removeEventListener('mousedown',       this._onDocMousedown)
+    document.removeEventListener('mouseup',         this._onDocMouseup)
 
     this.toc.destroy()
     this.tableManager.destroy()
