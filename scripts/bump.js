@@ -76,15 +76,24 @@ if (updated === src) {
 }
 writeFileSync(editorPath, updated)
 
+// ── 6. Write public/sample/index.html ?v= cache-buster ───────────────────────
+const samplePath = resolve(root, 'public', 'sample', 'index.html')
+const sampleSrc  = readFileSync(samplePath, 'utf8')
+const sampleUpd  = sampleSrc
+  .replace(/(href="\.\.\/kuro-editor\.css)(?:\?v=[^"]*)?(")/g, `$1?v=${next}$2`)
+  .replace(/(src="\.\.\/kuro-editor\.js)(?:\?v=[^"]*)?(")/g,  `$1?v=${next}$2`)
+writeFileSync(samplePath, sampleUpd)
+
 console.log(`✓ ${pkg.name}  ${prev} → ${next}`)
 console.log(`  VERSION        KUROEDITOR_VERSION=${next}`)
 console.log(`  package.json   "version": "${next}"`)
 console.log(`  src/editor.js  export const VERSION = '${next}'`)
+console.log(`  sample/index   ?v=${next}`)
 
-// ── 6. Git commit (no push — remote may not be configured) ───────────────────
+// ── 7. Git commit (no push — remote may not be configured) ───────────────────
 const label = bump === 'sync' ? `sync version to ${next}` : `bump version ${prev} → ${next}`
 try {
-  execSync('git add VERSION package.json src/editor.js src/editor.css', { cwd: root, stdio: 'inherit' })
+  execSync('git add VERSION package.json src/editor.js src/editor.css public/sample/index.html', { cwd: root, stdio: 'inherit' })
   execSync(`git commit -m "chore: ${label}"`, { cwd: root, stdio: 'inherit' })
   console.log('✓ Committed')
 } catch (e) {
