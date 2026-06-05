@@ -1,6 +1,6 @@
 {
   "name": "kuro-editor",
-  "version": "0.3.32",
+  "version": "0.3.33",
   "description": "WYSIWYG editor - Vanilla JS + HTML + Tailwind CSS, standalone embed",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.txt",
