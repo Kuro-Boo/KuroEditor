@@ -6,8 +6,8 @@
   <title>KuroEditor — Sample</title>
 
   <!-- KuroEditor 本体 -->
-  <link rel="stylesheet" href="../kuro-editor.css?v=1.0.0" />
-  <script src="../kuro-editor.js?v=1.0.0" defer></script>
+  <link rel="stylesheet" href="../kuro-editor.css?v=1.0.1" />
+  <script src="../kuro-editor.js?v=1.0.1" defer></script>
 
   <!-- 動作確認用 Web フォント (5 種類):
        ホストが <link> を増やせば、 KuroEditor の Web-Fonts ピッカーに
@@ -76,6 +76,16 @@
       transition: opacity 0.4s;
       opacity: 0;
     }
+    .sample-back-link {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      font-size: 0.8rem; color: #71717a;
+      padding: 0.25rem 0.6rem;
+      border: 1px solid #3f3f46;
+      border-radius: 9999px;
+      transition: color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .sample-back-link:hover { color: #e5e5e5; border-color: #71717a; }
     .sample-github-link { font-size: 0.75rem; color: #a3a3a3; transition: color 0.2s; }
     .sample-github-link:hover { color: #a5b4fc; }
 
@@ -186,6 +196,7 @@
   <!-- ヘッダー -->
   <header class="sample-header">
     <div class="sample-header__left">
+      <a href="../" class="sample-back-link">← 戻る</a>
       <a href="../" class="sample-logo">
         <img src="./favicon.svg" alt="" class="sample-logo__icon">
         <span class="sample-logo__name"><span class="sample-logo__kuro">Kuro</span><span class="sample-logo__editor">Editor</span></span>
