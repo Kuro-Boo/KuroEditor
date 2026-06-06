@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '0.3.34'
+export const VERSION = '1.0.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -18,12 +18,36 @@ export const LINK_RE = {
   hyper: /\[\[([^\]]+)\]\]/g,
 }
 
-/** Preset text colours for the colour picker */
-const PRESET_COLORS = [
-  '#ffffff', '#f3f4f6', '#d1d5db', '#9ca3af', '#6b7280', '#374151', '#111827',
-  '#fca5a5', '#ef4444', '#dc2626', '#fcd34d', '#eab308', '#86efac', '#22c55e',
-  '#93c5fd', '#3b82f6', '#1d4ed8', '#c4b5fd', '#8b5cf6', '#f9a8d4', '#ec4899',
+/** Grouped preset colours — 5 categories × 9 colours (3 cols × 3 rows each) */
+const COLOR_GROUPS = [
+  { name: 'モノトーン', colors: [
+    '#ffffff', '#e5e7eb', '#d1d5db',
+    '#9ca3af', '#6b7280', '#4b5563',
+    '#374151', '#1f2937', '#111827',
+  ]},
+  { name: '赤系', colors: [
+    '#fecdd3', '#fca5a5', '#f87171',
+    '#ef4444', '#dc2626', '#b91c1c',
+    '#fb7185', '#f43f5e', '#e11d48',
+  ]},
+  { name: '青系', colors: [
+    '#bae6fd', '#93c5fd', '#60a5fa',
+    '#3b82f6', '#2563eb', '#1d4ed8',
+    '#38bdf8', '#0ea5e9', '#0284c7',
+  ]},
+  { name: '緑系', colors: [
+    '#bbf7d0', '#86efac', '#4ade80',
+    '#22c55e', '#16a34a', '#15803d',
+    '#a3e635', '#5eead4', '#14b8a6',
+  ]},
+  { name: 'その他', colors: [
+    '#fed7aa', '#fb923c', '#f97316',
+    '#fde68a', '#fbbf24', '#eab308',
+    '#e9d5ff', '#c084fc', '#a855f7',
+  ]},
 ]
+/** Flat preset list (backward compat for any external use) */
+const PRESET_COLORS = COLOR_GROUPS.flatMap(g => g.colors)
 
 /** Font size presets (% of base).  100% = standard = highlighted as baseline. */
 const FONT_SIZE_OPTIONS = [
@@ -129,6 +153,10 @@ const ICON = {
   ),
   code: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,1 1,7 5,13"/><polyline points="11,1 15,7 11,13"/></svg>`,
   hr:   _icn(`<rect x="0" y="6" width="14" height="2" rx="1"/>`),
+  roundbox: _icn(
+    `<rect x="0.5" y="1" width="13" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+    _bar(2.5, 4, 9) + _bar(2.5, 7, 6) + _bar(2.5, 10, 7.5)
+  ),
   // Undo: 矢印が左に折れ曲がってカーブ
   undo: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,4 2,4 2,1"/><path d="M2 4 a5 5 0 0 1 5 -1 h2 a4 4 0 0 1 0 8 h-3"/></svg>`,
   // Redo: undo の左右対称
@@ -738,84 +766,129 @@ export function findCell(node) {
 export class ColorPicker {
   /**
    * @param {{
-   *   presets?:           string[],
-   *   allowClear?:        boolean,    // show the × clear swatch (default true)
-   *   showCustom?:        boolean,    // show the native <input type="color"> row (default true)
-   *   defaultCustomColor?: string,    // initial value for the native picker (default '#ffffff')
-   *   onBeforePick?:      () => void, // called right BEFORE onPick/onClear
-   *   onPick:             (color: string) => void,
-   *   onClear?:           () => void,
+   *   allowClear?:   boolean,
+   *   showCustom?:   boolean,
+   *   onBeforePick?: () => void,
+   *   onPick:        (color: string) => void,
+   *   onClear?:      () => void,
    * }} opts
    */
   constructor(opts) {
     this.opts = opts
-    this.el = createElement('div', { className: 'kuro-color-picker' })
-    this._customInput = null
+    this.el   = createElement('div', { className: 'kuro-color-picker' })
+    this._customRow = null
+    this._addInput  = null
     this._build()
   }
 
   _build() {
-    const {
-      presets            = PRESET_COLORS,
-      allowClear         = true,
-      showCustom         = true,
-      defaultCustomColor = '#ffffff',
-    } = this.opts
+    const { allowClear = true, showCustom = true } = this.opts
 
-    // ── Color grid ─────────────────────────────────────────────────────────
-    const grid = createElement('div', { className: 'kuro-color-grid' })
+    // ── Header: [× 色削除] ──────────────── [＋ カラー追加] ──────────────
+    const header = createElement('div', { className: 'kuro-color-picker__header' })
 
     if (allowClear) {
       const clearBtn = createElement('button', {
         className: 'kuro-color-swatch',
         html: '×',
         attrs: {
-          type: 'button',
-          title: '色なし',
-          'aria-label': '色なし',
+          type: 'button', title: '色なし', 'aria-label': '色なし',
           style: 'background:repeating-conic-gradient(#555 0% 25%,#333 0% 50%) 0/8px 8px;font-size:13px;line-height:1.25rem;color:#ef4444;font-weight:700',
         },
       })
       clearBtn.addEventListener('mousedown', (e) => {
-        e.preventDefault()
-        this.opts.onBeforePick?.()
-        this.opts.onClear?.()
+        e.preventDefault(); this.opts.onBeforePick?.(); this.opts.onClear?.()
       })
-      grid.appendChild(clearBtn)
+      header.appendChild(clearBtn)
     }
 
-    for (const color of presets) {
-      const sw = createElement('button', {
-        className: 'kuro-color-swatch',
-        attrs: { type: 'button', style: `background-color:${color}`, title: color, 'aria-label': color },
+    if (showCustom) {
+      this._addInput = createElement('input', {
+        className: 'kuro-color-add-input',
+        attrs: { type: 'color', value: '#ffffff', 'aria-hidden': 'true', tabindex: '-1' },
       })
-      sw.addEventListener('mousedown', (e) => {
-        e.preventDefault()
+      this._addInput.addEventListener('mousedown', () => this.opts.onBeforePick?.())
+      this._addInput.addEventListener('input', (e) => {
+        const color = e.target.value
         this.opts.onBeforePick?.()
+        const saved = ColorPicker._loadCustomColors()
+        if (!saved.includes(color)) {
+          ColorPicker._saveCustomColors([color, ...saved].slice(0, 27))
+          this._rebuildCustomRow()
+        }
         this.opts.onPick(color)
       })
-      grid.appendChild(sw)
+      const addBtn = createElement('button', {
+        className: 'kuro-color-add-btn',
+        html: '＋ カラー追加',
+        attrs: { type: 'button', title: 'カスタムカラーを追加' },
+      })
+      addBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this.opts.onBeforePick?.() })
+      addBtn.addEventListener('click', () => this._addInput.click())
+      header.appendChild(addBtn)
+      this.el.appendChild(this._addInput)
     }
-    this.el.appendChild(grid)
+    this.el.appendChild(header)
 
-    // ── Custom-color row (native <input type="color">) ─────────────────────
-    if (showCustom) {
-      const customRow = createElement('div', { className: 'kuro-color-custom' })
-      this._customInput = createElement('input', {
-        className: 'kuro-color-input',
-        attrs: { type: 'color', value: defaultCustomColor, 'aria-label': 'カスタムカラー' },
+    // ── Groups: 5 × (3 cols × 3 rows), flex-wrap for narrow viewports ─────
+    const groupsRow = createElement('div', { className: 'kuro-color-picker__groups' })
+    for (const group of COLOR_GROUPS) {
+      const groupEl = createElement('div', {
+        className: 'kuro-color-group',
+        attrs: { title: group.name },
       })
-      // Native picker steals focus — let the caller save state before that happens
-      this._customInput.addEventListener('mousedown', () => { this.opts.onBeforePick?.() })
-      this._customInput.addEventListener('input', (e) => {
-        this.opts.onBeforePick?.()
-        this.opts.onPick(e.target.value)
-      })
-      const label = createElement('span', { className: 'kuro-color-custom__label', html: 'カスタム' })
-      customRow.appendChild(this._customInput)
-      customRow.appendChild(label)
-      this.el.appendChild(customRow)
+      for (const color of group.colors) groupEl.appendChild(this._makeSwatch(color))
+      groupsRow.appendChild(groupEl)
     }
+    this.el.appendChild(groupsRow)
+
+    // ── Custom row: 20 slots (filled or empty-bordered) ───────────────────
+    if (showCustom) {
+      this._customRow = createElement('div', { className: 'kuro-color-picker__custom' })
+      this.el.appendChild(this._customRow)
+      this._rebuildCustomRow()
+    }
+  }
+
+  _rebuildCustomRow() {
+    if (!this._customRow) return
+    const saved = ColorPicker._loadCustomColors()
+    this._customRow.innerHTML = ''
+    // 3 blocks × 9 slots = 27 max, matching the 3×3 block unit of preset groups
+    for (let b = 0; b < 3; b++) {
+      const group = createElement('div', { className: 'kuro-color-group' })
+      for (let s = 0; s < 9; s++) {
+        const idx = b * 9 + s
+        group.appendChild(
+          idx < saved.length
+            ? this._makeSwatch(saved[idx])
+            : createElement('div', { className: 'kuro-color-slot--empty', attrs: { 'aria-hidden': 'true' } })
+        )
+      }
+      this._customRow.appendChild(group)
+    }
+  }
+
+  _makeSwatch(color) {
+    const sw = createElement('button', {
+      className: 'kuro-color-swatch',
+      attrs: { type: 'button', style: `background-color:${color}`, title: color, 'aria-label': color },
+    })
+    sw.addEventListener('mousedown', (e) => {
+      e.preventDefault(); this.opts.onBeforePick?.(); this.opts.onPick(color)
+    })
+    return sw
+  }
+
+  static _loadCustomColors() {
+    try {
+      const s = localStorage.getItem('kuro-custom-colors')
+      return s ? JSON.parse(s).filter(c => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 27) : []
+    } catch { return [] }
+  }
+
+  static _saveCustomColors(colors) {
+    try { localStorage.setItem('kuro-custom-colors', JSON.stringify(colors)) } catch {}
   }
 }
 
@@ -1966,6 +2039,204 @@ export class PopupMenu {
 // TABLE MANAGER — floating toolbar when cursor is inside a table
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROUNDBOX MENU  (floating kmenu — appears when cursor is inside .kuro-roundbox)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export class RoundboxMenu {
+  /** @param {KuroEditor} editor */
+  constructor(editor) {
+    this._editor = editor
+    this.wysiwyg = editor.wysiwyg
+    this._box    = null
+    this._build()
+  }
+
+  _build() {
+    this.el = createElement('div', {
+      className: 'kuro-roundbox-menu',
+      attrs: { role: 'toolbar', 'aria-label': '角丸ボックス設定' },
+    })
+    this.el.style.display = 'none'
+
+    this.el.appendChild(createElement('span', {
+      className: 'kuro-roundbox-menu__label',
+      html: 'BOX設定',
+    }))
+
+    // Width select
+    this._widthSel = createElement('select', {
+      className: 'kuro-roundbox-menu__select',
+      attrs: { title: '横幅 %' },
+    })
+    for (const w of ['30%','40%','50%','60%','70%','80%','90%','100%']) {
+      const opt = document.createElement('option')
+      opt.value = w; opt.textContent = w
+      this._widthSel.appendChild(opt)
+    }
+    this._widthSel.addEventListener('mousedown', e => e.stopPropagation())
+    this._widthSel.addEventListener('change', () => {
+      if (!this._box) return
+      this._box.dataset.width = this._widthSel.value
+      this._applyLayout(this._box)
+      this._position()
+      this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    this.el.appendChild(this._widthSel)
+
+    // Align buttons — use same icons as popm align buttons
+    this._alignBtns = []
+    const alignWrap = createElement('div', { className: 'kuro-roundbox-menu__aligns' })
+    for (const [align, icon, title] of [
+      ['left',   ICON.alignLeft,   '左寄せ（回り込み）'],
+      ['center', ICON.alignCenter, '中央'],
+      ['right',  ICON.alignRight,  '右寄せ（回り込み）'],
+    ]) {
+      const btn = createElement('button', {
+        html: icon,
+        attrs: { type: 'button', title, 'data-align': align },
+      })
+      btn.addEventListener('mousedown', e => e.stopPropagation())
+      btn.addEventListener('click', (e) => {
+        e.preventDefault()
+        if (!this._box) return
+        this._box.dataset.align = align
+        this._applyLayout(this._box)
+        this._alignBtns.forEach(b => b.classList.toggle('active', b.dataset.align === align))
+        this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      alignWrap.appendChild(btn)
+      this._alignBtns.push(btn)
+    }
+    this.el.appendChild(alignWrap)
+
+    // Delete button — removes the box, promotes its children to parent
+    const delBtn = createElement('button', {
+      className: 'kuro-roundbox-menu__del',
+      html: '× 削除',
+      attrs: { type: 'button', title: '角丸ボックスを削除' },
+    })
+    delBtn.addEventListener('mousedown', e => e.stopPropagation())
+    delBtn.addEventListener('click', (e) => {
+      e.preventDefault()
+      if (!this._box) return
+      const box = this._box
+      this.deactivate()
+      const frag = document.createDocumentFragment()
+      while (box.firstChild) frag.appendChild(box.firstChild)
+      box.replaceWith(frag)
+      this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    this.el.appendChild(delBtn)
+
+    document.body.appendChild(this.el)
+  }
+
+  _applyLayout(box) {
+    const width = box.dataset.width || '100%'
+    const align = box.dataset.align || 'center'
+    box.style.width = width
+    if (align === 'left') {
+      box.style.float   = 'left'
+      box.style.display = ''
+      box.style.margin  = '0 1em 1em 0'
+    } else if (align === 'right') {
+      box.style.float   = 'right'
+      box.style.display = ''
+      box.style.margin  = '0 0 1em 1em'
+    } else {
+      box.style.float   = ''
+      box.style.display = 'block'
+      box.style.margin  = '0 auto'
+    }
+  }
+
+  activate(box) {
+    this._box = box
+    this._widthSel.value = box.dataset.width || '100%'
+    const align = box.dataset.align || 'center'
+    this._alignBtns.forEach(b => b.classList.toggle('active', b.dataset.align === align))
+    this.el.style.display = 'flex'
+    this._position()
+  }
+
+  deactivate() {
+    this._box = null
+    this.el.style.display = 'none'
+  }
+
+  get isActive() { return !!this._box }
+
+  _position() {
+    if (!this._box) return
+    const boxRect = this._box.getBoundingClientRect()
+    const menuH   = this.el.offsetHeight || 32
+    const menuW   = this.el.offsetWidth  || 240
+    const GAP     = 6
+    const VPM     = 4
+
+    // Two safe candidates — always OUTSIDE the box to never cover typed text
+    const topAbove = boxRect.top    - menuH - GAP
+    const topBelow = boxRect.bottom + GAP
+
+    // Prefer above; fall back to below when there's no room
+    let top = topAbove >= VPM ? topAbove : topBelow
+
+    // Helper: does a given top position overlap with a rect?
+    const overlaps = (t, r) => r && t < r.bottom + GAP && t + menuH > r.top - GAP
+
+    // Avoid the active caret — flip to the other side of the box
+    const sel = window.getSelection()
+    if (sel?.rangeCount) {
+      const cr = sel.getRangeAt(0).getBoundingClientRect()
+      if ((cr.width || cr.height) && overlaps(top, cr)) {
+        top = (top === topAbove) ? topBelow : topAbove
+      }
+    }
+
+    // Avoid popm — flip to the other side of the box
+    const popmEl = this._editor?.popm?.el
+    if (popmEl?.classList.contains('kuro-popm--visible')) {
+      const pr = popmEl.getBoundingClientRect()
+      if (overlaps(top, pr)) {
+        top = (top === topAbove) ? topBelow : topAbove
+      }
+    }
+
+    // Avoid TableManager toolbar — RoundboxMenu has priority, so TableManager moves;
+    // but also shift roundboxMenu if table menu is already placed above the box
+    const tblEl = this._editor?.tableManager?.el
+    if (tblEl?.classList.contains('kuro-table-menu--visible')) {
+      const tr = tblEl.getBoundingClientRect()
+      if (overlaps(top, tr)) {
+        top = (top === topAbove) ? topBelow : topAbove
+      }
+    }
+
+    // Avoid mmenu (bottom bar) — push up if needed, but stay outside the box
+    const mmenuEl = this._editor?.mmenu
+    if (mmenuEl) {
+      const mr = mmenuEl.getBoundingClientRect()
+      if (top + menuH > mr.top - GAP) {
+        top = topAbove >= VPM ? topAbove : mr.top - menuH - GAP
+      }
+    }
+
+    // Final viewport clamp
+    top = Math.max(VPM, top)
+
+    // Horizontal: flush to box left, clamp to viewport
+    let left = boxRect.left
+    if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8
+    left = Math.max(VPM, left)
+
+    this.el.style.top  = (top + window.scrollY) + 'px'
+    this.el.style.left = left + 'px'
+  }
+
+  destroy() { this.el.remove() }
+}
+
 export class TableManager {
   /** @param {KuroEditor} editor */
   constructor(editor) {
@@ -1983,6 +2254,9 @@ export class TableManager {
   _build() {
     // ── Main button row ──────────────────────────────────────────────────
     this._mainRow = createElement('div', { className: 'kuro-table-menu__main' })
+
+    this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__label', html: 'TBL設定' }))
+    this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
 
     // Background color button (colored square icon + label)
     this._colorBtn = createElement('button', {
@@ -2132,7 +2406,7 @@ export class TableManager {
     requestAnimationFrame(() => {
       const menuH = this.el.offsetHeight || 36
       const menuW = this.el.offsetWidth  || 200
-      const GAP   = 18
+      const GAP   = 6
       const sel   = window.getSelection()
 
       const caretRect = sel?.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null
@@ -2143,6 +2417,15 @@ export class TableManager {
 
       let top = refRect.top - menuH - GAP
       if (top < 4) top = refRect.bottom + 6
+
+      // Avoid roundboxMenu — position below it if overlapping
+      const rbMenu = this.editor.roundboxMenu
+      if (rbMenu?.isActive) {
+        const rbRect = rbMenu.el.getBoundingClientRect()
+        if (rbRect && top < rbRect.bottom + GAP && top + menuH > rbRect.top - GAP) {
+          top = rbRect.bottom + GAP
+        }
+      }
 
       const left = Math.max(4, Math.min(refRect.left, window.innerWidth - menuW - 4))
 
@@ -3701,7 +3984,8 @@ export class KuroEditor {
       { label: ICON.table,    id: 'table', title: 'テーブル' },
       { label: '🖼',          id: 'media', title: 'メディア' },
       { label: ICON.code,     id: 'code',  title: 'コード' },
-      { label: ICON.hr,       id: 'hr',    title: '水平線' },
+      { label: ICON.hr,       id: 'hr',       title: '水平線' },
+      { label: ICON.roundbox, id: 'roundbox', title: '角丸ボックス' },
     ]
 
     this._mmenuBtns = {}
@@ -3796,7 +4080,8 @@ export class KuroEditor {
       { label: ICON.table, id: 'table', title: 'テーブル' },
       { label: '🖼',        id: 'media', title: 'メディア' },
       { label: ICON.code,  id: 'code',  title: 'コード' },
-      { label: ICON.hr,    id: 'hr',    title: '水平線' },
+      { label: ICON.hr,       id: 'hr',       title: '水平線' },
+      { label: ICON.roundbox, id: 'roundbox', title: '角丸ボックス' },
     ]
     this._tabActionBtns = {}
     for (const { label, id, title } of tabActionDefs) {
@@ -3931,6 +4216,7 @@ export class KuroEditor {
     this.toc = new TableOfContents(this.tocPanelEl, this.wysiwyg)
 
     this.linePopupMenu = new LinePopupMenu()
+    this.roundboxMenu  = new RoundboxMenu(this)
     this.tableManager  = new TableManager(this)
     this.tableInserter = new TableInserter(this.wysiwyg, {
       onRowBorderClick: (target, btn) => this._openLinePopup(target, btn),
@@ -4194,6 +4480,8 @@ export class KuroEditor {
       }
       // Close line popup whenever the selection (caret) moves
       if (this.linePopupMenu.isVisible) this.linePopupMenu.close()
+      // Reposition roundboxMenu when popm appears/moves (avoid overlap)
+      if (this.roundboxMenu.isActive) this.roundboxMenu._position()
     }
     document.addEventListener('selectionchange', this._onDocSelChange)
 
@@ -4207,9 +4495,15 @@ export class KuroEditor {
           !this.tableInserter.container.contains(e.target)) {
         this._updateTableContext()
       }
+      if (this._mode === 'wysiwyg' && !this.roundboxMenu.el.contains(e.target)) {
+        this._updateRoundboxContext()
+      }
     }
     document.addEventListener('mouseup', this._onDocMouseup)
-    this.wysiwyg.addEventListener('keyup', () => this._updateTableContext())
+    this.wysiwyg.addEventListener('keyup', () => {
+      this._updateTableContext()
+      this._updateRoundboxContext()
+    })
 
     // Content change → ToC + auto-list + special-link detection
     this.wysiwyg.addEventListener('input', (e) => {
@@ -4232,21 +4526,22 @@ export class KuroEditor {
     // Hide floaters when clicking outside.
     // Store as instance property so destroy() can removeEventListener with the same ref.
     this._onDocMousedown = (e) => {
-      const inEditor  = this.root.contains(e.target)
-      const inPopm    = this.popm.el.contains(e.target)
-      const inEmoji   = this.emojiPanel.el.contains(e.target)
-      const inTable   = this.tableManager.el.contains(e.target) ||
-                        this.tableInserter.container.contains(e.target)
-      const inMedia   = this.mediaDialog.el.contains(e.target)
-      const inImage   = this.imageMenu.el.contains(e.target)
-      const inLine    = this.linePopupMenu.el.contains(e.target)
+      const inEditor   = this.root.contains(e.target)
+      const inPopm     = this.popm.el.contains(e.target)
+      const inEmoji    = this.emojiPanel.el.contains(e.target)
+      const inTable    = this.tableManager.el.contains(e.target) ||
+                         this.tableInserter.container.contains(e.target)
+      const inMedia    = this.mediaDialog.el.contains(e.target)
+      const inImage    = this.imageMenu.el.contains(e.target)
+      const inLine     = this.linePopupMenu.el.contains(e.target)
+      const inRoundbox = this.roundboxMenu.el.contains(e.target)
       if (!inEditor && !inPopm && !inEmoji) this.popm.hide()
       if (!inEditor && !inPopm && !inEmoji) this.emojiPanel.hide()
       if (!inEditor && !inTable) this.tableManager.deactivate()
       if (!inMedia) this.mediaDialog.hide()
       if (!inImage && !inEditor) this.imageMenu.deactivate()
-      // Close line popup unless click is inside it OR on the border button that anchors it
       if (!inLine && !inTable) this.linePopupMenu.close()
+      if (!inEditor && !inRoundbox) this.roundboxMenu.deactivate()
     }
     document.addEventListener('mousedown', this._onDocMousedown)
 
@@ -4722,6 +5017,7 @@ export class KuroEditor {
     this.popm.hide()
     this.tableManager.deactivate()
     this.imageMenu.deactivate()
+    this.roundboxMenu.deactivate()
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -5705,10 +6001,11 @@ export class KuroEditor {
         this._saveRange()
         this.emojiPanel.toggle(anchorEl ?? this._mmenuBtns.emoji)
         break
-      case 'table':  this._insertTable();      break
-      case 'code':   this._insertCodeBlock();  break
-      case 'hr':     this._insertHR();         break
-      case 'media':  this._promptMedia();      break
+      case 'table':    this._insertTable();     break
+      case 'code':     this._insertCodeBlock(); break
+      case 'hr':       this._insertHR();        break
+      case 'media':    this._promptMedia();     break
+      case 'roundbox': this._insertRoundbox();  break
     }
   }
 
@@ -5993,6 +6290,43 @@ export class KuroEditor {
     execFormat('insertHTML', '<hr class="kuro-hr"><p><br></p>')
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ROUNDED BOX
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // DOM:
+  //   <div class="kuro-roundbox" data-align="center" data-width="100%"
+  //        style="width:100%;display:block;margin:0 auto">
+  //     <p>...</p>
+  //   </div>
+  //
+  // 普通のブロック div。wysiwyg 内で普通に編集可能。
+  // カーソルが中にある間だけ RoundboxMenu（kmenu）が浮かぶ。
+  // float で左右 align → 周囲テキストが回り込む。ネスト可能。
+
+  _insertRoundbox() {
+    this.wysiwyg.focus()
+    execFormat('insertHTML',
+      '<div class="kuro-roundbox" data-align="center" data-width="100%"' +
+      ' style="width:100%;display:block;margin:0 auto"><p><br></p></div>' +
+      '<p><br></p>'
+    )
+  }
+
+  _updateRoundboxContext() {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) { this.roundboxMenu.deactivate(); return }
+    let node = sel.getRangeAt(0).startContainer
+    while (node && node !== this.wysiwyg) {
+      if (node.nodeType === 1 && node.classList?.contains('kuro-roundbox')) {
+        this.roundboxMenu.activate(node)
+        return
+      }
+      node = node.parentNode
+    }
+    this.roundboxMenu.deactivate()
+  }
+
   _promptMedia() {
     // Show custom media dialog near the current caret position.
     // _savedRange is updated on wysiwyg blur (which fires when clicking mmenu).
@@ -6070,6 +6404,7 @@ export class KuroEditor {
     document.removeEventListener('mouseup',         this._onDocMouseup)
 
     this.toc.destroy()
+    this.roundboxMenu.destroy()
     this.tableManager.destroy()
     this.tableInserter.destroy()
     this.tableResizer.destroy()
