@@ -70,7 +70,7 @@ const updated    = src.replace(
   /^export const VERSION = '[^']*'/m,
   `export const VERSION = '${next}'`,
 )
-if (updated === src) {
+if (updated === src && bump !== 'sync') {
   console.error('⚠ Could not find VERSION constant in src/editor.js — update manually.')
   process.exit(1)
 }
@@ -84,16 +84,23 @@ const sampleUpd  = sampleSrc
   .replace(/(src="\.\.\/kuro-editor\.js)(?:\?v=[^"]*)?(")/g,  `$1?v=${next}$2`)
 writeFileSync(samplePath, sampleUpd)
 
+// ── 7. Write public/index.html hero.badge version (all languages) ─────────────
+const promoPath = resolve(root, 'public', 'index.html')
+const promoSrc  = readFileSync(promoPath, 'utf8')
+const promoUpd  = promoSrc.replace(/v\d+\.\d+\.\d+( — )/g, `v${next}$1`)
+writeFileSync(promoPath, promoUpd)
+
 console.log(`✓ ${pkg.name}  ${prev} → ${next}`)
 console.log(`  VERSION        KUROEDITOR_VERSION=${next}`)
 console.log(`  package.json   "version": "${next}"`)
 console.log(`  src/editor.js  export const VERSION = '${next}'`)
 console.log(`  sample/index   ?v=${next}`)
+console.log(`  public/index   hero.badge v${next}`)
 
-// ── 7. Git commit (no push — remote may not be configured) ───────────────────
+// ── 8. Git commit (no push — remote may not be configured) ───────────────────
 const label = bump === 'sync' ? `sync version to ${next}` : `bump version ${prev} → ${next}`
 try {
-  execSync('git add VERSION package.json src/editor.js src/editor.css public/sample/index.html', { cwd: root, stdio: 'inherit' })
+  execSync('git add VERSION package.json src/editor.js src/editor.css public/sample/index.html public/index.html', { cwd: root, stdio: 'inherit' })
   execSync(`git commit -m "chore: ${label}"`, { cwd: root, stdio: 'inherit' })
   console.log('✓ Committed')
 } catch (e) {
