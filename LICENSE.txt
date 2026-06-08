@@ -4,9 +4,9 @@ Copyright (c) 2026 Kuro-Boo
 
 This license is the MIT License with one additional attribution requirement:
 when the Software is used to provide a public-facing or user-facing interface,
-the phrase "with KuroEditor" must be shown in an appropriate attribution area,
-such as the final page, About screen, footer, credits screen, documentation
-page, or an equivalent location.
+the phrase "Editor: Kuro.Boo" with a link to https://kuro.boo/ must be shown in an
+appropriate attribution area, such as the final page, About screen, footer,
+credits screen, documentation page, or an equivalent location.
 
 The attribution is intended only to identify KuroEditor. It does not imply
 endorsement by Kuro-Boo or by any KuroEditor contributor.

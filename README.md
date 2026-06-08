@@ -243,4 +243,4 @@ dist/           # ビルド成果物 (kuro-editor.js / .css)
 
 [Kuro License](LICENSE.txt) — MIT ベース＋帰属表示要件付き。
 
-> このソフトウェアを使ったユーザー向けインターフェイスを公開する場合、フッターやクレジット欄などに `with KuroEditor` の表示が必要です。
+> このソフトウェアを使ったユーザー向けインターフェイスを公開する場合、フッターやクレジット欄などに `Editor: Kuro.Boo` ([https://kuro.boo/](https://kuro.boo/)) の表示が必要です。
