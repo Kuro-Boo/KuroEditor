@@ -18,11 +18,19 @@
   <!-- ヘッダー -->
   <header class="sticky top-0 z-40 bg-neutral-900 border-b border-neutral-800
                  px-6 py-3 flex items-center justify-between">
-    <h1 class="flex items-center gap-2 text-lg font-bold italic">
-      <img src="/assets/favicon.svg" alt="" class="w-7 h-7 flex-shrink-0">
-      <span><span class="text-white">Kuro</span><span class="text-indigo-400">Editor</span></span>
-      <span class="text-neutral-500 text-sm font-normal not-italic ml-1">— 開発環境</span>
-    </h1>
+    <div class="flex items-center gap-3">
+      <a href="/"
+         class="text-xs text-neutral-500 border border-neutral-700 rounded-full
+                px-3 py-1 hover:text-neutral-200 hover:border-neutral-500 transition-colors
+                whitespace-nowrap">
+        ← 戻る
+      </a>
+      <h1 class="flex items-center gap-2 text-lg font-bold italic">
+        <img src="/assets/favicon.svg" alt="" class="w-7 h-7 flex-shrink-0">
+        <span><span class="text-white">Kuro</span><span class="text-indigo-400">Editor</span></span>
+        <span class="text-neutral-500 text-sm font-normal not-italic ml-1">— 開発環境</span>
+      </h1>
+    </div>
 
     <!-- 右側: トースト + バージョンバッジ -->
     <div class="flex items-center gap-3">
