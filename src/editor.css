@@ -56,6 +56,13 @@
            rounded-xl border border-neutral-700
            overflow-hidden font-sans shadow-2xl;
     font-size: 15px;
+    /* 埋め込み先（kurocms 等）のレイアウトに依存せず、常にホストの列幅へ
+       自分を閉じ込める。これが無いと flex/grid アイテムとしてマウントされた
+       際にエディタが親より広がり、本文が見えない幅で折り返して overflow:hidden
+       に切り取られる（＝枠からはみ出して見える）。 */
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   /* ════════════════════════════════════════════════════════
@@ -275,6 +282,10 @@
            text-neutral-100 leading-relaxed;
     caret-color: theme('colors.indigo.400');
     min-height: 16rem;
+    /* flex 子としても縮めるようにし、本文は見えている幅で折り返す。
+       長い英字列/URL など分割不能なトークンも枠内に収める。 */
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   /* Drag-over: dashed indigo border as drop-target indicator */
