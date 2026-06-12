@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '1.0.2'
+export const VERSION = '1.0.3'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -3952,6 +3952,75 @@ export class KuroEditor {
     this.tocPanelEl.classList.add('kuro-toc--user-hidden')
 
     this.mountEl.replaceWith(this.root)
+
+    // ⚠️ TEMP DEBUG PANEL — 幅はみ出し調査用。採取後に削除すること。
+    this._buildDebugPanel()
+  }
+
+  // ⚠️ TEMP — 幅診断パネル（編集枠の下に computed 幅を出力）。調査後に削除。
+  _buildDebugPanel() {
+    const panel = createElement('div', { className: 'kuro-debug-panel' })
+    panel.style.cssText =
+      'margin-top:8px;padding:8px;background:#0b0b0e;border:1px solid #444;' +
+      'border-radius:8px;font:11px/1.4 monospace;color:#9febff;'
+    const bar = createElement('div')
+    bar.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;align-items:center;'
+    const refresh = document.createElement('button')
+    refresh.type = 'button'; refresh.textContent = '🔄 再計測'
+    const copy = document.createElement('button')
+    copy.type = 'button'; copy.textContent = '📋 コピー'
+    for (const b of [refresh, copy])
+      b.style.cssText = 'padding:2px 10px;background:#222;color:#ddd;border:1px solid #555;border-radius:6px;cursor:pointer;'
+    const title = document.createElement('span')
+    title.textContent = 'KURO DEBUG (width diagnostics)'
+    title.style.cssText = 'color:#888;margin-left:auto;'
+    bar.append(refresh, copy, title)
+    const ta = document.createElement('textarea')
+    ta.readOnly = true
+    ta.style.cssText = 'width:100%;min-height:240px;background:#000;color:#9febff;border:0;resize:vertical;white-space:pre;'
+    panel.append(bar, ta)
+    const run = () => { ta.value = this._collectDebug() }
+    refresh.addEventListener('click', run)
+    copy.addEventListener('click', () => {
+      ta.focus(); ta.select()
+      const done = () => { copy.textContent = '✅ コピー済'; setTimeout(() => copy.textContent = '📋 コピー', 1200) }
+      if (navigator.clipboard) navigator.clipboard.writeText(ta.value).then(done).catch(() => { try { document.execCommand('copy'); done() } catch (_) {} })
+      else { try { document.execCommand('copy'); done() } catch (_) {} }
+    })
+    this.root.insertAdjacentElement('afterend', panel)
+    requestAnimationFrame(() => requestAnimationFrame(run))
+  }
+
+  // ⚠️ TEMP — 幅診断テキストを生成。調査後に削除。
+  _collectDebug() {
+    const w = this.wysiwyg
+    if (!w) return 'wysiwyg not found'
+    const L = []
+    L.push('KuroEditor v' + VERSION + '  ' + new Date().toISOString())
+    L.push('window.innerWidth=' + window.innerWidth + '  docEl.clientWidth=' + document.documentElement.clientWidth)
+    L.push('')
+    L.push('ANCESTOR CHAIN (wysiwyg → up, 14 levels):')
+    L.push(['i', 'client', 'scroll', 'offset', 'display', 'ovX', 'minW', 'width', 'maxW', 'flex', 'el'].join('\t'))
+    let el = w
+    for (let i = 0; el && i < 14; i++, el = el.parentElement) {
+      const cs = getComputedStyle(el)
+      const name = el.className
+        ? '.' + String(el.className).trim().split(/\s+/).slice(0, 4).join('.')
+        : el.tagName
+      L.push([i, el.clientWidth, el.scrollWidth, el.offsetWidth, cs.display, cs.overflowX, cs.minWidth, cs.width, cs.maxWidth, cs.flex, name].join('\t'))
+    }
+    L.push('')
+    L.push('WIDEST DIRECT CHILDREN of wysiwyg (by scrollWidth, top 8):')
+    L.push(['scroll', 'offset', 'whiteSpace', 'tag', 'class + textHead'].join('\t'))
+    const kids = [...w.children].map(c => {
+      const cs = getComputedStyle(c)
+      return {
+        s: c.scrollWidth, o: c.offsetWidth, ws: cs.whiteSpace, tag: c.tagName,
+        cls: ((c.className || '') + ' | ' + (c.textContent || '').slice(0, 24).replace(/\s+/g, ' ')).trim(),
+      }
+    }).sort((a, b) => b.s - a.s).slice(0, 8)
+    for (const k of kids) L.push([k.s, k.o, k.ws, k.tag, k.cls].join('\t'))
+    return L.join('\n')
   }
 
   // ── Modal Menu (mmenu) ────────────────────────────────────────────────────
