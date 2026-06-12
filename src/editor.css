@@ -66,6 +66,22 @@
   }
 
   /* ════════════════════════════════════════════════════════
+     EMBED HARDENING（埋め込み耐性）
+     埋め込み先（kurocms 等）のグローバル CSS が、editor 内部の構造 flex を
+     上書きして本文がはみ出す事例があった（computed flex が 1 → none に化けて
+     pane が body 幅を埋めず、本文の max-content に縮んで overflow:hidden で
+     切られる）。構造に必須な flex/min-width だけを、ホスト CSS に負けない
+     高優先度（.kuro-editor 子孫 + !important）で固定する。
+     ※ ToC(.kuro-toc) と resizer は対象外（意図的に flex-shrink:0）。
+     ════════════════════════════════════════════════════════ */
+  .kuro-editor .kuro-body,
+  .kuro-editor .kuro-pane,
+  .kuro-editor .kuro-pane__wysiwyg {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+  }
+
+  /* ════════════════════════════════════════════════════════
      MODAL MENU (mmenu)
      ════════════════════════════════════════════════════════ */
 
