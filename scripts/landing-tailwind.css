@@ -1,0 +1,14 @@
+/* ランディング/紹介ページ (public/index.html) 用の Tailwind 入力。
+   Tailwind Play CDN を廃し、ここからコンパイルした静的 CSS
+   public/assets/compiled_tailwind_4_1_7.css を生成する。
+   生成コマンド: npm run build:site
+   旧 CDN の inline tailwind.config（fontFamily）をここに移植。 */
+@import "tailwindcss";
+
+/* 使用クラスをスキャンする対象（このファイルからの相対パス） */
+@source "../public/index.html";
+
+@theme {
+  --font-sans: "Inter", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}

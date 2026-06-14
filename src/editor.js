@@ -2230,7 +2230,11 @@ export class RoundboxMenu {
     if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8
     left = Math.max(VPM, left)
 
-    this.el.style.top  = (top + window.scrollY) + 'px'
+    // .kuro-roundbox-menu は position:fixed（viewport 基準）。top/left は
+    // getBoundingClientRect 由来の viewport 座標をそのまま入れる。
+    // （以前 window.scrollY を加算しており、スクロール時にメニューが画面外へ
+    //   飛んで「表示されない」バグになっていた）
+    this.el.style.top  = top + 'px'
     this.el.style.left = left + 'px'
   }
 

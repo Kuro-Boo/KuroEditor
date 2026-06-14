@@ -12,20 +12,9 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://kuro.boo/kuroeditor/" />
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Inter"', '"Hiragino Sans"', '"Yu Gothic"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', '"Fira Code"', 'monospace'],
-          },
-        },
-      },
-    }
-  </script>
+  <!-- Tailwind はコンパイル済み静的 CSS を使用（Play CDN は本番非推奨のため廃止）。
+       再生成: npm run build:site  （入力: scripts/landing-tailwind.css） -->
+  <link rel="stylesheet" href="./assets/compiled_tailwind_4_1_7.css" />
 
   <style>
     .hero-bg {
