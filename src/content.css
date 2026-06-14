@@ -1,0 +1,157 @@
+/* ============================================================================
+   KuroEditor — published CONTENT styles
+   ----------------------------------------------------------------------------
+   Styles for the class-based content blocks that KuroEditor writes into saved
+   HTML (rounded box, custom list markers, tables). These must render on the
+   PUBLIC site too, which does NOT load editor.css — so they live here.
+
+   Rules:
+   - Plain CSS only. NO `@import "tailwindcss"` / preflight — must never reset
+     or fight the host page's own styles.
+   - Theme-neutral via CSS variables (--kuro-*) with light/neutral defaults that
+     read on both light and dark backgrounds. A theme = override the variables.
+   - Intentionally UNLAYERED: unlayered styles beat any @layer (Tailwind base/
+     components/utilities, template `.prose`, editor.css @layer), so authored
+     content renders consistently without specificity battles.
+
+   editor.css @imports this file and overrides --kuro-* to its dark values, so
+   the in-editor appearance is unchanged.
+   ========================================================================== */
+
+:root {
+  --kuro-box-border: rgba(128, 128, 128, 0.35);
+  --kuro-box-bg: rgba(128, 128, 128, 0.06);
+  --kuro-box-border-nested: rgba(128, 128, 128, 0.28);
+  --kuro-box-bg-nested: rgba(128, 128, 128, 0.1);
+  --kuro-table-border: rgba(128, 128, 128, 0.4);
+  --kuro-table-head-bg: rgba(128, 128, 128, 0.12);
+}
+
+/* ── Ordered-list counter styles (must be top-level, not inside @layer) ── */
+@counter-style kuro-circled {
+  system: fixed;
+  symbols: ① ② ③ ④ ⑤ ⑥ ⑦ ⑧ ⑨ ⑩ ⑪ ⑫ ⑬ ⑭ ⑮ ⑯ ⑰ ⑱ ⑲ ⑳;
+  suffix: ' ';
+}
+@counter-style kuro-paren-num {
+  system: extends decimal;
+  prefix: '(';
+  suffix: ') ';
+}
+@counter-style kuro-paren-alpha {
+  system: extends upper-alpha;
+  prefix: '(';
+  suffix: ') ';
+}
+@counter-style kuro-paren-kata {
+  system: extends katakana;
+  prefix: '(';
+  suffix: ') ';
+}
+
+/* ── Rounded box (.kuro-roundbox) ── */
+.kuro-roundbox {
+  margin: 0.75rem 0;
+  border: 1px solid var(--kuro-box-border);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: var(--kuro-box-bg);
+  box-sizing: border-box;
+  overflow: hidden; /* clearfix for floated children */
+}
+.kuro-roundbox .kuro-roundbox {
+  border-color: var(--kuro-box-border-nested);
+  background: var(--kuro-box-bg-nested);
+}
+.kuro-roundbox[data-align='left'] {
+  float: left;
+  margin-right: 1rem;
+}
+.kuro-roundbox[data-align='right'] {
+  float: right;
+  margin-left: 1rem;
+}
+
+/* ── Table (.kuro-table) ── */
+.kuro-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+  table-layout: fixed;
+}
+.kuro-table th,
+.kuro-table td {
+  border: 1px solid var(--kuro-table-border);
+  padding: 0.75rem;
+  line-height: normal;
+}
+.kuro-table th {
+  background: var(--kuro-table-head-bg);
+  font-weight: 600;
+  text-align: left;
+}
+
+/* ── List custom markers ── */
+ul.kuro-ul-disc {
+  list-style-type: disc;
+}
+ul.kuro-ul-circle {
+  list-style-type: circle;
+}
+ul.kuro-ul-square {
+  list-style-type: square;
+}
+ul.kuro-ul-dash {
+  list-style-type: '- ';
+}
+ul.kuro-ul-hash {
+  list-style-type: '# ';
+}
+ul.kuro-ul-asterisk {
+  list-style-type: '* ';
+}
+ul.kuro-ul-arrow {
+  list-style-type: '> ';
+}
+ul.kuro-ul-bullseye {
+  list-style-type: '◎ ';
+}
+ul.kuro-ul-star {
+  list-style-type: '★ ';
+}
+ul.kuro-ul-star-open {
+  list-style-type: '☆ ';
+}
+ul.kuro-ul-tri {
+  list-style-type: '▶ ';
+}
+ul.kuro-ul-tri-open {
+  list-style-type: '▷ ';
+}
+ol.kuro-list-decimal {
+  list-style-type: decimal;
+}
+ol.kuro-list-circled {
+  list-style-type: kuro-circled;
+}
+ol.kuro-list-paren-num {
+  list-style-type: kuro-paren-num;
+}
+ol.kuro-list-alpha {
+  list-style-type: upper-alpha;
+}
+ol.kuro-list-paren-alpha {
+  list-style-type: kuro-paren-alpha;
+}
+ol.kuro-list-kata {
+  list-style-type: katakana;
+}
+ol.kuro-list-paren-kata {
+  list-style-type: kuro-paren-kata;
+}
+
+/* Marker color — set inline as --kuro-marker-color on the list element. */
+li::marker {
+  color: var(--kuro-marker-color, inherit);
+}
