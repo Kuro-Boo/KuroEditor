@@ -137,6 +137,31 @@ new KuroEditor(document.getElementById('editor'), { /* options */ })
 
 ---
 
+## 🖥 保存コンテンツの表示（公開ページ）
+
+KuroEditor が出力する HTML は、クラスベースのブロック（角丸ボックス・テーブル・カスタムリストマーカー）を使います。これを**公開サイト側**（エディターを読み込まないページ）で表示するには、重い editor CSS の代わりに、軽量・テーマ非依存の `kuro-content.css` を読み込みます:
+
+```html
+<link rel="stylesheet" href="/assets/kuro-content.css">
+<article><!-- KuroEditor で保存した HTML --></article>
+```
+
+- `kuro-content.css` はプレーン CSS（Tailwind なし・リセットなし）で、ホストページのスタイルを壊しません。ブロック用クラス（`.kuro-roundbox` / `.kuro-table` / `ul.kuro-ul-*` / `ol.kuro-list-*`）は保存 HTML に既に付いているため、ラッパー要素は不要です。
+- テーマは `--kuro-*` CSS 変数（中立な既定値）で制御します。ダーク（や独自テーマ）に合わせるには変数を上書きします:
+
+```css
+:root {
+  --kuro-box-border: #525252;
+  --kuro-box-bg: #1a1a1e;
+  --kuro-table-border: #525252;
+  --kuro-table-head-bg: #262626;
+}
+```
+
+> エディター本体の `kuro-editor.css` にはこれらのコンテンツスタイルが既に含まれます。エディターを読み込むページでは `kuro-content.css` は**不要**です。
+
+---
+
 ## ⚙️ オプション一覧
 
 `new KuroEditor(mountEl, options)` で渡せる主なオプション:

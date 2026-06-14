@@ -31,7 +31,8 @@
   "main": "dist/kuro-editor.js",
   "exports": {
     ".": "./dist/kuro-editor.js",
-    "./css": "./dist/kuro-editor.css"
+    "./css": "./dist/kuro-editor.css",
+    "./content.css": "./dist/kuro-content.css"
   },
   "scripts": {
     "dev": "vite",

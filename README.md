@@ -137,6 +137,31 @@ A typical pattern that replaces an existing `<textarea>` in a form:
 
 ---
 
+## 🖥 Rendering saved content (public pages)
+
+The HTML produced by KuroEditor uses class-based blocks (rounded boxes, tables, custom list markers). To render that saved HTML on your **public site** — where the editor is *not* loaded — include the lightweight, theme-neutral `kuro-content.css` instead of the full editor CSS:
+
+```html
+<link rel="stylesheet" href="/assets/kuro-content.css">
+<article><!-- saved KuroEditor HTML --></article>
+```
+
+- `kuro-content.css` is plain CSS (no Tailwind, no CSS reset) so it won't fight your page styles. The block classes (`.kuro-roundbox`, `.kuro-table`, `ul.kuro-ul-*`, `ol.kuro-list-*`) are already present in the saved HTML — no wrapper element is required.
+- It is theme-neutral via `--kuro-*` CSS variables with neutral defaults. To match a dark (or custom) theme, override them:
+
+```css
+:root {
+  --kuro-box-border: #525252;
+  --kuro-box-bg: #1a1a1e;
+  --kuro-table-border: #525252;
+  --kuro-table-head-bg: #262626;
+}
+```
+
+> The editor bundle `kuro-editor.css` already includes these content styles, so you do **not** need `kuro-content.css` on pages that load the editor itself.
+
+---
+
 ## ⚙️ Options
 
 Main options you can pass to `new KuroEditor(mountEl, options)`:
