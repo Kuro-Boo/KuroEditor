@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '1.0.7'
+export const VERSION = '1.0.8'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -4484,6 +4484,16 @@ export class KuroEditor {
       }
       // Close line popup whenever the selection (caret) moves
       if (this.linePopupMenu.isVisible) this.linePopupMenu.close()
+      // Show the roundbox menu when the caret enters a box. selectionchange is the
+      // only signal that fires for toolbar-insert, keyboard navigation and
+      // programmatic selection (none of which produce a mouseup/keyup inside the
+      // box). Only ACTIVATE here — never deactivate on selectionchange, otherwise
+      // using the menu's own controls (which move focus/selection out of the box)
+      // would dismiss it. Deactivation stays on mouseup / keyup / click-outside.
+      if (this._mode === 'wysiwyg' && !this.roundboxMenu.isActive) {
+        const box = this._roundboxAtCaret()
+        if (box) this.roundboxMenu.activate(box)
+      }
       // Reposition roundboxMenu when popm appears/moves (avoid overlap)
       if (this.roundboxMenu.isActive) this.roundboxMenu._position()
     }
@@ -6315,20 +6325,45 @@ export class KuroEditor {
       ' style="width:100%;display:block;margin:0 auto"><p><br></p></div>' +
       '<p><br></p>'
     )
+    // Drop the caret INSIDE the new box so its settings menu (kmenu) appears right
+    // away. After insertHTML the caret usually sits in the trailing <p>, whose
+    // previous sibling is the new box.
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return
+    let n = sel.getRangeAt(0).startContainer
+    while (n && n.parentNode && n.parentNode !== this.wysiwyg) n = n.parentNode
+    const box = n?.classList?.contains('kuro-roundbox')
+      ? n
+      : (n?.previousElementSibling?.classList?.contains('kuro-roundbox') ? n.previousElementSibling : null)
+    if (box) {
+      const p = box.querySelector('p') || box
+      const r = document.createRange()
+      r.setStart(p, 0)
+      r.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(r)
+      this._updateRoundboxContext()
+    }
   }
 
-  _updateRoundboxContext() {
+  // Returns the nearest .kuro-roundbox ancestor of the current caret, or null.
+  _roundboxAtCaret() {
     const sel = window.getSelection()
-    if (!sel?.rangeCount) { this.roundboxMenu.deactivate(); return }
+    if (!sel?.rangeCount) return null
     let node = sel.getRangeAt(0).startContainer
     while (node && node !== this.wysiwyg) {
-      if (node.nodeType === 1 && node.classList?.contains('kuro-roundbox')) {
-        this.roundboxMenu.activate(node)
-        return
-      }
+      if (node.nodeType === 1 && node.classList?.contains('kuro-roundbox')) return node
       node = node.parentNode
     }
-    this.roundboxMenu.deactivate()
+    return null
+  }
+
+  // Full update (activate OR deactivate) — used from mouseup / keyup where it is
+  // safe to dismiss the menu when the caret has left the box.
+  _updateRoundboxContext() {
+    const box = this._roundboxAtCaret()
+    if (box) this.roundboxMenu.activate(box)
+    else this.roundboxMenu.deactivate()
   }
 
   _promptMedia() {
