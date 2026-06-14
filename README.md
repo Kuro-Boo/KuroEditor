@@ -2,41 +2,43 @@
 
 # KuroEditor
 
-**ダークモード専用・Vanilla JS の WYSIWYG エディター**
+**Dark-mode-only WYSIWYG editor in Vanilla JS**
 
 [![License](https://img.shields.io/badge/license-Kuro%20License-blue.svg)](LICENSE.txt)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.x-38bdf8)](https://tailwindcss.com/)
 [![No deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](#)
 
-外部 JS ライブラリーゼロ — 単一ファイル `kuro-editor.js` を読み込むだけで動作する組込み用 WYSIWYG エディターです。
+**English** | [日本語](README.ja.md)
 
-### 🌐 [紹介ページ](https://kuro.boo/kuroeditor/) &nbsp;·&nbsp; 🎮 [サンプルを試す](https://kuro.boo/kuroeditor/sample/) &nbsp;·&nbsp; 🏠 [作者: Kuro.Boo](https://kuro.boo/)
+Zero external JS libraries — an embeddable WYSIWYG editor that runs by loading a single `kuro-editor.js` file.
+
+### 🌐 [Showcase](https://kuro.boo/kuroeditor/) &nbsp;·&nbsp; 🎮 [Live sample](https://kuro.boo/kuroeditor/sample/) &nbsp;·&nbsp; 🏠 [Author: Kuro.Boo](https://kuro.boo/)
 
 </div>
 
 ---
 
-## ✨ 特徴
+## ✨ Features
 
-- 🪶 **ライブラリ不要** — Vanilla JS と Tailwind CSS だけで構成。React / Vue / jQuery 不要
-- 🎨 **豊富な装飾** — 見出し H1〜H4、引用、コールアウト（4色）、リスト、文字色、フォントサイズ、行間、整列、コードブロック。コードブロックは行番号・コピー・削除・ドラッグ並び替えに対応
-- 📊 **本格的なテーブル** — セル結合・分割、罫線スタイル個別指定、列幅ドラッグリサイズ、セル背景色、縦方向配置、テーブル削除
-- 🖼 **メディア対応** — 画像／動画／音声／YouTube・Vimeo 埋め込み、ドラッグ＆ドロップ、クリップボード貼り付け
-- 🔗 **特殊リンク記法** — `[[slug]]` / `[[[slug]]]` / `[[slug|表示]]` で WiKi 風リンク
-- 🌙 **ダークモード固定** — 統一感のあるダーク UI
-- 💾 **自動保存** — 任意の間隔で `onSave` コールバック
-- 📝 **ソース編集** — WYSIWYG / HTML ソースをタブ切り替え
-- 🪄 **目次自動生成** — 見出しからアウトラインを自動で構築
+- 🪶 **No libraries** — Built with only Vanilla JS and Tailwind CSS. No React / Vue / jQuery
+- 🎨 **Rich formatting** — Headings H1–H4, blockquotes, callouts (4 colors), lists, text color, font size, line height, alignment, code blocks. Code blocks support line numbers, copy, delete, and drag-to-reorder
+- 📊 **Full-featured tables** — Cell merge/split, per-border style, drag-to-resize columns, cell background color, vertical alignment, table delete
+- 🖼 **Media support** — Image / video / audio / YouTube & Vimeo embeds, drag & drop, clipboard paste
+- 🔗 **Special link syntax** — WiKi-style links via `[[slug]]` / `[[[slug]]]` / `[[slug|label]]`
+- 🌙 **Dark mode only** — A cohesive dark UI
+- 💾 **Auto-save** — `onSave` callback at any interval
+- 📝 **Source editing** — Toggle between WYSIWYG and HTML source via tabs
+- 🪄 **Auto table of contents** — Builds an outline automatically from headings
 
 ---
 
-## 🚀 クイックスタート
+## 🚀 Quick start
 
-最小構成は `<script>` 1 行＋マウント先の `<div>` だけです。
+The minimal setup is a single `<script>` line plus a mount `<div>`.
 
 ```html
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <link rel="stylesheet" href="/path/to/kuro-editor.css">
@@ -47,9 +49,9 @@
   <script src="/path/to/kuro-editor.js"></script>
   <script>
     const editor = new KuroEditor(document.getElementById('editor'), {
-      initialContent: '<p>こんにちは KuroEditor!</p>',
+      initialContent: '<p>Hello, KuroEditor!</p>',
       onSave(html) {
-        console.log('保存:', html)
+        console.log('saved:', html)
       },
     })
   </script>
@@ -57,32 +59,32 @@
 </html>
 ```
 
-これだけで起動します。
+That's all it takes to launch.
 
 ---
 
-## 📦 組み込み方
+## 📦 Embedding
 
-### 1. ファイルの入手
+### 1. Get the files
 
-ビルド済みの 2 ファイルをサーバーに置きます:
+Place the two pre-built files on your server:
 
-| ファイル | 内容 |
+| File | Contents |
 |---|---|
-| `dist/kuro-editor.js` | エディター本体（Vanilla JS、依存なし） |
-| `dist/kuro-editor.css` | スタイル（Tailwind コンパイル済み、スコープ済み） |
+| `dist/kuro-editor.js` | The editor itself (Vanilla JS, no dependencies) |
+| `dist/kuro-editor.css` | Styles (Tailwind compiled, scoped) |
 
-ローカルでビルドする場合:
+To build locally:
 
 ```bash
 npm install
 npm run build
-# → dist/kuro-editor.js, dist/kuro-editor.css が生成
+# → generates dist/kuro-editor.js, dist/kuro-editor.css
 ```
 
-### 2. HTML への組み込み
+### 2. Add it to your HTML
 
-CSS を `<head>` に、JS を `<body>` の末尾（または `defer` 付き）で読み込みます:
+Load the CSS in `<head>` and the JS at the end of `<body>` (or with `defer`):
 
 ```html
 <link rel="stylesheet" href="/assets/kuro-editor.css">
@@ -99,9 +101,9 @@ CSS を `<head>` に、JS を `<body>` の末尾（または `defer` 付き）�
 </script>
 ```
 
-> 💡 `kuro-editor.js` を読み込むと `window.KuroEditor` と `window.KUROEDITOR_VERSION` が定義されます。
+> 💡 Loading `kuro-editor.js` defines `window.KuroEditor` and `window.KUROEDITOR_VERSION`.
 
-### 3. ES Modules で使う場合
+### 3. Using ES Modules
 
 ```js
 import { KuroEditor } from './path/to/dist/kuro-editor.js'
@@ -110,16 +112,16 @@ import './path/to/dist/kuro-editor.css'
 new KuroEditor(document.getElementById('editor'), { /* options */ })
 ```
 
-### 4. CMS / フォーム部品としての例
+### 4. As a CMS / form widget
 
-既存フォームの `<textarea>` を置換する典型パターン:
+A typical pattern that replaces an existing `<textarea>` in a form:
 
 ```html
 <form id="article-form">
-  <input name="title" placeholder="記事タイトル">
+  <input name="title" placeholder="Article title">
   <div id="editor-mount"></div>
   <input type="hidden" name="body" id="body-field">
-  <button type="submit">送信</button>
+  <button type="submit">Submit</button>
 </form>
 
 <script>
@@ -135,20 +137,20 @@ new KuroEditor(document.getElementById('editor'), { /* options */ })
 
 ---
 
-## ⚙️ オプション一覧
+## ⚙️ Options
 
-`new KuroEditor(mountEl, options)` で渡せる主なオプション:
+Main options you can pass to `new KuroEditor(mountEl, options)`:
 
-| オプション | 型 | 説明 |
+| Option | Type | Description |
 |---|---|---|
-| `initialContent` | `string` | 初期 HTML。`[[...]]` 記法も自動展開されます |
-| `onSave(html)` | `function` | 保存ボタン押下／自動保存時に呼ばれるコールバック |
-| `autoSaveInterval` | `number` | 自動保存の間隔（ミリ秒）。既定 `30000` |
-| `urlResolver(slug)` | `function` | `[[slug]]` 等の slug → URL 変換関数 |
-| `onMediaUpload(file)` | `async function` | 画像・動画アップロード処理。`mid` を返すと自動で `[[mid]]` 形式で挿入されます |
-| `modalToolbar` | `HTMLElement` | モーダルメニュー（mmenu）を任意の DOM スロットに差し込む場合に指定 |
+| `initialContent` | `string` | Initial HTML. `[[...]]` syntax is expanded automatically |
+| `onSave(html)` | `function` | Callback invoked on the Save button press / auto-save |
+| `autoSaveInterval` | `number` | Auto-save interval in milliseconds. Default `30000` |
+| `urlResolver(slug)` | `function` | Function that resolves a slug (e.g. `[[slug]]`) to a URL |
+| `onMediaUpload(file)` | `async function` | Image/video upload handler. Return a `mid` and it is inserted automatically as `[[mid]]` |
+| `modalToolbar` | `HTMLElement` | Specify to mount the modal menu (mmenu) into an arbitrary DOM slot |
 
-### onSave の例
+### onSave example
 
 ```js
 new KuroEditor(mount, {
@@ -162,9 +164,9 @@ new KuroEditor(mount, {
 })
 ```
 
-### onMediaUpload の例
+### onMediaUpload example
 
-`onMediaUpload` を渡すと、ユーザーが画像をドラッグ＆ドロップ／貼り付け／ファイル選択した時に呼ばれます。返却した `mid` は `[[mid-xxx]]` として記事中に挿入され、表示時には `urlResolver` で実際の URL に変換されます。
+When you pass `onMediaUpload`, it is called when the user drags & drops, pastes, or selects an image. The returned `mid` is inserted into the article as `[[mid-xxx]]`, and resolved to a real URL via `urlResolver` at display time.
 
 ```js
 new KuroEditor(mount, {
@@ -173,7 +175,7 @@ new KuroEditor(mount, {
     fd.append('file', file)
     const res = await fetch('/api/media', { method: 'POST', body: fd })
     const { mid } = await res.json()
-    return mid   // 例: "mid-abc123"
+    return mid   // e.g. "mid-abc123"
   },
 
   urlResolver(slug) {
@@ -186,61 +188,61 @@ new KuroEditor(mount, {
 
 ---
 
-## 🎮 公開 API
+## 🎮 Public API
 
 ```js
 const editor = new KuroEditor(mountEl, options)
 
-editor.setContent(html)   // 内容を上書き
-editor.getContent()       // 現在の HTML を取得（[[...]] 記法に戻して）
-editor.setMode('source')  // 'wysiwyg' | 'source' へ切替
-editor.getMode()          // 現在のモード
-editor.destroy()          // 後片付け（イベント解除＋元の要素に戻す）
+editor.setContent(html)   // Overwrite the content
+editor.getContent()       // Get the current HTML (converted back to [[...]] syntax)
+editor.setMode('source')  // Switch to 'wysiwyg' | 'source'
+editor.getMode()          // Current mode
+editor.destroy()          // Clean up (remove listeners + restore the original element)
 ```
 
 ---
 
-## 🔖 特殊リンク記法
+## 🔖 Special link syntax
 
-エディター内では以下のリンク記法をサポートします:
+The editor supports the following link syntaxes:
 
-| 記法 | 用途 | 例 |
+| Syntax | Purpose | Example |
 |---|---|---|
-| `[[slug]]` | ハイパーリンク（インライン） | `[[about]]` |
-| `[[[slug]]]` | カード型リンク（別タブで開く） | `[[[recipe-curry]]]` |
-| `[[slug\|表示]]` | WiKi 形式（表示テキスト指定） | `[[about\|会社概要]]` |
-| `[[mid\|60%,right]]` | メディア（サイズ＆配置） | `[[mid-001\|50%,center]]` |
-| `[[url\|60%\|https://...]]` | 画像クリックで別タブ遷移 | — |
+| `[[slug]]` | Hyperlink (inline) | `[[about]]` |
+| `[[[slug]]]` | Card-style link (opens in a new tab) | `[[[recipe-curry]]]` |
+| `[[slug\|label]]` | WiKi style (custom display text) | `[[about\|About us]]` |
+| `[[mid\|60%,right]]` | Media (size & alignment) | `[[mid-001\|50%,center]]` |
+| `[[url\|60%\|https://...]]` | Click image to open in a new tab | — |
 
-`slug` が `http` で始まる場合は外部リンクとして扱われます。
+A `slug` starting with `http` is treated as an external link.
 
 ---
 
-## 🛠 開発
+## 🛠 Development
 
 ```bash
 npm install
-npm run dev      # 開発サーバー (http://localhost:5177)
-npm test         # 単体テスト（Vitest）
-npm run build    # dist/ にビルド
+npm run dev      # Dev server (http://localhost:5177)
+npm test         # Unit tests (Vitest)
+npm run build    # Build to dist/
 ```
 
-### ディレクトリ構成
+### Directory layout
 
 ```
 src/
-  editor.js     # KuroEditor 本体（クラス + ユーティリティ）
-  editor.css    # Tailwind CSS スタイル
-  main.js       # デモページのエントリ
-  index.html    # 開発用デモ
-tests/          # Vitest テスト
-dist/           # ビルド成果物 (kuro-editor.js / .css)
+  editor.js     # KuroEditor core (class + utilities)
+  editor.css    # Tailwind CSS styles
+  main.js       # Demo page entry point
+  index.html    # Development demo
+tests/          # Vitest tests
+dist/           # Build artifacts (kuro-editor.js / .css)
 ```
 
 ---
 
-## 📜 ライセンス
+## 📜 License
 
-[Kuro License](LICENSE.txt) — MIT ベース＋帰属表示要件付き。
+[Kuro License](LICENSE.txt) — MIT-based, with an attribution requirement.
 
-> このソフトウェアを使ったユーザー向けインターフェイスを公開する場合、フッターやクレジット欄などに `Editor: Kuro.Boo` ([https://kuro.boo/](https://kuro.boo/)) の表示が必要です。
+> When you publish a user-facing interface built with this software, the credit `Editor: Kuro.Boo` ([https://kuro.boo/](https://kuro.boo/)) must be shown somewhere such as the footer or a credits section.
