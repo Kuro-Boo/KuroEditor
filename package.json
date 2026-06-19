@@ -37,7 +37,7 @@
   "scripts": {
     "dev": "vite",
     "build:site": "tailwindcss -i scripts/landing-tailwind.css -o public/assets/compiled_tailwind_4_1_7.css --minify",
-    "build": "npm run build:site && vite build && rm -rf dist/src && node -e \"require('fs').copyFileSync('src/content.css','dist/kuro-content.css')\"",
+    "build": "npm run build:site && vite build && rm -rf dist/src && node -e \"require('fs').copyFileSync('src/content.css','dist/kuro-content.css')\" && node scripts/emit-version.js",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
