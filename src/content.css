@@ -60,6 +60,13 @@
   --kuro-callout-note-bg: rgba(128, 128, 128, 0.1);
   --kuro-callout-note-border: #9ca3af;
   --kuro-callout-note-text: inherit;
+  /* code blocks are dark in BOTH editor and public (matches the editor's code
+     widget), so these defaults are shared — no editor override needed. */
+  --kuro-code-bg: #0a0a0a;
+  --kuro-code-text: #86efac;
+  --kuro-code-border: #404040;
+  --kuro-inline-code-bg: rgba(128, 128, 128, 0.18);
+  --kuro-inline-code-text: inherit;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -267,6 +274,41 @@ h5[id^='kuro-h-'] {
 .kuro-content .kuro-media-wrap--left + p,
 .kuro-content .kuro-media-wrap--right + p {
   clear: none;
+}
+
+/* Code block — KuroEditor saves code blocks as <pre><code> (the in-editor
+   textarea widget .kuro-code-* is editor-only chrome). Styled here to match the
+   editor's code block look (dark box, green monospace) so the published output
+   is WYSIWYG. */
+.kuro-content pre {
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: var(--kuro-code-bg);
+  color: var(--kuro-code-text);
+  border: 1px solid var(--kuro-code-border);
+  border-radius: 0.75rem;
+  overflow-x: auto;
+  font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.kuro-content pre code {
+  font: inherit;
+  color: inherit;
+  background: none;
+  padding: 0;
+  border: 0;
+  white-space: pre;
+}
+
+/* Inline <code> (not inside a <pre>) — subtle chip, theme-neutral. */
+.kuro-content :not(pre) > code {
+  font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.875em;
+  background: var(--kuro-inline-code-bg);
+  color: var(--kuro-inline-code-text);
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
 }
 
 /* ── Ordered-list counter styles (must be top-level, not inside @layer) ── */
