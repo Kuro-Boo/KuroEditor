@@ -40,6 +40,26 @@
   --kuro-quote-border: #6366f1;
   --kuro-hr: rgba(128, 128, 128, 0.4);
   --kuro-list-color: inherit;
+  /* kbd */
+  --kuro-kbd-bg: #f3f4f6;
+  --kuro-kbd-text: #1f2937;
+  --kuro-kbd-border: #9ca3af;
+  /* table cells (border/head-bg already defined above) */
+  --kuro-table-cell-text: inherit;
+  --kuro-table-head-text: inherit;
+  /* callouts (light tints by default; editor overrides to dark) */
+  --kuro-callout-tip-bg: rgba(59, 130, 246, 0.1);
+  --kuro-callout-tip-border: #3b82f6;
+  --kuro-callout-tip-text: inherit;
+  --kuro-callout-warn-bg: rgba(245, 158, 11, 0.12);
+  --kuro-callout-warn-border: #f59e0b;
+  --kuro-callout-warn-text: inherit;
+  --kuro-callout-danger-bg: rgba(239, 68, 68, 0.1);
+  --kuro-callout-danger-border: #ef4444;
+  --kuro-callout-danger-text: inherit;
+  --kuro-callout-note-bg: rgba(128, 128, 128, 0.1);
+  --kuro-callout-note-border: #9ca3af;
+  --kuro-callout-note-text: inherit;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -171,6 +191,84 @@ h5[id^='kuro-h-'] {
   text-align-last: justify;
 }
 
+/* Keyboard key (<kbd>) — physical key look */
+.kuro-content kbd {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  min-width: 1.2em;
+  text-align: center;
+  background: var(--kuro-kbd-bg);
+  color: var(--kuro-kbd-text);
+  border: 1px solid var(--kuro-kbd-border);
+  border-bottom-width: 2px;
+  border-radius: 0.3em;
+  font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.85em;
+  line-height: 1.2;
+  vertical-align: baseline;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Callout / admonition blocks — icon column on the left + left accent bar */
+.kuro-content .kuro-callout {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem 0.75rem 3rem;
+  border-radius: 0.5rem;
+  border-left: 4px solid;
+  position: relative;
+}
+.kuro-content .kuro-callout::before {
+  position: absolute;
+  left: 0.875rem;
+  top: 0.625rem;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.kuro-content .kuro-callout p {
+  margin: 0.25rem 0;
+}
+.kuro-content .kuro-callout--tip {
+  background-color: var(--kuro-callout-tip-bg);
+  border-color: var(--kuro-callout-tip-border);
+  color: var(--kuro-callout-tip-text);
+}
+.kuro-content .kuro-callout--tip::before {
+  content: '💡';
+}
+.kuro-content .kuro-callout--warn {
+  background-color: var(--kuro-callout-warn-bg);
+  border-color: var(--kuro-callout-warn-border);
+  color: var(--kuro-callout-warn-text);
+}
+.kuro-content .kuro-callout--warn::before {
+  content: '⚠️';
+}
+.kuro-content .kuro-callout--danger {
+  background-color: var(--kuro-callout-danger-bg);
+  border-color: var(--kuro-callout-danger-border);
+  color: var(--kuro-callout-danger-text);
+}
+.kuro-content .kuro-callout--danger::before {
+  content: '❗';
+}
+.kuro-content .kuro-callout--note {
+  background-color: var(--kuro-callout-note-bg);
+  border-color: var(--kuro-callout-note-border);
+  color: var(--kuro-callout-note-text);
+}
+.kuro-content .kuro-callout--note::before {
+  content: '📌';
+}
+
+/* Media float clearfix — a paragraph after a floated media shouldn't overlap it */
+.kuro-content p {
+  clear: none;
+}
+.kuro-content .kuro-media-wrap--left + p,
+.kuro-content .kuro-media-wrap--right + p {
+  clear: none;
+}
+
 /* ── Ordered-list counter styles (must be top-level, not inside @layer) ── */
 @counter-style kuro-circled {
   system: fixed;
@@ -216,24 +314,32 @@ h5[id^='kuro-h-'] {
   margin-left: 1rem;
 }
 
-/* ── Table (.kuro-table) ── */
-.kuro-table {
+/* ── Tables (.kuro-table class AND bare <table> inside .kuro-content) ── */
+.kuro-table,
+.kuro-content table {
   border-collapse: collapse;
   width: 100%;
   margin: 1rem 0;
   font-size: 0.875rem;
+}
+.kuro-table {
   table-layout: fixed;
 }
 .kuro-table th,
-.kuro-table td {
+.kuro-table td,
+.kuro-content th,
+.kuro-content td {
   border: 1px solid var(--kuro-table-border);
   padding: 0.75rem;
-  line-height: normal;
+  line-height: 1.5;
+  color: var(--kuro-table-cell-text);
 }
-.kuro-table th {
+.kuro-table th,
+.kuro-content th {
   background: var(--kuro-table-head-bg);
   font-weight: 600;
   text-align: left;
+  color: var(--kuro-table-head-text);
 }
 
 /* ── List custom markers ── */
