@@ -18,7 +18,7 @@ Zero external JS libraries — an embeddable WYSIWYG editor that runs by loading
 
 ---
 
-## ⚠️ v1.0.9 — CSS architecture v2 (stronger WYSIWYG)
+## ⚠️ v2.0.0 — CSS architecture v2 (stronger WYSIWYG)
 
 Content styling is now a **single source of truth** so the in-editor view and the
 published page render identically (no drift on future editor changes).
