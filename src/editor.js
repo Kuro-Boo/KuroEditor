@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '1.0.8'
+export const VERSION = '1.0.9'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
