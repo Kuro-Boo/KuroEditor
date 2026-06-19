@@ -18,6 +18,32 @@ Zero external JS libraries — an embeddable WYSIWYG editor that runs by loading
 
 ---
 
+## ⚠️ v1.0.9 — CSS architecture v2 (stronger WYSIWYG)
+
+Content styling is now a **single source of truth** so the in-editor view and the
+published page render identically (no drift on future editor changes).
+
+- **`src/content.css`** — all CONTENT styling (headings, text, quotes, lists,
+  links, hr, …) as plain CSS. The published page loads this file. Colors use
+  `--kuro-*` variables (theme-neutral / `inherit` by default).
+- **`src/editor2.css`** (renamed from `editor.css`) — editor **UI (chrome) only**:
+  `@import "tailwindcss"` + `@import "./content.css"` + `.kuro-content { --kuro-*: <dark values> }`.
+- `src/main.js` imports `editor2.css`.
+
+Public scope: content.css targets both the `.kuro-content` wrapper (editor) and
+KuroEditor's `id="kuro-h-*"` on headings, so authored headings get their sizes on
+the public page (where the host template's Tailwind preflight would otherwise
+shrink them) without touching the template's own headings.
+
+### 🛟 Fallback to the old CSS
+- **Recommended (full revert):** pin the embedding app (e.g. KuroCMS) to
+  KuroEditor **v1.0.8** — its `dist/` has the old `editor.css` + old `content.css`.
+- **In-place (partial):** change `src/main.js` import `editor2.css` → `editor.css`
+  and `npm run build`. Note `content.css` changed in v2, so this is a partial
+  revert; use v1.0.8 for a full one. The old `editor.css` is kept for this purpose.
+
+---
+
 ## ✨ Features
 
 - 🪶 **No libraries** — Built with only Vanilla JS and Tailwind CSS. No React / Vue / jQuery

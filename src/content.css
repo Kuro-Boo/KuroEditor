@@ -25,6 +25,150 @@
   --kuro-box-bg-nested: rgba(128, 128, 128, 0.1);
   --kuro-table-border: rgba(128, 128, 128, 0.4);
   --kuro-table-head-bg: rgba(128, 128, 128, 0.12);
+
+  /* Content typography COLORS — light/theme-neutral defaults for the PUBLIC
+     site. editor2.css overrides these to its dark palette so the in-editor
+     appearance is unchanged. Sizes/spacing are NOT themed (shared). */
+  --kuro-h1-color: inherit;
+  --kuro-h2-color: inherit;
+  --kuro-h3-color: inherit;
+  --kuro-h4-color: inherit;
+  --kuro-h5-color: inherit;
+  --kuro-link: #4f46e5;
+  --kuro-link-hover: #4338ca;
+  --kuro-quote-text: inherit;
+  --kuro-quote-border: #6366f1;
+  --kuro-hr: rgba(128, 128, 128, 0.4);
+  --kuro-list-color: inherit;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   CONTENT TYPOGRAPHY — SINGLE SOURCE OF TRUTH.
+   Both the editor and the published page use these rules, so output is WYSIWYG.
+   Sizes/weights/spacing are shared; COLOR is themed via --kuro-* (editor2.css
+   sets the dark palette). Scoped to authored content: the `.kuro-content`
+   wrapper (editor) AND headings carrying KuroEditor's `kuro-h-*` id (public),
+   so the host template's own headings are never affected.
+   (Migrated from editor.css; values = the prior @apply Tailwind output.)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Headings — h1=text-3xl … h5=text-base. */
+.kuro-content h1,
+h1[id^='kuro-h-'] {
+  font-size: 1.875rem;
+  line-height: 1.25;
+  font-weight: 700;
+  margin: 1.75rem 0 0.75rem;
+  color: var(--kuro-h1-color);
+}
+.kuro-content h2,
+h2[id^='kuro-h-'] {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 700;
+  margin: 1.5rem 0 0.625rem;
+  color: var(--kuro-h2-color);
+}
+.kuro-content h3,
+h3[id^='kuro-h-'] {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--kuro-h3-color);
+}
+.kuro-content h4,
+h4[id^='kuro-h-'] {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 1rem 0 0.375rem;
+  color: var(--kuro-h4-color);
+}
+.kuro-content h5,
+h5[id^='kuro-h-'] {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+  color: var(--kuro-h5-color);
+}
+
+/* Paragraphs */
+.kuro-content p {
+  margin: 0.375rem 0;
+  line-height: 1.625;
+}
+.kuro-content br {
+  line-height: 1.2;
+}
+
+/* Inline */
+.kuro-content a {
+  color: var(--kuro-link);
+  text-decoration: underline;
+  transition: color 0.15s;
+}
+.kuro-content a:hover {
+  color: var(--kuro-link-hover);
+}
+.kuro-content strong {
+  font-weight: 700;
+}
+.kuro-content em {
+  font-style: italic;
+}
+.kuro-content u {
+  text-decoration: underline;
+}
+.kuro-content s {
+  text-decoration: line-through;
+}
+
+/* Blockquote — left vertical accent bar */
+.kuro-content blockquote {
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  border-left: 4px solid var(--kuro-quote-border);
+  color: var(--kuro-quote-text);
+  font-style: italic;
+}
+.kuro-content blockquote p {
+  margin: 0.25rem 0;
+}
+
+/* Lists — base spacing/indent. Marker GLYPH classes (.kuro-ul-* / .kuro-list-*)
+   below win for the marker symbol. */
+.kuro-content ul {
+  list-style-type: disc;
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+  color: var(--kuro-list-color);
+}
+.kuro-content ol {
+  list-style-type: decimal;
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+  color: var(--kuro-list-color);
+}
+.kuro-content li {
+  line-height: 1.625;
+}
+.kuro-content ul > li + li,
+.kuro-content ol > li + li {
+  margin-top: 0.125rem;
+}
+
+/* Horizontal rule */
+.kuro-content hr,
+.kuro-hr {
+  border: 0;
+  border-top: 2px solid var(--kuro-hr);
+  margin: 1.25rem 0;
+}
+
+/* Justified text — CJK 均等割り (interior + last line). */
+.kuro-content [style*='text-align: justify'],
+.kuro-content [style*='text-align:justify'] {
+  text-justify: inter-character;
+  text-align-last: justify;
 }
 
 /* ── Ordered-list counter styles (must be top-level, not inside @layer) ── */

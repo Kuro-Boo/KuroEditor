@@ -18,6 +18,26 @@
 
 ---
 
+## ⚠️ v1.0.9 — CSS アーキテクチャ v2（WYSIWYG 強化）
+
+**コンテンツの見た目を「単一の正」に集約しました。** 編集中とサイト公開時の表示を構造的に一致（WYSIWYG）させ、将来の乖離を防ぎます。
+
+- **`src/content.css`** … 編集されるコンテンツの見た目（見出し・本文・引用・リスト・リンク・hr など）を**プレーンCSSで一元管理**。公開ページはこのファイルを読みます。色は `--kuro-*` 変数（既定はテーマ非依存／`inherit`）。
+- **`src/editor2.css`**（旧 `editor.css` をリネーム）… **エディタUI（ツールバー・メニュー等の枠）専用**。`@import "tailwindcss"` ＋ `@import "./content.css"` ＋ `.kuro-content { --kuro-*: <ダーク値> }` のみ。**コンテンツの見た目ルールは持ちません**。
+- `src/main.js` は `editor2.css` を読み込みます。
+
+**重要（公開側）**：見出し等はテンプレートの Tailwind preflight で素タグが小さくなるため、content.css は `.kuro-content` 配下に加え、**KuroEditor が見出しに付与する `id="kuro-h-*"`** にもスコープして公開ページで効くようにしています。
+
+### 🛟 問題が出たら（旧CSSへフォールバック）
+v2 で表示崩れ等が起きた場合の戻し方：
+
+- **推奨（完全復元）**：組込み側（例: KuroCMS）で KuroEditor を **v1.0.8 にピン**する。v1.0.8 の `dist/`（旧 `editor.css` ＋ 旧 `content.css`）をそのまま使うので、確実に元の表示へ戻ります。
+- **暫定（その場で）**：`src/main.js` の import を `editor2.css` → `editor.css` に戻して `npm run build`。※ただし `content.css` は v2 で更新されているため、これは部分的な復元です（完全復元は v1.0.8 ピンを使用）。
+
+> 旧 `editor.css` は削除せず**フォールバック用に残して**あります。完全な原状回復が必要な場合は v1.0.8 を利用してください。
+
+---
+
 ## ✨ 特徴
 
 - 🪶 **ライブラリ不要** — Vanilla JS と Tailwind CSS だけで構成。React / Vue / jQuery 不要
