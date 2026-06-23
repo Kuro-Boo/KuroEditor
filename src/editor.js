@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.5'
+export const VERSION = '2.0.6'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -3927,6 +3927,9 @@ export class KuroEditor {
 
     this._build()
     this._bindEvents()
+    // Honour the restored auto-save preference (the checkbox 'change' event does
+    // not fire for the initial programmatic checked state set in _build()).
+    if (this.tabAutoSaveCheck?.checked) this._startAutoSave()
     this.setContent(this.options.initialContent)
   }
 
@@ -4111,6 +4114,8 @@ export class KuroEditor {
       className: 'kuro-mmenu__autosave-check',
       attrs: { type: 'checkbox', id: tabAutoId, 'aria-label': '自動保存' },
     })
+    // Restore the persisted preference; defaults to ON when never set before.
+    this.tabAutoSaveCheck.checked = this._readAutoSavePref()
     const tabAutoLabel = createElement('label', {
       className: 'kuro-mmenu__autosave-label',
       html: '自動保存',
@@ -4415,8 +4420,10 @@ export class KuroEditor {
     this.saveBtn.addEventListener('click', () => this.options.onSave?.(this.getContent()))
     this.tabSaveBtn.addEventListener('click', () => this.options.onSave?.(this.getContent()))
 
-    // Auto-save toggle — tab bar is the single source of truth
+    // Auto-save toggle — tab bar is the single source of truth. The choice is
+    // persisted (localStorage) so it survives reloads / re-mounts.
     this.tabAutoSaveCheck.addEventListener('change', () => {
+      this._writeAutoSavePref(this.tabAutoSaveCheck.checked)
       this.tabAutoSaveCheck.checked ? this._startAutoSave() : this._stopAutoSave()
     })
 
@@ -6416,6 +6423,24 @@ export class KuroEditor {
 
   /** @returns {'wysiwyg'|'source'} */
   getMode()      { return this._mode }
+
+  /** Read the persisted auto-save preference. Defaults to ON (true) when unset. */
+  _readAutoSavePref() {
+    try {
+      return window.localStorage.getItem('kuro-editor-autosave') !== '0'
+    } catch {
+      return true  // private mode / storage disabled → keep the default
+    }
+  }
+
+  /** Persist the auto-save preference ('1' = on, '0' = off). */
+  _writeAutoSavePref(on) {
+    try {
+      window.localStorage.setItem('kuro-editor-autosave', on ? '1' : '0')
+    } catch {
+      /* storage unavailable — preference simply won't survive reloads */
+    }
+  }
 
   /** Start periodic auto-save (default interval 30 s, overridable via options). */
   _startAutoSave() {
