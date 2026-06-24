@@ -100,7 +100,12 @@ console.log(`  public/index   hero.badge v${next}`)
 // ── 8. Git commit (no push — remote may not be configured) ───────────────────
 const label = bump === 'sync' ? `sync version to ${next}` : `bump version ${prev} → ${next}`
 try {
-  execSync('git add VERSION package.json src/editor.js src/editor.css public/sample/index.html public/index.html', { cwd: root, stdio: 'inherit' })
+  // Stage the version-sync files PLUS the active editor source (editor.js +
+  // the v2 stylesheets editor2.css / content.css), so a normal "edit → npm run bup"
+  // flow commits the editor work together with the bump in one release commit.
+  // src/editor.css is intentionally excluded — it's legacy/dead (main.js imports
+  // editor2.css) and bump never touches it.
+  execSync('git add VERSION package.json src/editor.js src/editor2.css src/content.css public/sample/index.html public/index.html', { cwd: root, stdio: 'inherit' })
   execSync(`git commit -m "chore: ${label}"`, { cwd: root, stdio: 'inherit' })
   console.log('✓ Committed')
 } catch (e) {
