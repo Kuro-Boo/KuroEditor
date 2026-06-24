@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.7'
+export const VERSION = '2.0.8'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -5606,15 +5606,18 @@ export class KuroEditor {
 
   /**
    * Apply a font-family (CSS value, e.g. "'Hiragino Mincho ProN', serif") to
-   * the current selection. Mirrors _applyFontSize: clear any existing
-   * font-family spans first, then wrap in a new span — unless the chosen
-   * value is the base (= default), in which case clearing alone is enough.
+   * the current selection: clear any existing font-family spans first, then wrap
+   * in a new span carrying the chosen stack.
+   *
+   * NOTE: ゴシック (the `base` option) is applied EXPLICITLY too — it is NOT a
+   * "clear only" no-op. The host may apply its own inherited font to the editor
+   * content (e.g. KuroCMS sets a site-wide web font on .kuro-content), so merely
+   * clearing would leave the text in that inherited font instead of gothic.
+   * Wrapping an explicit span makes ゴシック actually override the inherited font,
+   * matching 明朝 / web-font behaviour and keeping the picker consistent.
    */
   _applyFontFamily(family) {
     this._clearFontFamily()
-
-    const baseValue = FONT_FAMILY_OPTIONS.find(o => o.base)?.value ?? ''
-    if (family === baseValue) return    // 既定 (= ゴシック) はクリアのみで十分
 
     const sel = window.getSelection()
     if (!sel?.rangeCount) return
