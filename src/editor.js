@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.8'
+export const VERSION = '2.0.9'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -61,19 +61,23 @@ const FONT_SIZE_OPTIONS = [
 ]
 
 /**
- * Font family presets — system fonts only, no web font loading required.
- * "ゴシック" (default) and "明朝" cover virtually all reading scenarios.
+ * Font family presets — CSS generic families only (no font-name list, no web
+ * font loading). In Japanese typography `sans-serif` ≈ ゴシック and `serif` ≈ 明朝;
+ * the browser/OS resolves them to its default gothic / mincho face, so the exact
+ * typeface is system-dependent (documented as such on the KuroCMS side). Using the
+ * bare generics keeps authored HTML simple and reliably overrides any inherited
+ * site web font back to plain gothic / mincho.
  * Mono-space stays exclusive to code blocks (already styled in <pre><code>).
  */
 const FONT_FAMILY_OPTIONS = [
   {
     label: 'ゴシック',
-    value: "'Hiragino Sans','Yu Gothic UI','Noto Sans CJK JP','Meiryo',sans-serif",
+    value: 'sans-serif',
     base:  true,
   },
   {
     label: '明朝',
-    value: "'Hiragino Mincho ProN','Yu Mincho','YuMincho','Noto Serif CJK JP','MS PMincho',serif",
+    value: 'serif',
   },
 ]
 
