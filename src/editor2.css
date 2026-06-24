@@ -525,6 +525,11 @@
     background: transparent;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* overflow:hidden makes a flex item's automatic min-height 0, so in the
+       flex-column list each row would be squashed (instead of the list
+       scrolling) once there are more fonts than fit — clipping the previews.
+       flex-shrink:0 keeps every row at its natural height. */
+    flex: 0 0 auto;
   }
   /* Currently active web font (matches the selection) */
   .kuro-web-font-btn--active {

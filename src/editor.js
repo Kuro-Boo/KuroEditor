@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.6'
+export const VERSION = '2.0.7'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -1455,7 +1455,12 @@ export class PopupMenu {
   _updateFontFamilyLabel() {
     if (!this._fontFamilyBtns) return
     const baseValue = FONT_FAMILY_OPTIONS.find(o => o.base)?.value ?? ''
-    let label = baseValue
+    // Start with NO detected font. ゴシック (base) is applied by *clearing* spans,
+    // so a selection with no inline font-family is indistinguishable from text
+    // merely inheriting the host/site font (e.g. a web font). In that case we must
+    // not light up ゴシック as "active" — it keeps only its permanent baseline
+    // ring. Only an explicit inline font-family (明朝 / a web font) highlights.
+    let label = ''
     try {
       const sel = window.getSelection()
       if (sel?.rangeCount) {
@@ -1474,7 +1479,7 @@ export class PopupMenu {
         }
 
         // ── Case A: walk up from the text node's parent ───────────────────
-        if (label === baseValue) {
+        if (!label) {
           if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
           const stop = this.constraintEl ?? document.documentElement
           while (node) {
