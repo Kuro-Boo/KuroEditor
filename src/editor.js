@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.9'
+export const VERSION = '2.0.10'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -4663,8 +4663,56 @@ export class KuroEditor {
         this._pasteTabularData(text)
         return
       }
-      // それ以外は通常のテキストペーストを通す
+
+      // ③ リッチテキスト (HTML) — 色などテーマに反するインラインスタイルを除去して貼付。
+      //   外部 (特に暗いテーマのページ) からのコピーは color/background が焼き込まれ、
+      //   そのままだと公開ページ (明背景) で白文字→読めない、になる。除去して文書の
+      //   テーマ色を継承させる。 (text/html が無い純テキストはブラウザ既定に委ねる)
+      const html = e.clipboardData?.getData('text/html') ?? ''
+      if (html) {
+        e.preventDefault()
+        this._pasteSanitizedHTML(html)
+        return
+      }
+      // それ以外 (純テキスト) は通常のテキストペーストを通す
     })
+  }
+
+  /**
+   * Paste rich HTML with theme-hostile presentational styling removed: strip
+   * `color` / `background*` from inline styles, legacy `color` / `bgcolor`
+   * attributes, and `<font color>`. Pasted content then adopts the document's own
+   * theme colors (so e.g. white-on-dark copied text doesn't become white-on-white
+   * on the published light page) while keeping structure, emphasis and links.
+   * @param {string} html  clipboard `text/html`
+   */
+  _pasteSanitizedHTML(html) {
+    // Browser/Office clipboards wrap the real selection in fragment markers;
+    // use that slice when present so we don't drag in <head>/<style> noise.
+    const frag = html.match(/<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/)
+    const markup = frag ? frag[1] : html
+    const body = new DOMParser().parseFromString(markup, 'text/html').body
+
+    const COLOR_PROPS = ['color', 'background', 'background-color', 'background-image']
+    // Chrome's "copy" serializes the element's ENTIRE computed style as
+    // `<prop>: revert-layer` (hundreds of props) plus the real color — pure noise
+    // that bloats saved HTML. Drop every CSS-wide-keyword declaration too.
+    const NOISE_VALUES = new Set(['revert-layer', 'revert', 'initial', 'unset', 'inherit'])
+    for (const el of body.querySelectorAll('*')) {
+      el.removeAttribute('color')   // legacy <font color> / [color]
+      el.removeAttribute('bgcolor')
+      const st = el.style
+      if (st && el.hasAttribute('style')) {
+        for (const p of COLOR_PROPS) st.removeProperty(p)
+        for (const p of [...st]) {
+          if (NOISE_VALUES.has(st.getPropertyValue(p).trim())) st.removeProperty(p)
+        }
+        if (el.getAttribute('style') === '') el.removeAttribute('style')
+      }
+    }
+
+    const clean = body.innerHTML
+    if (clean) execFormat('insertHTML', clean)
   }
 
   /**
