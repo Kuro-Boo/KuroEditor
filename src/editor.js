@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.10'
+export const VERSION = '2.0.11'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -2428,7 +2428,10 @@ export class TableManager {
         ? caretRect
         : (cell?.getBoundingClientRect() ?? table.getBoundingClientRect())
 
-      let top = refRect.top - menuH - GAP
+      // カーソル行の直上ではなく約3行分上に離して表示する。
+      // 1行分の高さは caret 矩形から取り、取れない場合は 20px とみなす。
+      const lineH = (caretRect && caretRect.height > 0) ? caretRect.height : 20
+      let top = refRect.top - menuH - lineH * 3
       if (top < 4) top = refRect.bottom + 6
 
       // Avoid roundboxMenu — position below it if overlapping
@@ -3917,6 +3920,7 @@ export class KuroEditor {
    *   onSave?: (html: string) => void,
    *   urlResolver?: (slug: string) => string,
    *   modalToolbar?: HTMLElement,  // host element to mount the modal menu bar into (slot mode)
+   *   blockIds?: boolean,          // opt-in: maintain a stable data-bid on each top-level block
    * }} [options]
    */
   constructor(mountEl, options = {}) {
@@ -3926,6 +3930,7 @@ export class KuroEditor {
       onSave: null,
       urlResolver: defaultResolver,
       modalToolbar: null,
+      blockIds: false,
       ...options,
     }
     this._mode          = 'wysiwyg'
@@ -3940,6 +3945,7 @@ export class KuroEditor {
     // not fire for the initial programmatic checked state set in _build()).
     if (this.tabAutoSaveCheck?.checked) this._startAutoSave()
     this.setContent(this.options.initialContent)
+    if (this.options.blockIds) this._initBlockIds()
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -6461,6 +6467,7 @@ export class KuroEditor {
     this.toc._doUpdate()
     this._initAllCodeBlocks()
     this._updateCharCount()
+    if (this.options.blockIds) this._refreshBlockIds()
   }
 
   /**
@@ -6473,6 +6480,70 @@ export class KuroEditor {
     const clone = this.wysiwyg.cloneNode(true)
     this._serializeCodeBlocksToHtml(clone)
     return unrenderSpecialLinks(clone.innerHTML)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLOCK IDS (opt-in via the `blockIds` option)
+  //
+  // Maintains a stable `data-bid` (UUID) on each top-level block of the wysiwyg
+  // so an external sync layer (KuroEditorPlus) can do per-block 3-way merge.
+  // A MutationObserver converges every block-creation path (Enter split, paste,
+  // drag) into "a block node was added" → it gets an id. characterData is not
+  // observed, so ids stay stable while typing inside a block.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Generate a block id. Uses crypto.randomUUID when available. */
+  _uuid() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+    return 'b-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+  }
+
+  /** Start maintaining block ids (called from the constructor when enabled). */
+  _initBlockIds() {
+    this._ensureBlockIds()
+    this._blockIdObserver = new MutationObserver((records) => {
+      for (const r of records) {
+        for (const n of r.addedNodes) {
+          if (n.nodeType === Node.ELEMENT_NODE) this._tagBlock(n, true)
+        }
+      }
+    })
+    // Only direct-child add/remove — never characterData (keeps ids stable while typing).
+    this._blockIdObserver.observe(this.wysiwyg, { childList: true })
+  }
+
+  /** Ensure every top-level block carries a unique data-bid. */
+  _ensureBlockIds() {
+    for (const el of this.wysiwyg.children) this._tagBlock(el)
+  }
+
+  /**
+   * Assign an id to a block, or re-issue on a duplicate.
+   * @param {Element} el
+   * @param {boolean} isNew - true when `el` is a just-added node (observer path):
+   *   the newly added/pasted/cloned block is the duplicate that gets a fresh id,
+   *   so the pre-existing block keeps its id regardless of document position.
+   */
+  _tagBlock(el, isNew = false) {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) return
+    const id = el.getAttribute('data-bid')
+    if (!id) { el.setAttribute('data-bid', this._uuid()); return }
+    const same = this.wysiwyg.querySelectorAll(`[data-bid="${id}"]`)
+    if (same.length <= 1) return
+    if (isNew) {
+      // Paste/split: the just-added node is the duplicate → re-issue it.
+      el.setAttribute('data-bid', this._uuid())
+    } else {
+      // Bulk/load: keep the first occurrence, re-issue the rest.
+      for (let i = 1; i < same.length; i++) same[i].setAttribute('data-bid', this._uuid())
+    }
+  }
+
+  /** Re-tag after a bulk content replace (setContent), avoiding observer churn. */
+  _refreshBlockIds() {
+    this._blockIdObserver?.disconnect()
+    this._ensureBlockIds()
+    this._blockIdObserver?.observe(this.wysiwyg, { childList: true })
   }
 
   /**
