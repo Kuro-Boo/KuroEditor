@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.11'
+export const VERSION = '2.0.12'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -511,6 +511,332 @@ export function unrenderSpecialLinks(html) {
   div.querySelectorAll('[data-kuro-media]').forEach(el =>
     el.replaceWith(`[[${decodeURIComponent(el.getAttribute('data-kuro-media'))}]]`))
   return div.innerHTML
+}
+
+/**
+ * Read the editable parts of a rendered link for the LinkEditPopup.
+ * For kuro links the url is the RAW slug from the [[...]] notation (what the
+ * user typed), not the resolved href.
+ * @param {HTMLAnchorElement} a
+ * @returns {{ text: string, url: string }}
+ */
+export function readLinkParts(a) {
+  const wiki = a.getAttribute('data-kuro-wiki')
+  if (wiki) {
+    const m = decodeURIComponent(wiki).match(/^\[\[([^\]|]+)\|([^\]]+)\]\]$/)
+    if (m) return { text: m[2], url: m[1] }
+  }
+  const link = a.getAttribute('data-kuro-link')
+  if (link) {
+    const m = decodeURIComponent(link).match(/^\[\[([^\]]+)\]\]$/)
+    if (m) return { text: a.textContent, url: m[1] }
+  }
+  return { text: a.textContent, url: a.getAttribute('href') ?? '' }
+}
+
+/**
+ * Write text + url back into a rendered link, keeping the data-kuro-* notation
+ * attributes consistent so source mode still round-trips.
+ * kuro links: text === url → [[url]] hyper form, otherwise [[url|text]] wiki form.
+ * Plain <a> (no data-kuro-*) stays plain — href is set verbatim.
+ * @param {HTMLAnchorElement} a
+ * @param {string} text
+ * @param {string} url
+ * @param {(slug: string) => string} [resolver]
+ * @returns {boolean} true when applied (false = rejected, link untouched)
+ */
+export function writeLinkParts(a, text, url, resolver = defaultResolver) {
+  if (!text || !url) return false
+  const isKuro = a.hasAttribute('data-kuro-wiki') || a.hasAttribute('data-kuro-link')
+  if (isKuro) {
+    // Notation guard: "]"/"|" in the slug or "]" in the label would break [[...]]
+    if (/[\]|]/.test(url) || text.includes(']')) return false
+    if (text === url) {
+      a.setAttribute('data-kuro-link', encodeURIComponent(`[[${url}]]`))
+      a.removeAttribute('data-kuro-wiki')
+    } else {
+      a.setAttribute('data-kuro-wiki', encodeURIComponent(`[[${url}|${text}]]`))
+      a.removeAttribute('data-kuro-link')
+    }
+    a.setAttribute('href', resolver(url))
+  } else {
+    a.setAttribute('href', url)
+  }
+  // Only touch children when the text really changed — keeps inline markup
+  // inside the link intact while the user is editing just the URL.
+  if (a.textContent !== text) a.textContent = text
+  return true
+}
+
+/**
+ * Find the editable <a> a collapsed caret is "on": inside it, or immediately
+ * before / after it. Card links and media open-links are excluded.
+ * @param {Range} range - caret range (must be collapsed)
+ * @param {HTMLElement} root - containment boundary (the wysiwyg)
+ * @returns {HTMLAnchorElement|null}
+ */
+export function linkAtCaret(range, root) {
+  if (!range.collapsed) return null
+  const node   = range.startContainer
+  const offset = range.startOffset
+  if (!root.contains(node)) return null
+
+  const editable = (a) => a
+    && !a.classList.contains('kuro-card-link')
+    && !a.classList.contains('kuro-media-open-link')
+    ? a : null
+  const asLink = (n) =>
+    (n?.nodeType === Node.ELEMENT_NODE && n.tagName === 'A') ? editable(n) : null
+
+  // ① Caret inside the link text
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node
+  const inside = el?.closest?.('a')
+  if (inside && root.contains(inside)) return editable(inside)
+
+  // ② Caret immediately after / before an adjacent <a>
+  let prev = null
+  let next = null
+  if (node.nodeType === Node.TEXT_NODE) {
+    if (offset === 0) prev = node.previousSibling
+    if (offset === node.textContent.length) next = node.nextSibling
+  } else {
+    prev = node.childNodes[offset - 1] ?? null
+    next = node.childNodes[offset] ?? null
+  }
+  return asLink(prev) ?? asLink(next)
+}
+
+/**
+ * Remove editing-only block ids (data-bid, maintained by the `blockIds`
+ * option) from an HTML string. Published/build output must not carry them —
+ * they only matter while editing and for block-level merge on STORED data,
+ * so getContent() keeps them and getBuildImage() strips them.
+ * @param {string} html
+ * @returns {string}
+ */
+export function stripBlockIds(html) {
+  if (!html.includes('data-bid')) return html   // common case: untouched
+  const div = document.createElement('div')
+  div.innerHTML = html
+  div.querySelectorAll('[data-bid]').forEach(el => el.removeAttribute('data-bid'))
+  return div.innerHTML
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCK MERGE — 3-way merge on top-level blocks (data-bid), string based
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** HTML void elements — no closing tag, never affect nesting depth. */
+const VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr',
+])
+
+/**
+ * Split an HTML string into its top-level segments (blocks / text runs)
+ * WITHOUT a DOM — a quote-aware, depth-counting tag scanner, so it runs
+ * identically in browsers and server runtimes (Cloudflare Workers etc.).
+ *
+ * Input is expected to be serialized (well-formed) HTML such as getContent()
+ * output; that is NOT enforced — when the scan detects malformed nesting the
+ * result carries ok:false so callers can refuse to act on it.
+ *
+ * @param {string} html
+ * @returns {{ segments: Array<{ html: string, bid: string|null }>, ok: boolean }}
+ */
+export function splitTopLevelBlocks(html) {
+  const segments = []
+  let ok = true
+  const n = html.length
+  let i = 0
+  let segStart = 0
+  let depth = 0
+  let openTag = ''   // opening tag of the current top-level block (bid source)
+
+  const pushSeg = (end) => {
+    if (end > segStart) {
+      const m = openTag.match(/\sdata-bid="([^"]*)"/)
+      segments.push({ html: html.slice(segStart, end), bid: m ? m[1] : null })
+    }
+    segStart = end
+    openTag = ''
+  }
+
+  while (i < n) {
+    const lt = html.indexOf('<', i)
+    if (lt === -1) break
+    // Top-level text run before this tag becomes its own segment
+    if (depth === 0 && lt > segStart) pushSeg(lt)
+
+    if (html.startsWith('<!--', lt)) {
+      const end = html.indexOf('-->', lt + 4)
+      if (end === -1) { ok = false; break }
+      i = end + 3
+      if (depth === 0) pushSeg(i)
+      continue
+    }
+
+    // Scan to the tag's real '>' — attribute values may contain '>'
+    let j = lt + 1
+    let quote = null
+    while (j < n) {
+      const ch = html[j]
+      if (quote) { if (ch === quote) quote = null }
+      else if (ch === '"' || ch === "'") quote = ch
+      else if (ch === '>') break
+      j++
+    }
+    if (j >= n) { ok = false; break }   // unterminated tag
+    const tag = html.slice(lt, j + 1)
+    i = j + 1
+
+    const nameMatch = tag.match(/^<\/?([a-zA-Z][a-zA-Z0-9-]*)/)
+    if (!nameMatch) continue            // stray '<' — keep as text
+    const name = nameMatch[1].toLowerCase()
+
+    if (tag[1] === '/') {
+      if (depth === 0) { ok = false; continue }   // stray closing tag
+      depth--
+      if (depth === 0) pushSeg(i)
+    } else if (VOID_TAGS.has(name) || tag.endsWith('/>')) {
+      if (depth === 0) { openTag = tag; pushSeg(i) }
+    } else {
+      if (depth === 0) openTag = tag
+      depth++
+    }
+  }
+  if (depth !== 0) ok = false
+  if (segStart < n) pushSeg(n)          // trailing text or unclosed remainder
+  return { segments, ok }
+}
+
+/**
+ * 3-way merge of two edits of the same document, block by block.
+ *
+ *   base   — the common ancestor (the body as it was loaded)
+ *   local  — the edit at hand (e.g. what is in the editor now)
+ *   remote — the other side's latest (e.g. an AI's REST/MCP edit on the server)
+ *
+ * Matching uses data-bid where present; blocks WITHOUT an id (e.g. raw HTML a
+ * client added over REST) fall back to content equality, so identical id-less
+ * duplicates cannot be tracked precisely. Inter-block whitespace is dropped.
+ *
+ * The mechanism never decides a winner: when both sides changed the same block
+ * differently the local version is kept in `html` and the full triple is
+ * reported in `conflicts` — resolution UX is the host's responsibility.
+ *
+ * Inputs are EXPECTED to be KuroEditor-generated HTML but this is not a hard
+ * precondition: when block splitting fails the function refuses to merge,
+ * returns `local` unchanged and says so in `warnings` (+ console.warn).
+ *
+ * @param {string} baseHtml
+ * @param {string} localHtml
+ * @param {string} remoteHtml
+ * @returns {{
+ *   html: string,
+ *   conflicts: Array<{ bid: string|null, base: string|null, local: string|null, remote: string|null }>,
+ *   warnings: string[],
+ * }}
+ */
+export function mergeBlocks(baseHtml, localHtml, remoteHtml) {
+  const warnings = []
+  const conflicts = []
+  const base   = splitTopLevelBlocks(baseHtml ?? '')
+  const local  = splitTopLevelBlocks(localHtml ?? '')
+  const remote = splitTopLevelBlocks(remoteHtml ?? '')
+
+  if (!base.ok || !local.ok || !remote.ok) {
+    const which = [!base.ok && 'base', !local.ok && 'local', !remote.ok && 'remote']
+      .filter(Boolean).join(', ')
+    const msg = `mergeBlocks: ブロック分割に失敗 (${which}) — 入力が整形済み (KuroEditor 生成) HTML でない可能性があります。マージせず local を返します。`
+    console.warn(msg)
+    return { html: localHtml, conflicts, warnings: [msg] }
+  }
+
+  // Key: data-bid when present, else the block's own content. Whitespace-only
+  // segments are formatting noise between blocks — excluded entirely.
+  const keyOf = (seg) => seg.bid !== null ? `b:${seg.bid}` : `c:${seg.html}`
+  const toMap = (split, label) => {
+    const map = new Map()
+    for (const seg of split.segments) {
+      if (seg.bid === null && seg.html.trim() === '') continue
+      const key = keyOf(seg)
+      if (map.has(key)) {
+        if (seg.bid !== null) {
+          warnings.push(`mergeBlocks: ${label} に重複した data-bid "${seg.bid}" — 最初の出現のみ照合に使用します。`)
+        }
+        continue
+      }
+      map.set(key, seg)
+    }
+    return map
+  }
+  const bMap = toMap(base, 'base')
+  const lMap = toMap(local, 'local')
+  const rMap = toMap(remote, 'remote')
+
+  // Decide the surviving content for every key (null = dropped)
+  const pick = new Map()
+  const allKeys = new Set([...bMap.keys(), ...lMap.keys(), ...rMap.keys()])
+  for (const key of allKeys) {
+    const b = bMap.get(key)?.html ?? null
+    const l = lMap.get(key)?.html ?? null
+    const r = rMap.get(key)?.html ?? null
+    const bid = (bMap.get(key) ?? lMap.get(key) ?? rMap.get(key)).bid
+
+    if (b !== null && l !== null && r !== null) {
+      const changedL = l !== b
+      const changedR = r !== b
+      if (!changedR) pick.set(key, l)                 // local-only change (or none)
+      else if (!changedL) pick.set(key, r)            // remote-only change
+      else if (l === r) pick.set(key, l)              // both made the same change
+      else {                                          // true conflict — keep local
+        pick.set(key, l)
+        conflicts.push({ bid, base: b, local: l, remote: r })
+      }
+    } else if (b !== null && l !== null && r === null) {
+      // Deleted remotely
+      if (l === b) pick.set(key, null)
+      else { pick.set(key, l); conflicts.push({ bid, base: b, local: l, remote: null }) }
+    } else if (b !== null && l === null && r !== null) {
+      // Deleted locally
+      if (r === b) pick.set(key, null)
+      else { pick.set(key, r); conflicts.push({ bid, base: b, local: null, remote: r }) }
+    } else if (b !== null) {
+      pick.set(key, null)                             // deleted on both sides
+    } else if (l !== null && r !== null) {
+      // Added on both sides under the same id
+      if (l === r) pick.set(key, l)
+      else { pick.set(key, l); conflicts.push({ bid, base: null, local: l, remote: r }) }
+    } else {
+      pick.set(key, l ?? r)                           // one-sided addition
+    }
+  }
+
+  // Order: local's sequence is the skeleton; blocks that only survive on the
+  // remote side (additions / edited-but-locally-deleted) are inserted after
+  // their nearest preceding block from remote's own sequence.
+  const outOrder = []
+  const inOut = new Set()
+  for (const seg of local.segments) {
+    const key = keyOf(seg)
+    if (pick.get(key) != null && !inOut.has(key)) {
+      outOrder.push(key)
+      inOut.add(key)
+    }
+  }
+  let anchor = -1
+  for (const seg of remote.segments) {
+    const key = keyOf(seg)
+    if (inOut.has(key)) { anchor = outOrder.indexOf(key); continue }
+    if (pick.get(key) != null) {
+      outOrder.splice(anchor + 1, 0, key)
+      inOut.add(key)
+      anchor += 1
+    }
+  }
+
+  return { html: outOrder.map((key) => pick.get(key)).join(''), conflicts, warnings }
 }
 
 /**
@@ -2434,13 +2760,31 @@ export class TableManager {
       let top = refRect.top - menuH - lineH * 3
       if (top < 4) top = refRect.bottom + 6
 
+      const overlaps = (t, r) => r && t < r.bottom + GAP && t + menuH > r.top - GAP
+
+      // Avoid popm (text-selection popup) — prefer above it, else below the
+      // caret AND the popm (popm may itself be flipped below the selection).
+      const popmEl   = this.editor.popm?.el
+      const popmRect = popmEl?.classList.contains('kuro-popm--visible')
+        ? popmEl.getBoundingClientRect() : null
+      if (popmRect && overlaps(top, popmRect)) {
+        const above = popmRect.top - menuH - GAP
+        top = above >= 4 ? above : Math.max(refRect.bottom + 6, popmRect.bottom + GAP)
+      }
+
       // Avoid roundboxMenu — position below it if overlapping
       const rbMenu = this.editor.roundboxMenu
       if (rbMenu?.isActive) {
         const rbRect = rbMenu.el.getBoundingClientRect()
-        if (rbRect && top < rbRect.bottom + GAP && top + menuH > rbRect.top - GAP) {
+        if (overlaps(top, rbRect)) {
           top = rbRect.bottom + GAP
         }
+      }
+
+      // Re-check popm after the roundbox shift — popm avoidance has the final
+      // say (roundboxMenu repositions itself around the table menu afterwards).
+      if (popmRect && overlaps(top, popmRect)) {
+        top = popmRect.bottom + GAP
       }
 
       const left = Math.max(4, Math.min(refRect.left, window.innerWidth - menuW - 4))
@@ -2604,12 +2948,27 @@ export class TableInserter {
     document.body.appendChild(this.container)
 
     this._onMouseMove = (e) => this._handleMouseMove(e)
+
+    // Scroll of window OR any inner container (capture — scroll doesn't bubble):
+    // buttons live in a viewport-fixed layer, so they must be re-anchored to the
+    // table's live rect or they get left behind. rAF-throttled.
+    this._scrollRaf = null
+    this._onScroll = () => {
+      if (this._scrollRaf !== null) return
+      this._scrollRaf = requestAnimationFrame(() => {
+        this._scrollRaf = null
+        this._syncScroll()
+      })
+    }
   }
 
   activate(table) {
     const wasActive = this.activeTable !== null
     this.activeTable = table
-    if (!wasActive) document.addEventListener('mousemove', this._onMouseMove)
+    if (!wasActive) {
+      document.addEventListener('mousemove', this._onMouseMove)
+      document.addEventListener('scroll', this._onScroll, { capture: true, passive: true })
+    }
   }
 
   /** Called every time the cursor moves within the table. */
@@ -2623,7 +2982,51 @@ export class TableInserter {
     this.activeTable  = null
     this._currentCell = null
     document.removeEventListener('mousemove', this._onMouseMove)
+    document.removeEventListener('scroll', this._onScroll, { capture: true })
+    if (this._scrollRaf !== null) {
+      cancelAnimationFrame(this._scrollRaf)
+      this._scrollRaf = null
+    }
     this._hide()
+  }
+
+  /** Re-anchor all visible buttons to the table's current rect after a scroll. */
+  _syncScroll() {
+    const table = this.activeTable
+    if (!table?.isConnected) return
+    const tableRect = table.getBoundingClientRect()
+    const rows  = Array.from(table.querySelectorAll('tr'))
+    const cells = rows.length ? Array.from(rows[0].cells) : []
+    const BTN = 9
+    const BBT = 12
+    const GAP = 5
+
+    // Same border geometry as _handleMouseMove; `!= null` also skips the
+    // undefined-until-first-hover border indices.
+    const rowBorderY = (i) => i === 0 ? tableRect.top
+      : i >= rows.length ? tableRect.bottom
+      : rows[i].getBoundingClientRect().top
+    const colBorderX = (i) => i === 0 ? tableRect.left
+      : i >= cells.length ? tableRect.right
+      : cells[i].getBoundingClientRect().left
+
+    if (this._pendingRowIdx != null && rows.length) {
+      this.rowBtn.style.left = `${Math.round(tableRect.left - BTN * 2 - GAP)}px`
+      this.rowBtn.style.top  = `${Math.round(rowBorderY(this._pendingRowIdx) - BTN)}px`
+    }
+    if (this._pendingRowBorderIdx != null && rows.length) {
+      this.rowBorderBtn.style.left = `${Math.round(tableRect.right + GAP)}px`
+      this.rowBorderBtn.style.top  = `${Math.round(rowBorderY(this._pendingRowBorderIdx) - BBT)}px`
+    }
+    if (this._pendingColIdx != null && cells.length) {
+      this.colBtn.style.left = `${Math.round(colBorderX(this._pendingColIdx) - BTN)}px`
+      this.colBtn.style.top  = `${Math.round(tableRect.top - BTN * 2 - GAP)}px`
+    }
+    if (this._pendingColBorderIdx != null && cells.length) {
+      this.colBorderBtn.style.left = `${Math.round(colBorderX(this._pendingColBorderIdx) - BBT)}px`
+      this.colBorderBtn.style.top  = `${Math.round(tableRect.bottom + GAP)}px`
+    }
+    this._updateDelBtns()
   }
 
   _makeInsertBtn(title, onClick) {
@@ -3468,6 +3871,101 @@ export class EmojiPanel {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// LINK EDIT POPUP — shown when the caret sits on / next to a link
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Floating popup with two stacked fields (表示テキスト / URL) for editing the
+ * link the caret is on or adjacent to. Every keystroke is applied to the <a>
+ * immediately (auto-save, no save button); the popup closes when the caret
+ * moves away (driven by KuroEditor._updateLinkEditContext on selectionchange).
+ */
+export class LinkEditPopup {
+  /** @param {KuroEditor} editor */
+  constructor(editor) {
+    this.editor = editor
+    this.activeLink = null
+    this.el = createElement('div', {
+      className: 'kuro-link-edit',
+      attrs: { role: 'dialog', 'aria-label': 'リンク編集' },
+    })
+    this._textInput = this._makeField('表示テキスト')
+    this._urlInput  = this._makeField('URL')
+    document.body.appendChild(this.el)
+  }
+
+  _makeField(label) {
+    const row = createElement('label', { className: 'kuro-link-edit__row' })
+    row.appendChild(createElement('span', { className: 'kuro-link-edit__label', html: label }))
+    const input = createElement('input', {
+      className: 'kuro-link-edit__input',
+      attrs: { type: 'text', placeholder: label, spellcheck: 'false' },
+    })
+    input.addEventListener('input', () => this._apply())
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        e.preventDefault()
+        this.close()
+      }
+    })
+    row.appendChild(input)
+    this.el.appendChild(row)
+    return input
+  }
+
+  get isVisible() { return this.el.classList.contains('kuro-link-edit--visible') }
+
+  /** Open for (or re-sync to) the given <a>. Never steals focus. */
+  open(a) {
+    const changedTarget = this.activeLink !== a
+    this.activeLink = a
+    // Don't clobber fields while the user is typing in them
+    if (changedTarget || !this.el.contains(document.activeElement)) {
+      const { text, url } = readLinkParts(a)
+      this._textInput.value = text
+      this._urlInput.value  = url
+    }
+    if (changedTarget || !this.isVisible) this._position(a)
+    this.el.classList.add('kuro-link-edit--visible')
+  }
+
+  close() {
+    this.activeLink = null
+    this.el.classList.remove('kuro-link-edit--visible')
+  }
+
+  /** Below the link; flips above when there's no room at the bottom. */
+  _position(a) {
+    const rect = a.getBoundingClientRect()
+    // Element is always laid out (hidden via opacity) → offsetWidth is live
+    const w = this.el.offsetWidth  || 280
+    const h = this.el.offsetHeight || 90
+    let top = rect.bottom + 6
+    if (top + h > window.innerHeight - 4) top = rect.top - h - 6
+    top = Math.max(4, top)
+    const left = Math.max(4, Math.min(rect.left, window.innerWidth - w - 4))
+    this.el.style.top  = `${top}px`
+    this.el.style.left = `${left}px`
+  }
+
+  /** Auto-save: push current field values into the link on every keystroke. */
+  _apply() {
+    const a = this.activeLink
+    if (!a?.isConnected) return
+    const ok = writeLinkParts(
+      a,
+      this._textInput.value.trim(),
+      this._urlInput.value.trim(),
+      this.editor.options.urlResolver,
+    )
+    // Notify the editor (ToC / auto-save) exactly like normal typing would
+    if (ok) this.editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  destroy() { this.el.remove() }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MEDIA DIALOG — custom popup for image / video insertion
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -4240,6 +4738,7 @@ export class KuroEditor {
     this.toc = new TableOfContents(this.tocPanelEl, this.wysiwyg)
 
     this.linePopupMenu = new LinePopupMenu()
+    this.linkEditPopup = new LinkEditPopup(this)
     this.roundboxMenu  = new RoundboxMenu(this)
     this.tableManager  = new TableManager(this)
     this.tableInserter = new TableInserter(this.wysiwyg, {
@@ -4518,6 +5017,8 @@ export class KuroEditor {
       }
       // Reposition roundboxMenu when popm appears/moves (avoid overlap)
       if (this.roundboxMenu.isActive) this.roundboxMenu._position()
+      // Link edit popup — caret on / next to a link shows it, moving away closes it
+      this._updateLinkEditContext()
     }
     document.addEventListener('selectionchange', this._onDocSelChange)
 
@@ -4571,6 +5072,7 @@ export class KuroEditor {
       const inImage    = this.imageMenu.el.contains(e.target)
       const inLine     = this.linePopupMenu.el.contains(e.target)
       const inRoundbox = this.roundboxMenu.el.contains(e.target)
+      const inLinkEdit = this.linkEditPopup.el.contains(e.target)
       if (!inEditor && !inPopm && !inEmoji) this.popm.hide()
       if (!inEditor && !inPopm && !inEmoji) this.emojiPanel.hide()
       if (!inEditor && !inTable) this.tableManager.deactivate()
@@ -4578,6 +5080,7 @@ export class KuroEditor {
       if (!inImage && !inEditor) this.imageMenu.deactivate()
       if (!inLine && !inTable) this.linePopupMenu.close()
       if (!inEditor && !inRoundbox) this.roundboxMenu.deactivate()
+      if (!inEditor && !inLinkEdit) this.linkEditPopup.close()
     }
     document.addEventListener('mousedown', this._onDocMousedown)
 
@@ -4818,6 +5321,23 @@ export class KuroEditor {
       this.tableManager.deactivate()
       this.tableInserter.deactivate()
     }
+  }
+
+  /**
+   * Show the LinkEditPopup while the (collapsed) caret is inside or immediately
+   * before / after a link; close it as soon as the caret moves elsewhere.
+   * Runs on every selectionchange.
+   */
+  _updateLinkEditContext() {
+    if (this._mode !== 'wysiwyg') return
+    // Typing in the popup fields moves focus out of the wysiwyg — keep it open
+    if (this.linkEditPopup.el.contains(document.activeElement)) return
+    const sel = window.getSelection()
+    const a = sel?.rangeCount && sel.isCollapsed
+      ? linkAtCaret(sel.getRangeAt(0), this.wysiwyg)
+      : null
+    if (a) this.linkEditPopup.open(a)
+    else   this.linkEditPopup.close()
   }
 
   /** Auto-detect "1. " and "- " / "* " list starters at line beginning. */
@@ -5102,6 +5622,7 @@ export class KuroEditor {
     this.tableManager.deactivate()
     this.imageMenu.deactivate()
     this.roundboxMenu.deactivate()
+    this.linkEditPopup.close()
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -6482,11 +7003,22 @@ export class KuroEditor {
     return unrenderSpecialLinks(clone.innerHTML)
   }
 
+  /**
+   * Build/publish snapshot: getContent() minus editing-only metadata
+   * (the data-bid block ids maintained by the `blockIds` option).
+   * Use THIS when generating static/published HTML. Keep getContent() for
+   * persistence — the stored copy needs the ids for block-level merge.
+   * @returns {string}
+   */
+  getBuildImage() {
+    return stripBlockIds(this.getContent())
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // BLOCK IDS (opt-in via the `blockIds` option)
   //
   // Maintains a stable `data-bid` (UUID) on each top-level block of the wysiwyg
-  // so an external sync layer (KuroEditorPlus) can do per-block 3-way merge.
+  // so an external sync layer can do per-block 3-way merge.
   // A MutationObserver converges every block-creation path (Enter split, paste,
   // drag) into "a block node was added" → it gets an id. characterData is not
   // observed, so ids stay stable while typing inside a block.
@@ -6604,6 +7136,7 @@ export class KuroEditor {
     this.tableInserter.destroy()
     this.tableResizer.destroy()
     this.linePopupMenu.destroy()
+    this.linkEditPopup.destroy()
     this.emojiPanel.destroy()
     this.mediaDialog.destroy()
     this.imageMenu.destroy()

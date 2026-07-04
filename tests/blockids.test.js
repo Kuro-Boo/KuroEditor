@@ -2,7 +2,7 @@
  * Block IDs (data-bid) — opt-in stable block identifiers for external 3-way merge.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { KuroEditor } from '../src/editor.js'
+import { KuroEditor, stripBlockIds } from '../src/editor.js'
 
 function makeMount() {
   const el = document.createElement('div')
@@ -136,5 +136,45 @@ describe('KuroEditor blockIds OFF — regression (unchanged behaviour)', () => {
     expect(out).toContain('hello')
     expect(out).toContain('world')
     expect(out).not.toContain('data-bid')
+  })
+})
+
+describe('getBuildImage / stripBlockIds — build output without editing ids', () => {
+  beforeEach(() => { document.body.innerHTML = '' })
+
+  it('stripBlockIds removes every data-bid but nothing else', () => {
+    const html = '<p data-bid="a1">x</p><h2 data-bid="a2" class="k">y</h2><p>z</p>'
+    const out = stripBlockIds(html)
+    expect(out).not.toContain('data-bid')
+    expect(out).toContain('<p>x</p>')
+    expect(out).toContain('class="k"')
+    expect(out).toContain('<p>z</p>')
+  })
+
+  it('stripBlockIds returns the string untouched when no data-bid present', () => {
+    const html = '<p>plain</p>\n<h2>heading</h2>'
+    expect(stripBlockIds(html)).toBe(html)   // no DOM round-trip in this case
+  })
+
+  it('getBuildImage strips ids while getContent keeps them (blockIds ON)', () => {
+    const ed = new KuroEditor(makeMount(), {
+      blockIds: true,
+      initialContent: '<p data-bid="keep-1">hello</p><p>world</p>',
+    })
+    expect(ed.getContent()).toContain('data-bid')
+    const build = ed.getBuildImage()
+    expect(build).not.toContain('data-bid')
+    expect(build).toContain('hello')
+    expect(build).toContain('world')
+  })
+
+  it('getBuildImage works in source mode too', () => {
+    const ed = new KuroEditor(makeMount(), {
+      blockIds: true,
+      initialContent: '<p data-bid="s1">src</p>',
+    })
+    ed.setMode('source')
+    expect(ed.getContent()).toContain('data-bid')
+    expect(ed.getBuildImage()).not.toContain('data-bid')
   })
 })

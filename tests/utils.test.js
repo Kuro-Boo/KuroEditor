@@ -12,6 +12,9 @@ import {
   resolveEmbedUrl,
   VERSION,
   LINK_RE,
+  readLinkParts,
+  writeLinkParts,
+  linkAtCaret,
 } from '../src/editor.js'
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
@@ -345,5 +348,146 @@ describe('findCell', () => {
     const text = document.createTextNode('hi')
     td.appendChild(text)
     expect(findCell(text)).toBe(td)
+  })
+})
+
+// ─── readLinkParts / writeLinkParts / linkAtCaret ────────────────────────────
+
+describe('readLinkParts', () => {
+  const makeA = (html) => {
+    const div = document.createElement('div')
+    div.innerHTML = html
+    return div.querySelector('a')
+  }
+
+  it('reads wiki links: url = raw slug, text = label', () => {
+    const a = makeA(renderSpecialLinks('[[my-page|表示名]]'))
+    expect(readLinkParts(a)).toEqual({ text: '表示名', url: 'my-page' })
+  })
+
+  it('reads hyper links: url = raw slug', () => {
+    const a = makeA(renderSpecialLinks('[[https://example.com/x]]'))
+    expect(readLinkParts(a)).toEqual({ text: 'https://example.com/x', url: 'https://example.com/x' })
+  })
+
+  it('reads plain <a> from href / textContent', () => {
+    const a = makeA('<a href="https://plain.example">click</a>')
+    expect(readLinkParts(a)).toEqual({ text: 'click', url: 'https://plain.example' })
+  })
+})
+
+describe('writeLinkParts', () => {
+  const makeA = (html) => {
+    const div = document.createElement('div')
+    div.innerHTML = html
+    return div.querySelector('a')
+  }
+
+  it('rejects empty text or url without touching the link', () => {
+    const a = makeA(renderSpecialLinks('[[slug|text]]'))
+    expect(writeLinkParts(a, '', 'slug')).toBe(false)
+    expect(writeLinkParts(a, 'text', '')).toBe(false)
+    expect(a.textContent).toBe('text')
+  })
+
+  it('kuro link with text !== url becomes wiki form', () => {
+    const a = makeA(renderSpecialLinks('[[https://example.com]]'))
+    expect(writeLinkParts(a, 'サイト', 'https://example.com')).toBe(true)
+    expect(decodeURIComponent(a.getAttribute('data-kuro-wiki'))).toBe('[[https://example.com|サイト]]')
+    expect(a.hasAttribute('data-kuro-link')).toBe(false)
+    expect(a.textContent).toBe('サイト')
+    expect(a.getAttribute('href')).toBe('https://example.com')
+  })
+
+  it('kuro link with text === url becomes hyper form', () => {
+    const a = makeA(renderSpecialLinks('[[page|label]]'))
+    expect(writeLinkParts(a, 'other', 'other')).toBe(true)
+    expect(decodeURIComponent(a.getAttribute('data-kuro-link'))).toBe('[[other]]')
+    expect(a.hasAttribute('data-kuro-wiki')).toBe(false)
+    expect(a.getAttribute('href')).toBe('/other')
+  })
+
+  it('resolves slug through the provided resolver', () => {
+    const a = makeA(renderSpecialLinks('[[page|label]]'))
+    writeLinkParts(a, 'ラベル', 'page2', (s) => `/base/${s}`)
+    expect(a.getAttribute('href')).toBe('/base/page2')
+  })
+
+  it('rejects notation-breaking characters in kuro links', () => {
+    const a = makeA(renderSpecialLinks('[[page|label]]'))
+    expect(writeLinkParts(a, 'label', 'a|b')).toBe(false)
+    expect(writeLinkParts(a, 'la]bel', 'page')).toBe(false)
+  })
+
+  it('plain <a>: sets href verbatim, keeps it plain', () => {
+    const a = makeA('<a href="https://old.example">old</a>')
+    expect(writeLinkParts(a, 'new', 'https://new.example')).toBe(true)
+    expect(a.getAttribute('href')).toBe('https://new.example')
+    expect(a.textContent).toBe('new')
+    expect(a.hasAttribute('data-kuro-wiki')).toBe(false)
+    expect(a.hasAttribute('data-kuro-link')).toBe(false)
+  })
+
+  it('keeps inline markup when only the url changes', () => {
+    const a = makeA('<a href="https://old.example"><b>bold</b></a>')
+    writeLinkParts(a, 'bold', 'https://new.example')
+    expect(a.innerHTML).toBe('<b>bold</b>')
+  })
+})
+
+describe('linkAtCaret', () => {
+  let root
+  const setup = (html) => {
+    root = document.createElement('div')
+    root.innerHTML = html
+    document.body.appendChild(root)
+    return root
+  }
+  const rangeAt = (node, offset) => {
+    const r = document.createRange()
+    r.setStart(node, offset)
+    r.collapse(true)
+    return r
+  }
+
+  it('finds the link when the caret is inside it', () => {
+    setup('before <a href="/x">link</a> after')
+    const a = root.querySelector('a')
+    expect(linkAtCaret(rangeAt(a.firstChild, 2), root)).toBe(a)
+  })
+
+  it('finds the link when the caret is immediately before it', () => {
+    setup('before <a href="/x">link</a> after')
+    const a = root.querySelector('a')
+    const beforeText = root.firstChild            // "before "
+    expect(linkAtCaret(rangeAt(beforeText, beforeText.textContent.length), root)).toBe(a)
+  })
+
+  it('finds the link when the caret is immediately after it', () => {
+    setup('before <a href="/x">link</a> after')
+    const a = root.querySelector('a')
+    const afterText = root.lastChild              // " after"
+    expect(linkAtCaret(rangeAt(afterText, 0), root)).toBe(a)
+  })
+
+  it('returns null when the caret is away from the link', () => {
+    setup('before <a href="/x">link</a> after')
+    const afterText = root.lastChild
+    expect(linkAtCaret(rangeAt(afterText, 3), root)).toBe(null)
+  })
+
+  it('excludes card links', () => {
+    setup(renderSpecialLinks('[[[my-card]]]'))
+    const a = root.querySelector('a')
+    expect(linkAtCaret(rangeAt(a.firstChild, 1), root)).toBe(null)
+  })
+
+  it('returns null for a non-collapsed range', () => {
+    setup('<a href="/x">link</a>')
+    const a = root.querySelector('a')
+    const r = document.createRange()
+    r.setStart(a.firstChild, 0)
+    r.setEnd(a.firstChild, 2)
+    expect(linkAtCaret(r, root)).toBe(null)
   })
 })
