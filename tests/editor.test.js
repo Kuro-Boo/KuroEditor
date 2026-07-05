@@ -94,6 +94,8 @@ describe('KuroEditor', () => {
     const onSave = vi.fn()
     const m2 = makeMount()
     const ed2 = new KuroEditor(m2, { initialContent: '<p>Save me</p>', onSave })
+    // 変更が無いと保存ボタンは disabled なので、入力を模擬してから押す
+    ed2.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
     ed2.saveBtn.click()
     expect(onSave).toHaveBeenCalledOnce()
     expect(onSave).toHaveBeenCalledWith(expect.stringContaining('Save me'))
@@ -159,6 +161,72 @@ describe('KuroEditor', () => {
   it('destroy() removes editor from DOM', () => {
     editor.destroy()
     expect(document.querySelector('[data-kuro-editor]')).toBeNull()
+  })
+
+  // ── Dirty tracking (保存ボタンの活性制御) ──────────────────────────────────
+
+  describe('dirty tracking / save button state', () => {
+    it('save buttons start disabled (no unsaved changes)', () => {
+      expect(editor.saveBtn.disabled).toBe(true)
+      expect(editor.tabSaveBtn.disabled).toBe(true)
+      expect(editor.isDirty()).toBe(false)
+    })
+
+    it('input enables the save buttons', () => {
+      editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(editor.saveBtn.disabled).toBe(false)
+      expect(editor.tabSaveBtn.disabled).toBe(false)
+      expect(editor.isDirty()).toBe(true)
+    })
+
+    it('DOM mutation without an input event also marks dirty (popup/table ops)', async () => {
+      const p = editor.wysiwyg.querySelector('p')
+      p.appendChild(document.createTextNode('!'))
+      await new Promise((r) => setTimeout(r, 0))  // MutationObserver は非同期配信
+      expect(editor.isDirty()).toBe(true)
+      expect(editor.saveBtn.disabled).toBe(false)
+    })
+
+    it('clicking save disables the buttons again', () => {
+      const onSave = vi.fn()
+      editor.options.onSave = onSave
+      editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      editor.saveBtn.click()
+      expect(onSave).toHaveBeenCalledOnce()
+      expect(editor.saveBtn.disabled).toBe(true)
+      expect(editor.isDirty()).toBe(false)
+    })
+
+    it('disabled save button does not fire onSave', () => {
+      const onSave = vi.fn()
+      editor.options.onSave = onSave
+      editor.saveBtn.click()  // clean 状態 → disabled → click は無効
+      expect(onSave).not.toHaveBeenCalled()
+    })
+
+    it('setContent resets dirty state', async () => {
+      editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(editor.isDirty()).toBe(true)
+      editor.setContent('<p>Fresh</p>')
+      await new Promise((r) => setTimeout(r, 0))
+      expect(editor.isDirty()).toBe(false)
+      expect(editor.saveBtn.disabled).toBe(true)
+    })
+
+    it('editing in source mode marks dirty', () => {
+      editor.setMode('source')
+      editor.sourceArea.value = '<p>edited</p>'
+      editor.sourceArea.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(editor.isDirty()).toBe(true)
+    })
+
+    it('mode switching alone does not mark dirty', async () => {
+      editor.setMode('source')
+      editor.setMode('wysiwyg')
+      await new Promise((r) => setTimeout(r, 0))
+      expect(editor.isDirty()).toBe(false)
+      expect(editor.saveBtn.disabled).toBe(true)
+    })
   })
 
   // ── Heading-safe block merge (Backspace / Delete) ──────────────────────────

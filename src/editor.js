@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.14'
+export const VERSION = '2.0.15'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -4444,6 +4444,7 @@ export class KuroEditor {
     if (this.tabAutoSaveCheck?.checked) this._startAutoSave()
     this.setContent(this.options.initialContent)
     if (this.options.blockIds) this._initBlockIds()
+    this._initDirtyTracking()
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -4931,8 +4932,17 @@ export class KuroEditor {
     this.tabSource.addEventListener('click',  () => this._setMode('source'))
 
     // Save (manual) — mmenu + tab bar
-    this.saveBtn.addEventListener('click', () => this.options.onSave?.(this.getContent()))
-    this.tabSaveBtn.addEventListener('click', () => this.options.onSave?.(this.getContent()))
+    this.saveBtn.addEventListener('click', () => {
+      this.options.onSave?.(this.getContent())
+      this._clearDirty()
+    })
+    this.tabSaveBtn.addEventListener('click', () => {
+      this.options.onSave?.(this.getContent())
+      this._clearDirty()
+    })
+
+    // ソースモードの編集は wysiwyg の MutationObserver では拾えない
+    this.sourceArea.addEventListener('input', () => this._markDirty())
 
     // Auto-save toggle — tab bar is the single source of truth. The choice is
     // persisted (localStorage) so it survives reloads / re-mounts.
@@ -5044,6 +5054,9 @@ export class KuroEditor {
 
     // Content change → ToC + auto-list + special-link detection
     this.wysiwyg.addEventListener('input', (e) => {
+      // コードブロック textarea の入力もここへバブルする(value 変更は
+      // MutationObserver に映らないので、dirty 検知はこの経路が担う)
+      this._markDirty()
       this.toc._update()
       this._detectAutoList(e)
       this._detectSpecialLink(e)
@@ -5616,13 +5629,17 @@ export class KuroEditor {
       this.tocPanelEl.classList.add('kuro-toc--hidden')
     } else {
       // Source → WYSIWYG: render special links
-      this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver)
+      // (書き換え・コードブロック再配線は編集ではないので dirty 検知は止める。
+      //  ソースモードで実際に編集していれば sourceArea の input で dirty 済み)
+      this._suspendDirty(() => {
+        this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver)
+        this._initAllCodeBlocks()
+      })
       this.pane.classList.remove('kuro-pane--source')
       this.tabSource.classList.remove('kuro-tab--active')
       this.tabWysiwyg.classList.add('kuro-tab--active')
       this.tocPanelEl.classList.remove('kuro-toc--hidden')
       this.toc._doUpdate()
-      this._initAllCodeBlocks()
     }
 
     this._mode = mode
@@ -7079,12 +7096,15 @@ export class KuroEditor {
    */
   setContent(html) {
     const rendered = renderSpecialLinks(html ?? '', this.options.urlResolver)
-    this.wysiwyg.innerHTML = rendered
-    if (this._mode === 'source') this.sourceArea.value = html ?? ''
-    this.toc._doUpdate()
-    this._initAllCodeBlocks()
-    this._updateCharCount()
-    if (this.options.blockIds) this._refreshBlockIds()
+    this._suspendDirty(() => {
+      this.wysiwyg.innerHTML = rendered
+      if (this._mode === 'source') this.sourceArea.value = html ?? ''
+      this.toc._doUpdate()
+      this._initAllCodeBlocks()
+      this._updateCharCount()
+      if (this.options.blockIds) this._refreshBlockIds()
+    })
+    this._clearDirty()  // プログラムからの差し替えは「未保存の変更」ではない
   }
 
   /**
@@ -7206,7 +7226,9 @@ export class KuroEditor {
     this._stopAutoSave()  // clear any existing timer
     const ms = this.options.autoSaveInterval ?? 30_000
     this._autoSaveTimer = setInterval(() => {
+      if (!this._dirty) return  // 変更が無ければ保存の必要なし
       this.options.onSave?.(this.getContent())
+      this._clearDirty()
     }, ms)
   }
 
@@ -7217,9 +7239,93 @@ export class KuroEditor {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DIRTY TRACKING (保存ボタンの活性制御)
+  //
+  // 未保存の変更が無い間は保存ボタンを disabled(暗色)にする。
+  // 変更検知は 2 系統:
+  //   - MutationObserver … ポップアップ経由の書式適用・テーブル操作など
+  //     input イベントを発火しない DOM 直接操作も漏らさず拾う
+  //   - input イベント   … コードブロック <textarea> の value 変更(DOM に
+  //     映らない)と、ソースモードの sourceArea 編集
+  // ToC の見出し id 付与・blockIds の data-bid・選択ハイライト等の
+  // 「編集ではない自動変異」は _isContentMutation でフィルタする。
+  // 誤判定は「押せるのに変更なし」側に倒す(押せないのが一番困るため)。
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _initDirtyTracking() {
+    this._dirty = false
+    this._updateSaveButtons()
+    this._dirtyObserver = new MutationObserver((records) => {
+      if (this._dirty) return
+      for (const r of records) {
+        if (this._isContentMutation(r)) { this._markDirty(); return }
+      }
+    })
+    this._observeDirty()
+  }
+
+  _observeDirty() {
+    this._dirtyObserver?.observe(this.wysiwyg, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeOldValue: true,
+    })
+  }
+
+  /** setContent やモード切替など「編集ではない書き換え」を検知させずに実行する。 */
+  _suspendDirty(fn) {
+    if (!this._dirtyObserver) { fn(); return }
+    this._dirtyObserver.disconnect()
+    try { fn() } finally { this._observeDirty() }
+  }
+
+  /** 編集由来の変異か。自動付与される属性・UI ハイライトの class は除外。 */
+  _isContentMutation(r) {
+    if (r.type !== 'attributes') return true
+    if (r.target === this.wysiwyg) return false  // kuro-drag-over 等ルート自身の属性
+    const a = r.attributeName
+    if (a === 'id' || a === 'data-bid') return false  // ToC / blockIds の自動付与
+    if (a === 'class') {
+      // 選択ハイライト等の UI クラスだけの付け外しは編集ではない
+      const UI = /\bkuro-media-wrap--selected\b|\bkuro-code-wrap--dragging\b/g
+      const norm = (v) => (v || '').replace(UI, '').split(/\s+/).filter(Boolean).sort().join(' ')
+      return norm(r.oldValue) !== norm(r.target.getAttribute('class'))
+    }
+    return true
+  }
+
+  _markDirty() {
+    if (this._dirty) return
+    this._dirty = true
+    this._updateSaveButtons()
+  }
+
+  _clearDirty() {
+    // 配信待ちの(保存前の編集由来)レコードを破棄してから消灯する
+    this._dirtyObserver?.takeRecords()
+    this._dirty = false
+    this._updateSaveButtons()
+  }
+
+  _updateSaveButtons() {
+    const clean = !this._dirty
+    for (const btn of [this.saveBtn, this.tabSaveBtn]) {
+      if (!btn) continue
+      btn.disabled = clean
+      btn.title = clean ? '変更はありません' : ''
+    }
+  }
+
+  /** 未保存の変更があるか(slotted モードでホスト側の保存 UI からも使える)。 */
+  isDirty() { return !!this._dirty }
+
   /** Remove the editor and restore the original mount element. */
   destroy() {
     this._stopAutoSave()
+    this._dirtyObserver?.disconnect()
 
     // Remove document-level listeners registered in _bindEvents()
     document.removeEventListener('selectionchange', this._onDocSelChange)

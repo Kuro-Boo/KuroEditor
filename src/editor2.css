@@ -131,6 +131,10 @@
            text-sm font-semibold text-white
            transition-colors cursor-pointer flex-shrink-0;
   }
+  /* 未保存の変更が無い間は暗くして押せなくする */
+  .kuro-mmenu__save:disabled {
+    @apply bg-neutral-700 text-neutral-500 cursor-default pointer-events-none;
+  }
 
   /* ── Slotted mode: mounted inside host modalToolbar, not fixed to viewport ── */
   .kuro-mmenu--slotted {
@@ -259,6 +263,10 @@
     @apply px-4 py-1.5 mx-2 my-1 text-sm font-semibold text-white
            bg-indigo-600 hover:bg-indigo-500 rounded
            transition-colors cursor-pointer flex-shrink-0;
+  }
+  /* 未保存の変更が無い間は暗くして押せなくする */
+  .kuro-tabs__save:disabled {
+    @apply bg-neutral-700 text-neutral-500 cursor-default pointer-events-none;
   }
 
   /* ════════════════════════════════════════════════════════
