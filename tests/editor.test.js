@@ -160,4 +160,84 @@ describe('KuroEditor', () => {
     editor.destroy()
     expect(document.querySelector('[data-kuro-editor]')).toBeNull()
   })
+
+  // ── Heading-safe block merge (Backspace / Delete) ──────────────────────────
+  // ブラウザ標準の結合は <h2> を <p><strong style="font-size:…"> に化けさせる
+  // ため、見出しが絡む結合は _handleHeadingMerge が DOM 直接操作で行う。
+
+  describe('heading-safe block merge', () => {
+    function setCaret(node, offset) {
+      const sel = window.getSelection()
+      const r = document.createRange()
+      r.setStart(node, offset)
+      r.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(r)
+    }
+
+    function pressKey(key) {
+      const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      editor.wysiwyg.dispatchEvent(e)
+      return e
+    }
+
+    it('Delete on the empty line before a heading keeps the <h2> intact', () => {
+      editor.setContent('<p><br></p><h2>Title</h2>')
+      const p = editor.wysiwyg.querySelector('p')
+      setCaret(p, 0)
+      const e = pressKey('Delete')
+      expect(e.defaultPrevented).toBe(true)
+      // ToC が id を付けるので tag/text だけ検証
+      expect(editor.wysiwyg.innerHTML).toMatch(/^<h2[^>]*>Title<\/h2>$/)
+    })
+
+    it('Backspace at heading start removes the empty line above, heading survives', () => {
+      editor.setContent('<p><br></p><h2>Title</h2>')
+      const h2 = editor.wysiwyg.querySelector('h2')
+      setCaret(h2.firstChild, 0)
+      const e = pressKey('Backspace')
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.wysiwyg.innerHTML).toMatch(/^<h2[^>]*>Title<\/h2>$/)
+    })
+
+    it('Backspace at heading start merges into the previous paragraph without inline garbage', () => {
+      editor.setContent('<p>Intro</p><h2>Title</h2>')
+      const h2 = editor.wysiwyg.querySelector('h2')
+      setCaret(h2.firstChild, 0)
+      const e = pressKey('Backspace')
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.wysiwyg.innerHTML).not.toContain('<strong')
+      expect(editor.wysiwyg.innerHTML).not.toContain('font-size')
+      expect(editor.wysiwyg.textContent).toBe('IntroTitle')
+      expect(editor.wysiwyg.querySelectorAll('p').length).toBe(1)
+    })
+
+    it('Delete at end of a paragraph pulls the heading text up without inline garbage', () => {
+      editor.setContent('<p>Intro</p><h2>Title</h2>')
+      const p = editor.wysiwyg.querySelector('p')
+      setCaret(p.firstChild, p.firstChild.length)
+      const e = pressKey('Delete')
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.wysiwyg.innerHTML).not.toContain('<strong')
+      expect(editor.wysiwyg.innerHTML).not.toContain('font-size')
+      expect(editor.wysiwyg.textContent).toBe('IntroTitle')
+    })
+
+    it('Backspace in an empty heading removes it, previous paragraph untouched', () => {
+      editor.setContent('<p>Intro</p><h2><br></h2>')
+      const h2 = editor.wysiwyg.querySelector('h2')
+      setCaret(h2, 0)
+      const e = pressKey('Backspace')
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.wysiwyg.innerHTML).toBe('<p>Intro</p>')
+    })
+
+    it('paragraph-to-paragraph merge is left to the browser', () => {
+      editor.setContent('<p>one</p><p>two</p>')
+      const p2 = editor.wysiwyg.querySelectorAll('p')[1]
+      setCaret(p2.firstChild, 0)
+      const e = pressKey('Backspace')
+      expect(e.defaultPrevented).toBe(false)
+    })
+  })
 })

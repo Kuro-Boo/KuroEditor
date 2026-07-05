@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.12'
+export const VERSION = '2.0.13'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -5588,6 +5588,14 @@ export class KuroEditor {
         }
       }
     }
+
+    // ── Backspace / Delete: 見出しが絡むブロック結合を DOM 直接操作で行う ──
+    // ブラウザ標準の結合は「見た目を保つ」ために inline style を注入するため、
+    // <h2>text</h2> が <p><strong style="font-size:1.5rem">text</strong></p>
+    // に化ける。見出しが結合のどちらか側にあるときだけ横取りする。
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      if (this._handleHeadingMerge(e)) return
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -6064,6 +6072,94 @@ export class KuroEditor {
       el = el.parentElement
     }
     return this.wysiwyg
+  }
+
+  /**
+   * Backspace at block start / Delete at block end when a heading is on
+   * either side of the would-be merge.
+   *
+   * Left to the browser, the merge injects style-preserving garbage
+   * (<strong style="font-size:…">, <span style="font-weight:…">) so the
+   * heading tag is lost. We redo the merge with plain DOM moves instead:
+   * the upper block survives, the lower block's children move into it, and
+   * empty lines are simply removed without any merge at all.
+   *
+   * Top-level <p> / <h1>–<h6> only — lists, tables, callouts, code blocks
+   * keep their native behaviour.
+   *
+   * @param {KeyboardEvent} e
+   * @returns {boolean} true when handled (preventDefault was called)
+   */
+  _handleHeadingMerge(e) {
+    const HEADINGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
+    const SIMPLE   = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
+
+    const sel = window.getSelection()
+    if (!sel?.rangeCount || !sel.isCollapsed) return false
+    const range = sel.getRangeAt(0)
+    const block = this._nearestBlock(range.startContainer)
+    if (!block || block === this.wysiwyg) return false
+    if (block.parentElement !== this.wysiwyg || !SIMPLE.has(block.tagName)) return false
+
+    const edge = e.key === 'Backspace' ? 'start' : 'end'
+    if (!this._caretAtBlockEdge(block, range, edge)) return false
+
+    const other = edge === 'start' ? block.previousElementSibling : block.nextElementSibling
+    if (!other || !SIMPLE.has(other.tagName)) return false
+    if (!HEADINGS.has(block.tagName) && !HEADINGS.has(other.tagName)) return false
+
+    // 結合方向は常に「下のブロックが上へ合流」
+    const upper = edge === 'start' ? other : block
+    const lower = edge === 'start' ? block : other
+
+    e.preventDefault()
+
+    if (this._isEmptyBlock(upper)) {
+      // 空行を消すだけ — 結合は起こさず、下のブロックのタグを守る
+      upper.remove()
+      sel.setBaseAndExtent(lower, 0, lower, 0)
+    } else if (this._isEmptyBlock(lower)) {
+      lower.remove()
+      const idx = upper.lastChild?.nodeName === 'BR'
+        ? upper.childNodes.length - 1
+        : upper.childNodes.length
+      sel.setBaseAndExtent(upper, idx, upper, idx)
+    } else {
+      if (upper.lastChild?.nodeName === 'BR') upper.lastChild.remove()
+      const junction = upper.childNodes.length
+      while (lower.firstChild) upper.appendChild(lower.firstChild)
+      lower.remove()
+      sel.setBaseAndExtent(upper, junction, upper, junction)
+    }
+
+    // preventDefault したので input イベントは発火しない → 手動更新
+    this.toc._update()
+    this._updateCharCount()
+    return true
+  }
+
+  /**
+   * キャレットがブロックの視覚的な先頭 / 末尾にあるか。
+   * 間に <br> しか無ければ端とみなす(placeholder <br> 対策)。
+   */
+  _caretAtBlockEdge(block, range, edge) {
+    const probe = document.createRange()
+    probe.selectNodeContents(block)
+    try {
+      if (edge === 'start') probe.setEnd(range.startContainer, range.startOffset)
+      else                  probe.setStart(range.endContainer, range.endOffset)
+    } catch {
+      return false
+    }
+    if (probe.toString() !== '') return false
+    const frag = probe.cloneContents()
+    return !frag.querySelector('img, video, audio, iframe, table, hr, textarea')
+  }
+
+  /** テキストも埋め込み要素も無いブロックか(<br> のみは空とみなす)。 */
+  _isEmptyBlock(el) {
+    if (el.textContent.trim() !== '') return false
+    return !el.querySelector('img, video, audio, iframe, table, hr, textarea')
   }
 
   /**
