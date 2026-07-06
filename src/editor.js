@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.0.15'
+export const VERSION = '2.1.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -1044,6 +1044,42 @@ export function createTableHtml(rows = 2, cols = 2) {
   const tdRow   = Array.from({ length: cols }, () => '<td contenteditable="true"><br></td>').join('')
   const allRows = Array.from({ length: rows }, () => `<tr>${tdRow}</tr>`).join('')
   return `<table class="kuro-table"><tbody>${allRows}</tbody></table>`
+}
+
+/**
+ * Pick a readable text color (dark or white) for the given background color.
+ *
+ * セル背景色はインライン style として本文 HTML に焼き込まれるが、文字色を
+ * テーマ任せにすると「ダークな編集画面では読める／ライトな公開ページでは
+ * 背景と同化して読めない」という WYSIWYG 破綻が起きる（kuro.boo 本番で実際に
+ * 発生）。背景を焼き込むときは、必ずコントラストの付く文字色をペアで焼き込む。
+ *
+ * @param {string} cssColor #rgb / #rrggbb / rgb() / rgba()
+ * @returns {string} '#111827' | '#ffffff' | ''（解析不能・ほぼ透明 = 文字色は継承のまま）
+ */
+export function contrastTextColor(cssColor) {
+  const c = String(cssColor || '').trim()
+  let r, g, b, a = 1
+  let m = c.match(/^#([0-9a-f]{3})$/i)
+  if (m) {
+    r = parseInt(m[1][0] + m[1][0], 16)
+    g = parseInt(m[1][1] + m[1][1], 16)
+    b = parseInt(m[1][2] + m[1][2], 16)
+  } else if ((m = c.match(/^#([0-9a-f]{6})$/i))) {
+    r = parseInt(m[1].slice(0, 2), 16)
+    g = parseInt(m[1].slice(2, 4), 16)
+    b = parseInt(m[1].slice(4, 6), 16)
+  } else if ((m = c.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i))) {
+    r = Number(m[1]); g = Number(m[2]); b = Number(m[3])
+    if (m[4] !== undefined) a = Number(m[4])
+  } else {
+    return ''
+  }
+  if (!(r <= 255 && g <= 255 && b <= 255)) return ''
+  if (a < 0.5) return ''  // ほぼ透明な背景 → 下地が支配的なので文字色は継承のまま
+  // YIQ 輝度 (0-255)。128 を境に暗背景=白文字 / 明背景=濃色文字。
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000
+  return yiq >= 128 ? '#111827' : '#ffffff'
 }
 
 /**
@@ -2702,11 +2738,22 @@ export class TableManager {
     const picker = new ColorPicker({
       onPick: (color) => {
         const cell = this._cell()
-        if (cell) cell.style.backgroundColor = color
+        if (cell) {
+          cell.style.backgroundColor = color
+          // 背景を焼き込むときは読める文字色もペアで焼き込む（公開ページの
+          // テーマが編集画面と違っても文字が背景に同化しないように）。
+          const fg = contrastTextColor(color)
+          if (fg) cell.style.color = fg
+          else cell.style.removeProperty('color')
+        }
         this._hideColorPanel()
       },
       onClear: () => {
-        this._cell()?.style.removeProperty('background-color')
+        const cell = this._cell()
+        if (cell) {
+          cell.style.removeProperty('background-color')
+          cell.style.removeProperty('color')
+        }
         this._hideColorPanel()
       },
     })
@@ -4462,6 +4509,10 @@ export class KuroEditor {
       attrs: { 'data-kuro-editor': VERSION },
     })
 
+    // キャンバス配色モード。既定は「通常」（= content.css のニュートラル既定
+    // ＝公開ページと同じ変数値）。ダークは .kuro-editor--canvas-dark を付与。
+    if (this._readCanvasDarkPref()) this.root.classList.add('kuro-editor--canvas-dark')
+
     this._buildMMenu()
     this._buildTabs()
     this._buildBody()   // pane + ToC
@@ -4639,6 +4690,25 @@ export class KuroEditor {
     tabAutoWrap.appendChild(this.tabAutoSaveCheck)
     tabAutoWrap.appendChild(tabAutoLabel)
 
+    // Canvas theme checkbox — 通常(サイト相当) ⇔ ダーク。既定は通常。
+    const tabThemeId = `kuro-tab-canvas-dark-${Math.random().toString(36).slice(2, 7)}`
+    this.tabCanvasDarkCheck = createElement('input', {
+      className: 'kuro-mmenu__autosave-check',
+      attrs: { type: 'checkbox', id: tabThemeId, 'aria-label': '編集エリアをダーク表示' },
+    })
+    this.tabCanvasDarkCheck.checked = this._readCanvasDarkPref()
+    this.tabCanvasDarkCheck.addEventListener('change', () => {
+      this.setCanvasDark(this.tabCanvasDarkCheck.checked)
+    })
+    const tabThemeLabel = createElement('label', {
+      className: 'kuro-mmenu__autosave-label',
+      html: 'ダーク',
+      attrs: { for: tabThemeId, title: '編集エリアの配色: OFF=公開ページ相当(通常) / ON=ダーク' },
+    })
+    const tabThemeWrap = createElement('div', { className: 'kuro-tabs__autosave kuro-tabs__canvas-theme' })
+    tabThemeWrap.appendChild(this.tabCanvasDarkCheck)
+    tabThemeWrap.appendChild(tabThemeLabel)
+
     // Save button
     this.tabSaveBtn = createElement('button', {
       className: 'kuro-tabs__save',
@@ -4671,6 +4741,7 @@ export class KuroEditor {
     row1Left.appendChild(this.tabSource)
     row1Left.appendChild(this._tabCharCount)
 
+    row1Right.appendChild(tabThemeWrap)
     row1Right.appendChild(tabAutoWrap)
     row1Right.appendChild(this.tabSaveBtn)
     row1Right.appendChild(tocSep)
@@ -7220,6 +7291,37 @@ export class KuroEditor {
       /* storage unavailable — preference simply won't survive reloads */
     }
   }
+
+  /** Read the persisted canvas-theme preference. Defaults to 通常 (false) when unset. */
+  _readCanvasDarkPref() {
+    try {
+      return window.localStorage.getItem('kuro-editor-canvas-dark') === '1'
+    } catch {
+      return false  // private mode / storage disabled → keep the default (通常)
+    }
+  }
+
+  /** Persist the canvas-theme preference ('1' = dark, '0' = 通常). */
+  _writeCanvasDarkPref(on) {
+    try {
+      window.localStorage.setItem('kuro-editor-canvas-dark', on ? '1' : '0')
+    } catch {
+      /* storage unavailable — preference simply won't survive reloads */
+    }
+  }
+
+  /**
+   * Switch the editing-canvas color mode.
+   * @param {boolean} dark true = ダーク / false = 通常（公開ページ相当）
+   */
+  setCanvasDark(dark) {
+    this.root.classList.toggle('kuro-editor--canvas-dark', !!dark)
+    if (this.tabCanvasDarkCheck) this.tabCanvasDarkCheck.checked = !!dark
+    this._writeCanvasDarkPref(!!dark)
+  }
+
+  /** @returns {boolean} whether the editing canvas is in dark mode. */
+  isCanvasDark() { return this.root.classList.contains('kuro-editor--canvas-dark') }
 
   /** Start periodic auto-save (default interval 30 s, overridable via options). */
   _startAutoSave() {

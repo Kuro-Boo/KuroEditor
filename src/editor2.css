@@ -2,13 +2,39 @@
 @import "./content.css";
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Editor uses a DARK theme. content.css (imported above) defines the published
-   content blocks (rounded box, tables, list markers) and the @counter-style
-   rules with theme-neutral CSS variables + neutral defaults. Override those
-   variables to the editor's dark palette here. UNLAYERED so it beats
-   content.css's own (also unlayered) :root by source order.
+   CANVAS THEME. The editor chrome (toolbar/menus) is always dark, but the
+   editing CANVAS (.kuro-pane__wysiwyg) has two modes, toggled by the
+   `.kuro-editor--canvas-dark` modifier on the editor root:
+
+   - 通常 (default, no modifier): light/site-like. content.css keeps its
+     theme-neutral :root variable defaults — the same values the PUBLIC page
+     uses — so what you see is what publishes. The canvas surface colors come
+     from the --kuro-canvas-* variables below; an embedding host can override
+     them to match its actual site palette (each site's "normal" differs).
+   - ダーク (modifier present): the classic dark canvas. The --kuro-* content
+     variables are overridden to the dark palette, scoped to the modifier so
+     they never leak into 通常 mode. UNLAYERED so it beats content.css's
+     (also unlayered) :root defaults.
    ────────────────────────────────────────────────────────────────────────── */
-:root {
+.kuro-editor {
+  /* 通常モードのキャンバス配色（サイト相当）。ホストが実サイトの配色に
+     合わせたいときはこの変数を上書きする。 */
+  --kuro-canvas-bg: #ffffff;
+  --kuro-canvas-text: #0f172a; /* slate-900 */
+  --kuro-canvas-caret: #4f46e5; /* indigo-600 */
+  --kuro-canvas-placeholder: #9ca3af; /* gray-400 */
+  --kuro-canvas-cellfocus-bg: #eef2ff; /* indigo-50 */
+  --kuro-canvas-dragover-bg: rgba(224, 231, 255, 0.5); /* indigo-100/50 */
+}
+.kuro-editor.kuro-editor--canvas-dark {
+  --kuro-canvas-bg: #171717; /* neutral-900 (shell bg) */
+  --kuro-canvas-text: #f5f5f5; /* neutral-100 */
+  --kuro-canvas-caret: #818cf8; /* indigo-400 */
+  --kuro-canvas-placeholder: #525252; /* neutral-600 */
+  --kuro-canvas-cellfocus-bg: #1e1b4b; /* indigo-950 */
+  --kuro-canvas-dragover-bg: rgba(30, 27, 75, 0.4); /* indigo-950/40 */
+
+  /* Content-block variables — dark palette (was the global :root override). */
   --kuro-box-border: #525252; /* neutral-600 */
   --kuro-box-bg: #1a1a1e;
   --kuro-box-border-nested: #737373; /* neutral-500 */
@@ -287,8 +313,10 @@
 
   .kuro-pane__wysiwyg {
     @apply flex-1 overflow-y-auto p-5 outline-none
-           text-neutral-100 leading-relaxed;
-    caret-color: theme('colors.indigo.400');
+           leading-relaxed;
+    background: var(--kuro-canvas-bg);
+    color: var(--kuro-canvas-text);
+    caret-color: var(--kuro-canvas-caret);
     min-height: 16rem;
     /* flex 子としても縮めるようにし、本文は見えている幅で折り返す。
        長い英字列/URL など分割不能なトークンも枠内に収める。 */
@@ -300,13 +328,14 @@
   .kuro-pane__wysiwyg.kuro-drag-over {
     outline: 2px dashed theme('colors.indigo.500');
     outline-offset: -3px;
-    @apply bg-indigo-950/40;
+    background: var(--kuro-canvas-dragover-bg);
   }
 
   /* Placeholder via CSS */
   .kuro-pane__wysiwyg:empty::before {
     content: attr(data-placeholder);
-    @apply text-neutral-600 pointer-events-none;
+    @apply pointer-events-none;
+    color: var(--kuro-canvas-placeholder);
   }
 
   .kuro-pane__source {
@@ -1020,10 +1049,14 @@
      ════════════════════════════════════════════════════════ */
 
   /* CONTENT TYPOGRAPHY lives in content.css now (single source of truth, shared
-     with the published page → WYSIWYG). Here we only set the COLOR variables to
-     the editor's dark palette so the in-editor appearance is unchanged. */
+     with the published page → WYSIWYG). Colors:
+     - 通常モード: content.css の theme-neutral な既定値をそのまま使う
+       （公開ページと同一の変数値 = 真の WYSIWYG）。ここでは何も上書きしない。
+     - ダークモード (.kuro-editor--canvas-dark): 従来のダークパレットに上書き。 */
   .kuro-content {
-    @apply text-neutral-100;
+    color: var(--kuro-canvas-text);
+  }
+  .kuro-editor--canvas-dark .kuro-content {
     --kuro-h1-color: theme('colors.neutral.50');
     --kuro-h2-color: theme('colors.neutral.100');
     --kuro-h3-color: theme('colors.neutral.100');
@@ -1266,7 +1299,8 @@
   .kuro-table th:focus,
   .kuro-content td:focus,
   .kuro-content th:focus {
-    @apply bg-indigo-950 outline-none;
+    @apply outline-none;
+    background: var(--kuro-canvas-cellfocus-bg);
     box-shadow: inset 0 0 0 2px theme('colors.indigo.500');
   }
 
