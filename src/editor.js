@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.1.0'
+export const VERSION = '2.1.1'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -4463,6 +4463,10 @@ export class KuroEditor {
    * @param {{
    *   initialContent?: string,
    *   onSave?: (html: string) => void,
+   *   onDirty?: () => void,        // 未保存の変更が生じた瞬間に発火（false→true 遷移のみ）。
+   *                                // input イベントを出さない装飾系 DOM 操作（文字色・セル背景色・
+   *                                // テーブル操作）も MutationObserver 経由で漏れなく通知する。
+   *                                // ホストの保存 UI はこれを購読すること（input 監視では取りこぼす）。
    *   urlResolver?: (slug: string) => string,
    *   modalToolbar?: HTMLElement,  // host element to mount the modal menu bar into (slot mode)
    *   blockIds?: boolean,          // opt-in: maintain a stable data-bid on each top-level block
@@ -4473,6 +4477,7 @@ export class KuroEditor {
     this.options = {
       initialContent: '',
       onSave: null,
+      onDirty: null,
       urlResolver: defaultResolver,
       modalToolbar: null,
       blockIds: false,
@@ -7403,6 +7408,10 @@ export class KuroEditor {
     if (this._dirty) return
     this._dirty = true
     this._updateSaveButtons()
+    // ホスト（KuroCMS 等）に「未保存の変更あり」を通知。装飾のみの編集は
+    // input イベントを発火しないため、ホストが独自に input を監視するだけ
+    // では取りこぼす — この通知が唯一の完全なシグナル。
+    this.options.onDirty?.()
   }
 
   _clearDirty() {
@@ -7423,6 +7432,14 @@ export class KuroEditor {
 
   /** 未保存の変更があるか(slotted モードでホスト側の保存 UI からも使える)。 */
   isDirty() { return !!this._dirty }
+
+  /**
+   * ホストが自前の保存 UI で本文を保存し終えたときに呼ぶ。エディタの
+   * 未保存状態を消灯し、次の編集で onDirty が再発火するようにする。
+   * （これを呼ばないと、ホスト側保存後の装飾のみの編集が「既に dirty」で
+   * 通知されず、ホストの dirty 管理と食い違って保存が落ちる。）
+   */
+  clearDirty() { this._clearDirty() }
 
   /** Remove the editor and restore the original mount element. */
   destroy() {
