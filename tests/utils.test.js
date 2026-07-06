@@ -7,6 +7,7 @@ import {
   renderSpecialLinks,
   defaultResolver,
   createTableHtml,
+  contrastTextColor,
   findCell,
   parseMediaParams,
   resolveEmbedUrl,
@@ -313,6 +314,45 @@ describe('createTableHtml', () => {
     const tdCount = (html.match(/<td /g) || []).length
     expect(tdCount).toBe(4)   // 2 rows × 2 cols
     expect(html).not.toMatch(/<th\b/)
+  })
+})
+
+// ─── contrastTextColor ────────────────────────────────────────────────────────
+
+describe('contrastTextColor', () => {
+  it('returns white text for dark backgrounds', () => {
+    expect(contrastTextColor('#374151')).toBe('#ffffff') // gray-700 (kuro.boo 本番で潰れた色)
+    expect(contrastTextColor('#111827')).toBe('#ffffff') // gray-900
+    expect(contrastTextColor('#ef4444')).toBe('#ffffff') // red-500
+    expect(contrastTextColor('rgb(55, 65, 81)')).toBe('#ffffff')
+  })
+
+  it('returns dark text for light backgrounds', () => {
+    expect(contrastTextColor('#ffffff')).toBe('#111827')
+    expect(contrastTextColor('#fecdd3')).toBe('#111827') // rose-200
+    expect(contrastTextColor('#e5e7eb')).toBe('#111827') // gray-200
+    expect(contrastTextColor('rgb(255, 255, 0)')).toBe('#111827')
+  })
+
+  it('supports #rgb shorthand', () => {
+    expect(contrastTextColor('#000')).toBe('#ffffff')
+    expect(contrastTextColor('#fff')).toBe('#111827')
+  })
+
+  it('keeps inherited color for near-transparent backgrounds', () => {
+    expect(contrastTextColor('rgba(0, 0, 0, 0.3)')).toBe('')
+    expect(contrastTextColor('rgba(255, 255, 255, 0)')).toBe('')
+  })
+
+  it('treats opaque-enough rgba by its RGB', () => {
+    expect(contrastTextColor('rgba(0, 0, 0, 0.8)')).toBe('#ffffff')
+  })
+
+  it('returns empty string for unparsable input', () => {
+    expect(contrastTextColor('')).toBe('')
+    expect(contrastTextColor('tomato')).toBe('')
+    expect(contrastTextColor('var(--x)')).toBe('')
+    expect(contrastTextColor(null)).toBe('')
   })
 })
 
