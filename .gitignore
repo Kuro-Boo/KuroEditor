@@ -16,6 +16,5 @@ AGENTS.local.md
 .aider*
 
 # Local helper scripts (per-developer / 公開 main では追跡しない)
-# ※ これらは github_push_private.sh が private ブランチへ force-add してバックアップする
-kuroeditor_deploy_copy.sh
-github_push_private.sh
+# ※ リリーススクリプト自身が private ブランチへ force-add してバックアップする
+commit_push_deploy.sh
