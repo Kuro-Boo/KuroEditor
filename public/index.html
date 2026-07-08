@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title data-i18n="meta.title">KuroEditor — Vanilla JS WYSIWYG エディター</title>
-  <meta name="description" data-i18n-attr="content" data-i18n="meta.desc" content="依存ゼロ・単一ファイルで組込み可能な、ダークモード専用 WYSIWYG エディター。Vanilla JS + Tailwind CSS で構築。">
+  <meta name="description" data-i18n-attr="content" data-i18n="meta.desc" content="依存ゼロ・単一ファイルで組込み可能な WYSIWYG エディター。編集画面は公開ページに合わせた見た目が既定で、ワンクリックでダーク表示にも切替可能。Vanilla JS + Tailwind CSS で構築。">
 
   <!-- OGP -->
   <meta property="og:title" data-i18n-attr="content" data-i18n="meta.title" content="KuroEditor — Vanilla JS WYSIWYG エディター" />
-  <meta property="og:description" data-i18n-attr="content" data-i18n="meta.desc" content="依存ゼロ・単一ファイル組込み・ダークモード専用。表の罫線も自由に編集できる、こだわりの WYSIWYG エディター。" />
+  <meta property="og:description" data-i18n-attr="content" data-i18n="meta.desc" content="依存ゼロ・単一ファイル組込み・編集画面はライト/ダーク切替対応。表の罫線も自由に編集できる、こだわりの WYSIWYG エディター。" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://kuro.boo/kuroeditor/" />
 
@@ -127,7 +127,7 @@
     <div class="max-w-6xl mx-auto px-6 py-24 sm:py-32 text-center">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-medium mb-6">
         <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
-        <span data-i18n="hero.badge">v2.1.3 — 公開中</span>
+        <span data-i18n="hero.badge">v2.1.4 — 公開中</span>
       </div>
 
       <h1 class="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6" data-i18n="hero.title">
@@ -170,7 +170,7 @@
           <div class="text-neutral-500 mt-1" data-i18n="hero.stat_vanilla">Vanilla JS</div>
         </div>
         <div class="text-center">
-          <div class="text-3xl font-bold text-indigo-300">🌙</div>
+          <div class="text-3xl font-bold text-indigo-300">🌓</div>
           <div class="text-neutral-500 mt-1" data-i18n="hero.stat_dark">Dark mode</div>
         </div>
       </div>
@@ -213,9 +213,9 @@
         <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f5_d"><code class="inline">[[slug]]</code>、<code class="inline">[[[slug]]]</code>、<code class="inline">[[slug|表示]]</code> で WiKi 風リンクをサポート。</p>
       </div>
       <div class="glass-card rounded-2xl p-6">
-        <div class="w-12 h-12 rounded-xl bg-cyan-500/15 flex items-center justify-center mb-4 text-2xl">🌙</div>
-        <h3 class="text-lg font-bold mb-2" data-i18n="features.f6_t">ダークモード固定</h3>
-        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f6_d">常に統一感のあるダーク UI。記事の色設定だけが反映され、UI 色は変動しない設計。</p>
+        <div class="w-12 h-12 rounded-xl bg-cyan-500/15 flex items-center justify-center mb-4 text-2xl">🌓</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f6_t">編集画面のライト/ダーク切替</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f6_d">編集画面は公開ページに合わせたライト表示が既定。ワンクリックでダークにも切替でき、設定は保持されます。</p>
       </div>
       <div class="glass-card rounded-2xl p-6">
         <div class="w-12 h-12 rounded-xl bg-rose-500/15 flex items-center justify-center mb-4 text-2xl">💾</div>
@@ -350,7 +350,7 @@
     const I18N = {
       ja: {
         'meta.title': 'KuroEditor — Vanilla JS WYSIWYG エディター',
-        'meta.desc': '依存ゼロ・単一ファイルで組込み可能な、ダークモード専用 WYSIWYG エディター。Vanilla JS + Tailwind CSS で構築。',
+        'meta.desc': '依存ゼロ・単一ファイルで組込み可能な WYSIWYG エディター。編集画面は公開ページに合わせた見た目が既定で、ワンクリックでダーク表示にも切替可能。Vanilla JS + Tailwind CSS で構築。',
         'nav.features': '特徴',
         'nav.quickstart': '使い方',
         'nav.sample': 'サンプル',
@@ -362,7 +362,7 @@
         'hero.stat_deps': 'ランタイム依存',
         'hero.stat_files': '組込みファイル数',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': 'ダークモード',
+        'hero.stat_dark': 'ライト/ダーク切替',
         'features.heading': '主な特徴',
         'features.sub': 'こだわって作り込んだ、組込み用 WYSIWYG エディターの中身。',
         'features.f1_t': 'ライブラリ不要',
@@ -375,8 +375,8 @@
         'features.f4_d': '画像／動画／音声／YouTube・Vimeo 埋め込み。ドラッグ&ドロップ、クリップボード貼り付けにも対応。',
         'features.f5_t': '特殊リンク記法',
         'features.f5_d': '<code class="inline">[[slug]]</code>、<code class="inline">[[[slug]]]</code>、<code class="inline">[[slug|表示]]</code> で WiKi 風リンクをサポート。',
-        'features.f6_t': 'ダークモード固定',
-        'features.f6_d': '常に統一感のあるダーク UI。記事の色設定だけが反映され、UI 色は変動しない設計。',
+        'features.f6_t': '編集画面のライト/ダーク切替',
+        'features.f6_d': '編集画面は公開ページに合わせたライト表示が既定。夜間の編集などはワンクリックでダークに切替でき、設定は保持されます。',
         'features.f7_t': '自動保存',
         'features.f7_d': '任意の間隔で <code class="inline">onSave</code> コールバック発火。サーバー連携も自由自在。',
         'features.f8_t': 'ソース編集',
@@ -403,7 +403,7 @@
       },
       en: {
         'meta.title': 'KuroEditor — Vanilla JS WYSIWYG Editor',
-        'meta.desc': 'A dark-mode WYSIWYG editor with zero runtime dependencies, embeddable as a single file. Built with Vanilla JS + Tailwind CSS.',
+        'meta.desc': 'A zero-dependency, single-file embeddable WYSIWYG editor. The editing canvas matches your site\'s look by default, with an optional one-click dark mode. Built with Vanilla JS + Tailwind CSS.',
         'nav.features': 'Features',
         'nav.quickstart': 'Quick Start',
         'nav.sample': 'Demo',
@@ -415,7 +415,7 @@
         'hero.stat_deps': 'runtime deps',
         'hero.stat_files': 'files to embed',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': 'Dark mode',
+        'hero.stat_dark': 'Light/Dark toggle',
         'features.heading': 'Key Features',
         'features.sub': 'A WYSIWYG editor crafted with care, designed for embedding.',
         'features.f1_t': 'No libraries required',
@@ -428,8 +428,8 @@
         'features.f4_d': 'Images, videos, audio, YouTube and Vimeo embeds. Drag &amp; drop and clipboard paste also supported.',
         'features.f5_t': 'Special link syntax',
         'features.f5_d': 'Wiki-style links via <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code>, and <code class="inline">[[slug|display]]</code>.',
-        'features.f6_t': 'Dark mode only',
-        'features.f6_d': 'A consistent dark UI at all times. Only article colors change — the chrome stays the same.',
+        'features.f6_t': 'Light/Dark canvas toggle',
+        'features.f6_d': 'The editing canvas matches your site\'s look by default. Switch to dark with one click for comfortable night editing — the choice is remembered.',
         'features.f7_t': 'Auto-save',
         'features.f7_d': 'Fires an <code class="inline">onSave</code> callback at the interval you choose. Plug it into any backend.',
         'features.f8_t': 'Source editing',
@@ -456,7 +456,7 @@
       },
       de: {
         'meta.title': 'KuroEditor — Vanilla-JS-WYSIWYG-Editor',
-        'meta.desc': 'Ein Dark-Mode-WYSIWYG-Editor ohne Laufzeitabhängigkeiten, einbettbar als eine einzige Datei. Mit Vanilla JS + Tailwind CSS gebaut.',
+        'meta.desc': 'Ein abhängigkeitsfreier, in einer einzigen Datei einbettbarer WYSIWYG-Editor. Die Bearbeitungsfläche passt sich standardmäßig dem Erscheinungsbild Ihrer Seite an, mit optionalem Dunkelmodus per Klick. Mit Vanilla JS + Tailwind CSS gebaut.',
         'nav.features': 'Funktionen',
         'nav.quickstart': 'Schnellstart',
         'nav.sample': 'Demo',
@@ -468,7 +468,7 @@
         'hero.stat_deps': 'Laufzeitabhängigkeiten',
         'hero.stat_files': 'Dateien zum Einbetten',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': 'Dunkler Modus',
+        'hero.stat_dark': 'Hell/Dunkel-Umschalter',
         'features.heading': 'Hauptfunktionen',
         'features.sub': 'Ein sorgfältig gestalteter, einbettbarer WYSIWYG-Editor.',
         'features.f1_t': 'Keine Bibliotheken nötig',
@@ -481,8 +481,8 @@
         'features.f4_d': 'Bilder, Videos, Audio, YouTube- und Vimeo-Einbettungen. Drag &amp; Drop sowie Einfügen aus der Zwischenablage werden unterstützt.',
         'features.f5_t': 'Sondersyntax für Links',
         'features.f5_d': 'Wiki-Style-Links per <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> und <code class="inline">[[slug|Anzeige]]</code>.',
-        'features.f6_t': 'Nur Dunkelmodus',
-        'features.f6_d': 'Stets ein einheitliches dunkles UI. Nur die Artikelfarben ändern sich.',
+        'features.f6_t': 'Hell/Dunkel-Umschalter',
+        'features.f6_d': 'Die Bearbeitungsfläche passt sich standardmäßig an das Erscheinungsbild Ihrer Seite an. Mit einem Klick zum Dunkelmodus wechseln – die Einstellung wird gespeichert.',
         'features.f7_t': 'Automatisches Speichern',
         'features.f7_d': 'Ruft einen <code class="inline">onSave</code>-Callback in einem Intervall Ihrer Wahl auf.',
         'features.f8_t': 'Quellcode-Bearbeitung',
@@ -509,7 +509,7 @@
       },
       fr: {
         'meta.title': 'KuroEditor — Éditeur WYSIWYG en Vanilla JS',
-        'meta.desc': 'Un éditeur WYSIWYG en mode sombre, sans dépendances, intégrable en un seul fichier. Construit avec Vanilla JS + Tailwind CSS.',
+        'meta.desc': 'Un éditeur WYSIWYG sans dépendances, intégrable en un seul fichier. La zone d\'édition adopte par défaut l\'apparence de votre site, avec un mode sombre optionnel en un clic. Construit avec Vanilla JS + Tailwind CSS.',
         'nav.features': 'Fonctionnalités',
         'nav.quickstart': 'Démarrage',
         'nav.sample': 'Démo',
@@ -521,7 +521,7 @@
         'hero.stat_deps': 'dépendances runtime',
         'hero.stat_files': 'fichiers à intégrer',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': 'Mode sombre',
+        'hero.stat_dark': 'Bascule clair/sombre',
         'features.heading': 'Principales fonctionnalités',
         'features.sub': 'Un éditeur WYSIWYG soigneusement conçu, dédié à l\'intégration.',
         'features.f1_t': 'Sans bibliothèques',
@@ -534,8 +534,8 @@
         'features.f4_d': 'Images, vidéos, audio, intégrations YouTube et Vimeo. Glisser-déposer et collage depuis le presse-papiers.',
         'features.f5_t': 'Syntaxe spéciale',
         'features.f5_d': 'Liens style wiki via <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> et <code class="inline">[[slug|texte]]</code>.',
-        'features.f6_t': 'Mode sombre uniquement',
-        'features.f6_d': 'Une interface sombre cohérente en permanence. Seules les couleurs du contenu varient.',
+        'features.f6_t': 'Bascule clair/sombre',
+        'features.f6_d': 'La zone d\'édition adopte par défaut l\'apparence de votre site. Passez en mode sombre en un clic pour éditer confortablement le soir — le choix est mémorisé.',
         'features.f7_t': 'Sauvegarde automatique',
         'features.f7_d': 'Le callback <code class="inline">onSave</code> est appelé à l\'intervalle de votre choix.',
         'features.f8_t': 'Édition source',
@@ -562,7 +562,7 @@
       },
       es: {
         'meta.title': 'KuroEditor — Editor WYSIWYG en Vanilla JS',
-        'meta.desc': 'Un editor WYSIWYG en modo oscuro, sin dependencias, integrable como un solo archivo. Construido con Vanilla JS + Tailwind CSS.',
+        'meta.desc': 'Un editor WYSIWYG sin dependencias, integrable como un solo archivo. El lienzo de edición adopta por defecto el aspecto de tu sitio, con modo oscuro opcional con un clic. Construido con Vanilla JS + Tailwind CSS.',
         'nav.features': 'Características',
         'nav.quickstart': 'Inicio rápido',
         'nav.sample': 'Demo',
@@ -574,7 +574,7 @@
         'hero.stat_deps': 'dependencias en runtime',
         'hero.stat_files': 'archivos a integrar',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': 'Modo oscuro',
+        'hero.stat_dark': 'Cambio claro/oscuro',
         'features.heading': 'Características principales',
         'features.sub': 'Un editor WYSIWYG cuidadosamente diseñado para integrarse.',
         'features.f1_t': 'Sin librerías',
@@ -587,8 +587,8 @@
         'features.f4_d': 'Imágenes, vídeos, audio, embeds de YouTube y Vimeo. Soporta arrastrar y soltar y pegar desde el portapapeles.',
         'features.f5_t': 'Sintaxis de enlace especial',
         'features.f5_d': 'Enlaces estilo wiki con <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> y <code class="inline">[[slug|texto]]</code>.',
-        'features.f6_t': 'Solo modo oscuro',
-        'features.f6_d': 'Interfaz oscura siempre coherente. Solo cambian los colores del contenido.',
+        'features.f6_t': 'Cambio de lienzo claro/oscuro',
+        'features.f6_d': 'El lienzo de edición adopta por defecto el aspecto de tu sitio. Cambia a modo oscuro con un clic para editar cómodamente de noche — la elección se recuerda.',
         'features.f7_t': 'Autoguardado',
         'features.f7_d': 'Llama al callback <code class="inline">onSave</code> en el intervalo que elijas.',
         'features.f8_t': 'Edición de fuente',
@@ -615,7 +615,7 @@
       },
       it: {
         'meta.title': 'KuroEditor — Editor WYSIWYG in Vanilla JS',
-        'meta.desc': 'Un editor WYSIWYG in modalità scura, senza dipendenze runtime, integrabile come singolo file. Costruito con Vanilla JS + Tailwind CSS.',
+        'meta.desc': 'Un editor WYSIWYG senza dipendenze runtime, integrabile come singolo file. La superficie di modifica adotta per impostazione predefinita l\'aspetto del tuo sito, con modalità scura opzionale con un clic. Costruito con Vanilla JS + Tailwind CSS.',
         'nav.features': 'Caratteristiche',
         'nav.quickstart': 'Avvio rapido',
         'nav.sample': 'Demo',
@@ -627,7 +627,7 @@
         'hero.stat_deps': 'dipendenze runtime',
         'hero.stat_files': 'file da integrare',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': 'Modalità scura',
+        'hero.stat_dark': 'Passa chiaro/scuro',
         'features.heading': 'Caratteristiche principali',
         'features.sub': 'Un editor WYSIWYG curato nei dettagli, pensato per l\'integrazione.',
         'features.f1_t': 'Nessuna libreria',
@@ -640,8 +640,8 @@
         'features.f4_d': 'Immagini, video, audio, embed YouTube e Vimeo. Drag &amp; drop e incolla dagli appunti.',
         'features.f5_t': 'Sintassi link speciale',
         'features.f5_d': 'Link in stile wiki con <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> e <code class="inline">[[slug|testo]]</code>.',
-        'features.f6_t': 'Solo modalità scura',
-        'features.f6_d': 'Interfaccia scura sempre coerente. Solo i colori del contenuto cambiano.',
+        'features.f6_t': 'Passaggio chiaro/scuro',
+        'features.f6_d': 'La superficie di modifica adotta per impostazione predefinita l\'aspetto del tuo sito. Passa alla modalità scura con un clic per modificare comodamente di notte — la scelta viene ricordata.',
         'features.f7_t': 'Salvataggio automatico',
         'features.f7_d': 'Richiama il callback <code class="inline">onSave</code> all\'intervallo che preferisci.',
         'features.f8_t': 'Modifica sorgente',
@@ -668,7 +668,7 @@
       },
       uk: {
         'meta.title': 'KuroEditor — WYSIWYG-редактор на Vanilla JS',
-        'meta.desc': 'WYSIWYG-редактор у темному режимі без runtime-залежностей, вбудовується одним файлом. Побудовано на Vanilla JS + Tailwind CSS.',
+        'meta.desc': 'WYSIWYG-редактор без runtime-залежностей, вбудовується одним файлом. Область редагування за замовчуванням має вигляд вашого сайту, з опціональним темним режимом в один клік. Побудовано на Vanilla JS + Tailwind CSS.',
         'nav.features': 'Можливості',
         'nav.quickstart': 'Швидкий старт',
         'nav.sample': 'Демо',
@@ -680,7 +680,7 @@
         'hero.stat_deps': 'runtime-залежностей',
         'hero.stat_files': 'файли для вбудовування',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': 'Темний режим',
+        'hero.stat_dark': 'Перемикач світла/темного',
         'features.heading': 'Основні можливості',
         'features.sub': 'Ретельно створений WYSIWYG-редактор для вбудовування.',
         'features.f1_t': 'Без бібліотек',
@@ -693,8 +693,8 @@
         'features.f4_d': 'Зображення, відео, аудіо, вбудовування YouTube і Vimeo. Drag &amp; drop і вставка з буфера обміну.',
         'features.f5_t': 'Спеціальний синтаксис посилань',
         'features.f5_d': 'Wiki-посилання через <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> і <code class="inline">[[slug|текст]]</code>.',
-        'features.f6_t': 'Тільки темний режим',
-        'features.f6_d': 'Завжди узгоджений темний UI. Змінюються лише кольори вмісту.',
+        'features.f6_t': 'Перемикач світлої/темної теми',
+        'features.f6_d': 'Область редагування за замовчуванням виглядає як ваш сайт. Перемкніться на темний режим одним кліком для комфортного редагування вночі — вибір запам\'ятовується.',
         'features.f7_t': 'Автозбереження',
         'features.f7_d': 'Викликає callback <code class="inline">onSave</code> з вашим інтервалом.',
         'features.f8_t': 'Редагування коду',
@@ -721,7 +721,7 @@
       },
       zh: {
         'meta.title': 'KuroEditor — Vanilla JS 所见即所得编辑器',
-        'meta.desc': '零运行时依赖、单文件即可嵌入的暗色 WYSIWYG 编辑器。基于 Vanilla JS + Tailwind CSS 构建。',
+        'meta.desc': '零运行时依赖、单文件即可嵌入的 WYSIWYG 编辑器。编辑区默认匹配你的网站外观,可一键切换为暗色模式。基于 Vanilla JS + Tailwind CSS 构建。',
         'nav.features': '特性',
         'nav.quickstart': '快速开始',
         'nav.sample': '演示',
@@ -733,7 +733,7 @@
         'hero.stat_deps': '运行时依赖',
         'hero.stat_files': '嵌入文件数',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': '暗色模式',
+        'hero.stat_dark': '明暗切换',
         'features.heading': '主要特性',
         'features.sub': '精心打造的嵌入式 WYSIWYG 编辑器。',
         'features.f1_t': '无需依赖库',
@@ -746,8 +746,8 @@
         'features.f4_d': '图片、视频、音频、YouTube 与 Vimeo 嵌入。支持拖拽放置与从剪贴板粘贴。',
         'features.f5_t': '特殊链接语法',
         'features.f5_d': '通过 <code class="inline">[[slug]]</code>、<code class="inline">[[[slug]]]</code> 与 <code class="inline">[[slug|文本]]</code> 提供 Wiki 风格链接。',
-        'features.f6_t': '仅暗色模式',
-        'features.f6_d': '始终保持统一的暗色 UI。只有正文颜色会变化。',
+        'features.f6_t': '编辑区明暗切换',
+        'features.f6_d': '编辑区默认匹配你网站的外观。一键切换为暗色模式,方便夜间编辑——设置会被记住。',
         'features.f7_t': '自动保存',
         'features.f7_d': '按你设定的间隔触发 <code class="inline">onSave</code> 回调,可对接任意后端。',
         'features.f8_t': '源码编辑',
@@ -774,7 +774,7 @@
       },
       ko: {
         'meta.title': 'KuroEditor — Vanilla JS WYSIWYG 에디터',
-        'meta.desc': '런타임 의존성 제로, 단일 파일로 임베드 가능한 다크 모드 WYSIWYG 에디터. Vanilla JS + Tailwind CSS로 구축.',
+        'meta.desc': '런타임 의존성 제로, 단일 파일로 임베드 가능한 WYSIWYG 에디터. 편집 영역은 기본적으로 사이트 모양에 맞추며, 클릭 한 번으로 다크 모드 전환도 가능합니다. Vanilla JS + Tailwind CSS로 구축.',
         'nav.features': '특징',
         'nav.quickstart': '빠른 시작',
         'nav.sample': '데모',
@@ -786,7 +786,7 @@
         'hero.stat_deps': '런타임 의존성',
         'hero.stat_files': '임베드 파일 수',
         'hero.stat_vanilla': 'Vanilla JS',
-        'hero.stat_dark': '다크 모드',
+        'hero.stat_dark': '라이트/다크 전환',
         'features.heading': '주요 특징',
         'features.sub': '꼼꼼하게 만든 임베드용 WYSIWYG 에디터.',
         'features.f1_t': '라이브러리 불필요',
@@ -799,8 +799,8 @@
         'features.f4_d': '이미지/동영상/오디오/YouTube·Vimeo 임베드. 드래그 앤 드롭, 클립보드 붙여넣기 지원.',
         'features.f5_t': '특수 링크 문법',
         'features.f5_d': '<code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code>, <code class="inline">[[slug|표시]]</code>로 위키 스타일 링크 지원.',
-        'features.f6_t': '다크 모드 전용',
-        'features.f6_d': '항상 일관된 다크 UI. 본문 색상만 변경되고 UI 색은 고정.',
+        'features.f6_t': '편집 화면 라이트/다크 전환',
+        'features.f6_d': '편집 영역은 기본적으로 사이트 모양을 따릅니다. 클릭 한 번으로 다크 모드로 전환해 밤에도 편하게 편집할 수 있고, 설정은 저장됩니다.',
         'features.f7_t': '자동 저장',
         'features.f7_d': '원하는 간격으로 <code class="inline">onSave</code> 콜백 호출. 어떤 백엔드와도 연동 가능.',
         'features.f8_t': '소스 편집',
