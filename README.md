@@ -2,7 +2,7 @@
 
 # KuroEditor
 
-**Dark-mode-only WYSIWYG editor in Vanilla JS**
+**A Vanilla JS WYSIWYG editor with a light/dark editing canvas**
 
 [![License](https://img.shields.io/badge/license-Kuro%20License-blue.svg)](LICENSE.txt)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.x-38bdf8)](https://tailwindcss.com/)
@@ -51,7 +51,7 @@ shrink them) without touching the template's own headings.
 - 📊 **Full-featured tables** — Cell merge/split, per-border style, drag-to-resize columns, cell background color, vertical alignment, table delete
 - 🖼 **Media support** — Image / video / audio / YouTube & Vimeo embeds, drag & drop, clipboard paste
 - 🔗 **Special link syntax** — WiKi-style links via `[[slug]]` / `[[[slug]]]` / `[[slug|label]]`
-- 🌙 **Dark mode only** — A cohesive dark UI
+- 🌓 **Light/Dark canvas toggle** — The editing canvas matches your site's look by default, with an optional one-click dark mode (the choice is remembered)
 - 💾 **Auto-save** — `onSave` callback at any interval
 - 📝 **Source editing** — Toggle between WYSIWYG and HTML source via tabs
 - 🪄 **Auto table of contents** — Builds an outline automatically from headings

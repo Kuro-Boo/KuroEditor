@@ -2,7 +2,7 @@
 
 # KuroEditor
 
-**ダークモード専用・Vanilla JS の WYSIWYG エディター**
+**編集画面はライト/ダーク切替対応・Vanilla JS の WYSIWYG エディター**
 
 [![License](https://img.shields.io/badge/license-Kuro%20License-blue.svg)](LICENSE.txt)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.x-38bdf8)](https://tailwindcss.com/)
@@ -45,7 +45,7 @@ v2 で表示崩れ等が起きた場合の戻し方：
 - 📊 **本格的なテーブル** — セル結合・分割、罫線スタイル個別指定、列幅ドラッグリサイズ、セル背景色、縦方向配置、テーブル削除
 - 🖼 **メディア対応** — 画像／動画／音声／YouTube・Vimeo 埋め込み、ドラッグ＆ドロップ、クリップボード貼り付け
 - 🔗 **特殊リンク記法** — `[[slug]]` / `[[[slug]]]` / `[[slug|表示]]` で WiKi 風リンク
-- 🌙 **ダークモード固定** — 統一感のあるダーク UI
+- 🌓 **編集画面のライト/ダーク切替** — 既定は公開ページに合わせたライト表示。ワンクリックでダークにも切替でき、設定は保持されます
 - 💾 **自動保存** — 任意の間隔で `onSave` コールバック
 - 📝 **ソース編集** — WYSIWYG / HTML ソースをタブ切り替え
 - 🪄 **目次自動生成** — 見出しからアウトラインを自動で構築
