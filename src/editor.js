@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.1.5'
+export const VERSION = '2.2.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -4491,6 +4491,14 @@ export class KuroEditor {
    *   urlResolver?: (slug: string) => string,
    *   modalToolbar?: HTMLElement,  // host element to mount the modal menu bar into (slot mode)
    *   blockIds?: boolean,          // opt-in: maintain a stable data-bid on each top-level block
+   *   canvasColors?: {             // 通常モードのキャンバス配色をホストの実サイト色に合わせる。
+   *     bg?: string,               // 各値は CSS color。省略・空はスタイルシート既定
+   *     text?: string,             // （白地/slate-900）のまま。ダーク表示中は適用されない
+   *     caret?: string,            // （--kuro-canvas-* のインライン変数として反映）。
+   *     placeholder?: string,
+   *     cellFocusBg?: string,
+   *     dragOverBg?: string,
+   *   } | null,
    * }} [options]
    */
   constructor(mountEl, options = {}) {
@@ -4502,6 +4510,7 @@ export class KuroEditor {
       urlResolver: defaultResolver,
       modalToolbar: null,
       blockIds: false,
+      canvasColors: null,
       ...options,
     }
     this._mode          = 'wysiwyg'
@@ -4538,6 +4547,8 @@ export class KuroEditor {
     // キャンバス配色モード。既定は「通常」（= content.css のニュートラル既定
     // ＝公開ページと同じ変数値）。ダークは .kuro-editor--canvas-dark を付与。
     if (this._readCanvasDarkPref()) this.root.classList.add('kuro-editor--canvas-dark')
+    // ホスト指定の通常モード配色（canvasColors）をインライン変数で反映
+    this._applyCanvasColors()
 
     this._buildMMenu()
     this._buildTabs()
@@ -7344,10 +7355,48 @@ export class KuroEditor {
     this.root.classList.toggle('kuro-editor--canvas-dark', !!dark)
     if (this.tabCanvasDarkCheck) this.tabCanvasDarkCheck.checked = !!dark
     this._writeCanvasDarkPref(!!dark)
+    this._applyCanvasColors()
   }
 
   /** @returns {boolean} whether the editing canvas is in dark mode. */
   isCanvasDark() { return this.root.classList.contains('kuro-editor--canvas-dark') }
+
+  /**
+   * Set the 通常モード canvas palette (the host site's real colors) at runtime.
+   * Same shape as options.canvasColors; pass null/{} to return to defaults.
+   */
+  setCanvasColors(colors) {
+    this.options.canvasColors = colors || null
+    this._applyCanvasColors()
+  }
+
+  /**
+   * Reflect options.canvasColors as inline CSS variables on the editor root.
+   * 通常モード ONLY: an inline custom property would beat the
+   * `.kuro-editor--canvas-dark` class values too (inline style wins on the
+   * same element regardless of selector specificity), so in dark mode every
+   * host override is REMOVED and the stylesheet's dark palette applies.
+   */
+  _applyCanvasColors() {
+    const VARS = {
+      bg: '--kuro-canvas-bg',
+      text: '--kuro-canvas-text',
+      caret: '--kuro-canvas-caret',
+      placeholder: '--kuro-canvas-placeholder',
+      cellFocusBg: '--kuro-canvas-cellfocus-bg',
+      dragOverBg: '--kuro-canvas-dragover-bg',
+    }
+    const colors = this.options.canvasColors || {}
+    const dark = this.isCanvasDark()
+    for (const [key, cssVar] of Object.entries(VARS)) {
+      const value = colors[key]
+      if (!dark && typeof value === 'string' && value) {
+        this.root.style.setProperty(cssVar, value)
+      } else {
+        this.root.style.removeProperty(cssVar)
+      }
+    }
+  }
 
   /** Start periodic auto-save (default interval 30 s, overridable via options). */
   _startAutoSave() {
