@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.1.2'
+export const VERSION = '2.1.3'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -3938,7 +3938,28 @@ export class LinkEditPopup {
     })
     this._textInput = this._makeField('表示テキスト')
     this._urlInput  = this._makeField('URL')
+    this._jumpBtn   = this._makeJumpButton()
     document.body.appendChild(this.el)
+  }
+
+  /**
+   * リンク先を新規タブで開く。activeLink.href は writeLinkParts() が
+   * urlResolver 適用済みで書き込んでいるため、ここで改めて解決する必要はない
+   * （kuro-media-open-link と同じ「href を直接使う」パターン）。
+   */
+  _makeJumpButton() {
+    const btn = createElement('button', {
+      className: 'kuro-link-edit__jump-btn',
+      html: '↗ リンク先にジャンプ',
+      attrs: { type: 'button', title: 'リンク先にジャンプ（新規タブ）' },
+    })
+    btn.addEventListener('click', () => {
+      const href = this.activeLink?.href
+      if (!href) return
+      window.open(href, '_blank', 'noopener')
+    })
+    this.el.appendChild(btn)
+    return btn
   }
 
   _makeField(label) {
