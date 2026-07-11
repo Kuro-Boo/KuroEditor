@@ -407,6 +407,116 @@ describe('KuroEditor', () => {
     })
   })
 
+  // ── clipControl (ポップアップのコピー/切り取り/貼り付けボタン) ─────────────
+
+  describe('clipControl', () => {
+    const clipBtn = (ed, cmd) => ed.popm.el.querySelector(`[data-command="${cmd}"]`)
+
+    /** wysiwyg 内の要素全体を選択する（selection をライブにした状態でボタン押下を再現） */
+    function selectAll(ed, el) {
+      const sel = window.getSelection()
+      sel.setBaseAndExtent(el, 0, el, el.childNodes.length)
+      return sel
+    }
+
+    function tap(btn) {
+      btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+    }
+
+    it('default: clipboard buttons are not added to the popup', () => {
+      expect(clipBtn(editor, 'clipCopy')).toBeNull()
+      expect(clipBtn(editor, 'clipCut')).toBeNull()
+      expect(clipBtn(editor, 'clipPaste')).toBeNull()
+    })
+
+    it('clipControl: true adds copy / cut / paste buttons', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { clipControl: true })
+      expect(clipBtn(ed, 'clipCopy')).not.toBeNull()
+      expect(clipBtn(ed, 'clipCut')).not.toBeNull()
+      expect(clipBtn(ed, 'clipPaste')).not.toBeNull()
+    })
+
+    it('copy button calls onClipCopy with the selection text + html', () => {
+      document.body.innerHTML = ''
+      const onClipCopy = vi.fn()
+      const ed = new KuroEditor(makeMount(), {
+        clipControl: true, onClipCopy,
+        initialContent: '<p>Hello <b>World</b></p>',
+      })
+      selectAll(ed, ed.wysiwyg.querySelector('p'))
+      tap(clipBtn(ed, 'clipCopy'))
+      expect(onClipCopy).toHaveBeenCalledTimes(1)
+      const payload = onClipCopy.mock.calls[0][0]
+      expect(payload.html).toContain('<b>World</b>')
+      expect(payload.text).toContain('Hello')
+      // コピーは選択を消さない
+      expect(ed.wysiwyg.textContent).toBe('Hello World')
+    })
+
+    it('cut button calls onClipCut and removes the selection from the editor', () => {
+      document.body.innerHTML = ''
+      const onClipCut = vi.fn()
+      const ed = new KuroEditor(makeMount(), {
+        clipControl: true, onClipCut,
+        initialContent: '<p>Hello <b>World</b></p>',
+      })
+      selectAll(ed, ed.wysiwyg.querySelector('p'))
+      tap(clipBtn(ed, 'clipCut'))
+      expect(onClipCut).toHaveBeenCalledTimes(1)
+      expect(onClipCut.mock.calls[0][0].html).toContain('<b>World</b>')
+      expect(ed.wysiwyg.textContent).toBe('')
+    })
+
+    it('paste button inserts the string returned by onClipPaste', async () => {
+      document.body.innerHTML = ''
+      const onClipPaste = vi.fn(() => 'PASTED')
+      const ed = new KuroEditor(makeMount(), {
+        clipControl: true, onClipPaste,
+        initialContent: '<p>Hello</p>',
+      })
+      selectAll(ed, ed.wysiwyg.querySelector('p'))
+      tap(clipBtn(ed, 'clipPaste'))
+      await Promise.resolve()  // _clipPaste は async — マイクロタスクを流す
+      await Promise.resolve()
+      expect(onClipPaste).toHaveBeenCalledTimes(1)
+      expect(document.execCommand).toHaveBeenCalledWith('insertText', false, 'PASTED')
+    })
+
+    it('onClipPaste returning nothing → host handles insertion, editor inserts nothing', async () => {
+      document.body.innerHTML = ''
+      const onClipPaste = vi.fn(() => undefined)
+      const ed = new KuroEditor(makeMount(), {
+        clipControl: true, onClipPaste,
+        initialContent: '<p>Hello</p>',
+      })
+      selectAll(ed, ed.wysiwyg.querySelector('p'))
+      tap(clipBtn(ed, 'clipPaste'))
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(onClipPaste).toHaveBeenCalledTimes(1)
+      expect(document.execCommand).not.toHaveBeenCalledWith('insertText', false, expect.anything())
+    })
+
+    it('selection collapsed → copy / cut do nothing', () => {
+      document.body.innerHTML = ''
+      const onClipCopy = vi.fn()
+      const onClipCut  = vi.fn()
+      const ed = new KuroEditor(makeMount(), {
+        clipControl: true, onClipCopy, onClipCut,
+        initialContent: '<p>Hello</p>',
+      })
+      const sel = window.getSelection()
+      const p = ed.wysiwyg.querySelector('p')
+      sel.setBaseAndExtent(p, 0, p, 0)  // collapsed
+      tap(clipBtn(ed, 'clipCopy'))
+      tap(clipBtn(ed, 'clipCut'))
+      expect(onClipCopy).not.toHaveBeenCalled()
+      expect(onClipCut).not.toHaveBeenCalled()
+      expect(ed.wysiwyg.textContent).toBe('Hello')
+    })
+  })
+
   // ── キャンバス配色 (canvasColors / canvasDarkColors) ────────────────────────
 
   describe('canvas colors', () => {
