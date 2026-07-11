@@ -406,4 +406,82 @@ describe('KuroEditor', () => {
       window.localStorage.removeItem('kuro-editor-canvas-dark')
     })
   })
+
+  // ── キャンバス配色 (canvasColors / canvasDarkColors) ────────────────────────
+
+  describe('canvas colors', () => {
+    it('canvasColors applies inline --kuro-canvas-* vars in light mode', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), {
+        canvasDark: false,
+        canvasColors: { bg: '#fafaf0', text: '#333333' },
+      })
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#fafaf0')
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-text')).toBe('#333333')
+    })
+
+    it('canvasDarkColors applies inline vars in dark mode; unset keys fall back', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), {
+        canvasDark: true,
+        canvasDarkColors: { bg: '#101418' },
+      })
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#101418')
+      // text は未指定 → inline なし（スタイルシートのダーク既定にフォールバック）
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-text')).toBe('')
+    })
+
+    it('only the active mode\'s palette is inlined (canvasColors not leaked into dark)', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), {
+        canvasDark: true,
+        canvasColors: { bg: '#fafaf0' },
+        canvasDarkColors: { bg: '#101418' },
+      })
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#101418')
+    })
+
+    it('toggling the mode swaps which palette is inlined', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), {
+        canvasDark: false,
+        canvasColors: { bg: '#fafaf0' },
+        canvasDarkColors: { bg: '#101418' },
+      })
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#fafaf0')
+      ed.setCanvasDark(true)
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#101418')
+      ed.setCanvasDark(false)
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#fafaf0')
+    })
+
+    it('canvasDarkColors unset → dark mode keeps stylesheet defaults (初期値)', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), {
+        canvasDark: true,
+        canvasColors: { bg: '#fafaf0' },
+      })
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('')
+    })
+
+    it('setCanvasDarkColors() updates at runtime and null restores defaults', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { canvasDark: true })
+      ed.setCanvasDarkColors({ bg: '#101418', caret: '#facc15' })
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#101418')
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-caret')).toBe('#facc15')
+      ed.setCanvasDarkColors(null)
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('')
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-caret')).toBe('')
+    })
+
+    it('setCanvasColors() while dark does not inline anything until back in light', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { canvasDark: true })
+      ed.setCanvasColors({ bg: '#fafaf0' })
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('')
+      ed.setCanvasDark(false)
+      expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#fafaf0')
+    })
+  })
 })
