@@ -14,7 +14,9 @@
    - ダーク (modifier present): the classic dark canvas. The --kuro-* content
      variables are overridden to the dark palette, scoped to the modifier so
      they never leak into 通常 mode. UNLAYERED so it beats content.css's
-     (also unlayered) :root defaults.
+     (also unlayered) :root defaults. The --kuro-canvas-* surface colors below
+     are likewise host-overridable (options.canvasDarkColors); unset keys keep
+     these stylesheet defaults.
    ────────────────────────────────────────────────────────────────────────── */
 .kuro-editor {
   /* 通常モードのキャンバス配色（サイト相当）。ホストが実サイトの配色に

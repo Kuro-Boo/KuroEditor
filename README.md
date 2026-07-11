@@ -204,6 +204,8 @@ Main options you can pass to `new KuroEditor(mountEl, options)`:
 | `saveUi` | `boolean` | Default `true`. Set `false` to hide the save UI (auto-save checkbox + Save button, both tab bar and mmenu) and disable the built-in auto-save timer — for hosts that fully manage saving via `onDirty` + `getContent()` |
 | `canvasDark` | `boolean` | Optional. Force the initial canvas dark mode from the host. When set, it overrides the localStorage preference and toggling no longer writes to localStorage. When omitted, the persisted preference is restored as before (default light) |
 | `canvasDarkUi` | `boolean` | Default `false` (hidden). Set `true` to show the "dark" toggle checkbox in the tab bar. Even when hidden, `canvasDark` / `setCanvasDark()` still switch the canvas |
+| `canvasColors` | `object` | Optional. Match the light-mode canvas palette to your site's real colors: `{ bg, text, caret, placeholder, cellFocusBg, dragOverBg }` (each a CSS color; all keys optional). Omitted keys keep the stylesheet defaults (white / slate-900). Change at runtime with `setCanvasColors()` |
+| `canvasDarkColors` | `object` | Optional. Dark-mode canvas palette, same shape as `canvasColors`; applied only while the canvas is dark. Omitted keys keep the dark defaults (`#171717` / `#f5f5f5`). Change at runtime with `setCanvasDarkColors()` |
 
 ### onSave example
 

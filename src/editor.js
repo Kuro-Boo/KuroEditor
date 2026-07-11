@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.3.0'
+export const VERSION = '2.4.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -4512,6 +4512,14 @@ export class KuroEditor {
    *     cellFocusBg?: string,
    *     dragOverBg?: string,
    *   } | null,
+   *   canvasDarkColors?: {         // ダークモードのキャンバス配色。shape は canvasColors と
+   *     bg?: string,               // 同じ。ダーク表示中のみ適用され、省略・空のキーは
+   *     text?: string,             // スタイルシートのダーク既定（#171717/#f5f5f5 等）のまま。
+   *     caret?: string,            // 通常モード中は適用されない。
+   *     placeholder?: string,
+   *     cellFocusBg?: string,
+   *     dragOverBg?: string,
+   *   } | null,
    * }} [options]
    */
   constructor(mountEl, options = {}) {
@@ -4528,6 +4536,7 @@ export class KuroEditor {
       canvasDarkUi: false,
       blockIds: false,
       canvasColors: null,
+      canvasDarkColors: null,
       ...options,
     }
     this._mode          = 'wysiwyg'
@@ -4566,7 +4575,8 @@ export class KuroEditor {
     // ホストが options.canvasDark を指定した場合はそちらが localStorage より優先。
     const initialCanvasDark = this.options.canvasDark ?? this._readCanvasDarkPref()
     if (initialCanvasDark) this.root.classList.add('kuro-editor--canvas-dark')
-    // ホスト指定の通常モード配色（canvasColors）をインライン変数で反映
+    // ホスト指定のキャンバス配色（canvasColors / canvasDarkColors のうち
+    // 現在モード側）をインライン変数で反映
     this._applyCanvasColors()
 
     this._buildMMenu()
@@ -7408,11 +7418,22 @@ export class KuroEditor {
   }
 
   /**
-   * Reflect options.canvasColors as inline CSS variables on the editor root.
-   * 通常モード ONLY: an inline custom property would beat the
-   * `.kuro-editor--canvas-dark` class values too (inline style wins on the
-   * same element regardless of selector specificity), so in dark mode every
-   * host override is REMOVED and the stylesheet's dark palette applies.
+   * Set the ダークモード canvas palette at runtime.
+   * Same shape as options.canvasDarkColors; pass null/{} to return to defaults.
+   */
+  setCanvasDarkColors(colors) {
+    this.options.canvasDarkColors = colors || null
+    this._applyCanvasColors()
+  }
+
+  /**
+   * Reflect the host canvas palette for the CURRENT mode (canvasColors in 通常,
+   * canvasDarkColors in ダーク) as inline CSS variables on the editor root.
+   * Only one set may be inlined at a time: an inline custom property would beat
+   * the `.kuro-editor--canvas-dark` class values too (inline style wins on the
+   * same element regardless of selector specificity), so on every mode switch
+   * the other set's overrides are REMOVED and unset keys fall back to the
+   * stylesheet palette of the active mode.
    */
   _applyCanvasColors() {
     const VARS = {
@@ -7423,11 +7444,11 @@ export class KuroEditor {
       cellFocusBg: '--kuro-canvas-cellfocus-bg',
       dragOverBg: '--kuro-canvas-dragover-bg',
     }
-    const colors = this.options.canvasColors || {}
     const dark = this.isCanvasDark()
+    const colors = (dark ? this.options.canvasDarkColors : this.options.canvasColors) || {}
     for (const [key, cssVar] of Object.entries(VARS)) {
       const value = colors[key]
-      if (!dark && typeof value === 'string' && value) {
+      if (typeof value === 'string' && value) {
         this.root.style.setProperty(cssVar, value)
       } else {
         this.root.style.removeProperty(cssVar)

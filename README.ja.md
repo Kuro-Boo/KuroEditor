@@ -198,6 +198,8 @@ KuroEditor が出力する HTML は、クラスベースのブロック（角丸
 | `saveUi` | `boolean` | 既定 `true`。`false` で保存 UI（自動保存チェック＋保存ボタン。タブバー・mmenu 両方）を非表示にし、内蔵の自動保存も無効化。保存をホスト側が `onDirty` + `getContent()` で完全管理する場合に |
 | `canvasDark` | `boolean` | 任意。編集キャンバスの初期ダークモードをホストが強制。指定時は localStorage の保存値より優先され、トグルしても localStorage に書き込みません。未指定なら従来どおり localStorage 復元（既定ライト） |
 | `canvasDarkUi` | `boolean` | 既定 `false`（非表示）。`true` でタブバーに「ダーク」トグルチェックを表示。非表示でも `canvasDark` / `setCanvasDark()` による切替は有効です |
+| `canvasColors` | `object` | 任意。ライト（通常）モードのキャンバス配色をホストサイトの実際の色に合わせます。`{ bg, text, caret, placeholder, cellFocusBg, dragOverBg }`（各値 CSS color、部分指定可）。省略キーは既定（白地/slate-900 系）のまま。実行時変更は `setCanvasColors()` |
+| `canvasDarkColors` | `object` | 任意。ダークモードのキャンバス配色。shape は `canvasColors` と同じで、ダーク表示中のみ適用。省略キーはダーク既定（`#171717`/`#f5f5f5` 系）のまま。実行時変更は `setCanvasDarkColors()` |
 
 ### onSave の例
 
