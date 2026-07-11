@@ -51,7 +51,7 @@ shrink them) without touching the template's own headings.
 - 📊 **Full-featured tables** — Cell merge/split, per-border style, drag-to-resize columns, cell background color, vertical alignment, table delete
 - 🖼 **Media support** — Image / video / audio / YouTube & Vimeo embeds, drag & drop, clipboard paste
 - 🔗 **Special link syntax** — WiKi-style links via `[[slug]]` / `[[[slug]]]` / `[[slug|label]]`
-- 🌓 **Light/Dark canvas toggle** — The editing canvas matches your site's look by default, with an optional one-click dark mode (the choice is remembered)
+- 🌓 **Light/Dark canvas** — The editing canvas matches your site's look by default, and can be switched to dark (`canvasDark` option / `setCanvasDark()`; the tab-bar toggle checkbox is opt-in via `canvasDarkUi: true`)
 - 💾 **Auto-save** — `onSave` callback at any interval
 - 📝 **Source editing** — Toggle between WYSIWYG and HTML source via tabs
 - 🪄 **Auto table of contents** — Builds an outline automatically from headings
@@ -200,6 +200,10 @@ Main options you can pass to `new KuroEditor(mountEl, options)`:
 | `urlResolver(slug)` | `function` | Function that resolves a slug (e.g. `[[slug]]`) to a URL |
 | `onMediaUpload(file)` | `async function` | Image/video upload handler. Return a `mid` and it is inserted automatically as `[[mid]]` |
 | `modalToolbar` | `HTMLElement` | Specify to mount the modal menu (mmenu) into an arbitrary DOM slot |
+| `modalMenu` | `boolean` | Default `true`. Set `false` to not mount the modal menu (mmenu) at all — the tab bar's inline buttons mirror every mmenu action. Takes precedence over `modalToolbar` |
+| `saveUi` | `boolean` | Default `true`. Set `false` to hide the save UI (auto-save checkbox + Save button, both tab bar and mmenu) and disable the built-in auto-save timer — for hosts that fully manage saving via `onDirty` + `getContent()` |
+| `canvasDark` | `boolean` | Optional. Force the initial canvas dark mode from the host. When set, it overrides the localStorage preference and toggling no longer writes to localStorage. When omitted, the persisted preference is restored as before (default light) |
+| `canvasDarkUi` | `boolean` | Default `false` (hidden). Set `true` to show the "dark" toggle checkbox in the tab bar. Even when hidden, `canvasDark` / `setCanvasDark()` still switch the canvas |
 
 ### onSave example
 

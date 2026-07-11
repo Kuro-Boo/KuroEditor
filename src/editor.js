@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.2.0'
+export const VERSION = '2.3.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -4490,6 +4490,19 @@ export class KuroEditor {
    *                                // ホストの保存 UI はこれを購読すること（input 監視では取りこぼす）。
    *   urlResolver?: (slug: string) => string,
    *   modalToolbar?: HTMLElement,  // host element to mount the modal menu bar into (slot mode)
+   *   modalMenu?: boolean,         // false でモーダルメニュー(mmenu)を表示しない（既定 true）。
+   *                                // 要素自体は生成されるので this.mmenu 参照は従来どおり有効。
+   *   saveUi?: boolean,            // false で保存 UI（自動保存チェック＋保存ボタン。タブバー・
+   *                                // mmenu 両方）を非表示にし、内蔵の自動保存タイマーも無効化
+   *                                // （既定 true）。ホスト側が保存を完全に管理する場合に使う。
+   *   canvasDark?: boolean | null, // 編集キャンバスの初期ダークモードをホストが指定。
+   *                                // true/false 指定時は localStorage の保存値より優先され、
+   *                                // 以後トグルしても localStorage へ書き込まない（他エディタの
+   *                                // 設定を汚さない）。null/省略で従来どおり localStorage 復元
+   *                                // （既定ライト）。
+   *   canvasDarkUi?: boolean,      // true でタブバーに「ダーク」トグルチェックを表示（既定
+   *                                // false = 非表示）。非表示でも setCanvasDark() や
+   *                                // canvasDark オプションによる切替は従来どおり有効。
    *   blockIds?: boolean,          // opt-in: maintain a stable data-bid on each top-level block
    *   canvasColors?: {             // 通常モードのキャンバス配色をホストの実サイト色に合わせる。
    *     bg?: string,               // 各値は CSS color。省略・空はスタイルシート既定
@@ -4509,6 +4522,10 @@ export class KuroEditor {
       onDirty: null,
       urlResolver: defaultResolver,
       modalToolbar: null,
+      modalMenu: true,
+      saveUi: true,
+      canvasDark: null,
+      canvasDarkUi: false,
       blockIds: false,
       canvasColors: null,
       ...options,
@@ -4546,7 +4563,9 @@ export class KuroEditor {
 
     // キャンバス配色モード。既定は「通常」（= content.css のニュートラル既定
     // ＝公開ページと同じ変数値）。ダークは .kuro-editor--canvas-dark を付与。
-    if (this._readCanvasDarkPref()) this.root.classList.add('kuro-editor--canvas-dark')
+    // ホストが options.canvasDark を指定した場合はそちらが localStorage より優先。
+    const initialCanvasDark = this.options.canvasDark ?? this._readCanvasDarkPref()
+    if (initialCanvasDark) this.root.classList.add('kuro-editor--canvas-dark')
     // ホスト指定の通常モード配色（canvasColors）をインライン変数で反映
     this._applyCanvasColors()
 
@@ -4626,13 +4645,20 @@ export class KuroEditor {
 
     this.mmenu.appendChild(this.mmenuActions)
     this.mmenu.appendChild(this._mmenuCharCount)
-    this.mmenu.appendChild(divider)
-    this.mmenu.appendChild(this.saveBtn)
+    // saveUi: false → 保存ボタン（と手前の仕切り）を載せない。
+    // 要素は生成済みのままにして this.saveBtn 参照の互換性を保つ。
+    if (this.options.saveUi) {
+      this.mmenu.appendChild(divider)
+      this.mmenu.appendChild(this.saveBtn)
+    }
 
+    // modalMenu: false → mmenu を DOM に載せない（要素は生成済み、参照互換）。
     // When modalToolbar is provided, mount mmenu into the host slot (inline flow).
     // Otherwise mount fixed to the viewport bottom (default standalone mode).
     const mmenuTarget = this.options.modalToolbar
-    if (mmenuTarget) {
+    if (!this.options.modalMenu) {
+      /* not mounted */
+    } else if (mmenuTarget) {
       this.mmenu.classList.add('kuro-mmenu--slotted')
       mmenuTarget.appendChild(this.mmenu)
     } else {
@@ -4733,7 +4759,8 @@ export class KuroEditor {
       className: 'kuro-mmenu__autosave-check',
       attrs: { type: 'checkbox', id: tabThemeId, 'aria-label': '編集エリアをダーク表示' },
     })
-    this.tabCanvasDarkCheck.checked = this._readCanvasDarkPref()
+    // _build() で決定済みの初期状態（options.canvasDark 優先）を反映する
+    this.tabCanvasDarkCheck.checked = this.isCanvasDark()
     this.tabCanvasDarkCheck.addEventListener('change', () => {
       this.setCanvasDark(this.tabCanvasDarkCheck.checked)
     })
@@ -4778,9 +4805,16 @@ export class KuroEditor {
     row1Left.appendChild(this.tabSource)
     row1Left.appendChild(this._tabCharCount)
 
-    row1Right.appendChild(tabThemeWrap)
-    row1Right.appendChild(tabAutoWrap)
-    row1Right.appendChild(this.tabSaveBtn)
+    // canvasDarkUi: true のときだけ「ダーク」トグルを載せる（既定は非表示）。
+    // 要素は生成済みなので this.tabCanvasDarkCheck 参照と setCanvasDark() の
+    // チェック同期は表示に関係なく動く。
+    if (this.options.canvasDarkUi) row1Right.appendChild(tabThemeWrap)
+    // saveUi: false → 自動保存チェックと保存ボタンを載せない（要素は生成済み、
+    // this.tabAutoSaveCheck / this.tabSaveBtn 参照の互換性は保つ）
+    if (this.options.saveUi) {
+      row1Right.appendChild(tabAutoWrap)
+      row1Right.appendChild(this.tabSaveBtn)
+    }
     row1Right.appendChild(tocSep)
     row1Right.appendChild(this.tabTocBtn)
 
@@ -7340,6 +7374,9 @@ export class KuroEditor {
 
   /** Persist the canvas-theme preference ('1' = dark, '0' = 通常). */
   _writeCanvasDarkPref(on) {
+    // options.canvasDark 指定時はホスト管理モード: localStorage に書き込まず、
+    // 素の（未指定の）エディタが使う共有設定を汚さない。
+    if (this.options.canvasDark != null) return
     try {
       window.localStorage.setItem('kuro-editor-canvas-dark', on ? '1' : '0')
     } catch {
@@ -7400,6 +7437,9 @@ export class KuroEditor {
 
   /** Start periodic auto-save (default interval 30 s, overridable via options). */
   _startAutoSave() {
+    // saveUi: false = ホストが保存を管理する。チェックボックスも非表示で
+    // ユーザーが止められないため、内蔵タイマーは一切起動しない。
+    if (!this.options.saveUi) return
     this._stopAutoSave()  // clear any existing timer
     const ms = this.options.autoSaveInterval ?? 30_000
     this._autoSaveTimer = setInterval(() => {

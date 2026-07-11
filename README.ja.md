@@ -45,7 +45,7 @@ v2 で表示崩れ等が起きた場合の戻し方：
 - 📊 **本格的なテーブル** — セル結合・分割、罫線スタイル個別指定、列幅ドラッグリサイズ、セル背景色、縦方向配置、テーブル削除
 - 🖼 **メディア対応** — 画像／動画／音声／YouTube・Vimeo 埋め込み、ドラッグ＆ドロップ、クリップボード貼り付け
 - 🔗 **特殊リンク記法** — `[[slug]]` / `[[[slug]]]` / `[[slug|表示]]` で WiKi 風リンク
-- 🌓 **編集画面のライト/ダーク切替** — 既定は公開ページに合わせたライト表示。ワンクリックでダークにも切替でき、設定は保持されます
+- 🌓 **編集画面のライト/ダーク切替** — 既定は公開ページに合わせたライト表示。ダークにも切替できます（`canvasDark` オプション / `setCanvasDark()`。タブバーのトグル表示は `canvasDarkUi: true` でオプトイン）
 - 💾 **自動保存** — 任意の間隔で `onSave` コールバック
 - 📝 **ソース編集** — WYSIWYG / HTML ソースをタブ切り替え
 - 🪄 **目次自動生成** — 見出しからアウトラインを自動で構築
@@ -194,6 +194,10 @@ KuroEditor が出力する HTML は、クラスベースのブロック（角丸
 | `urlResolver(slug)` | `function` | `[[slug]]` 等の slug → URL 変換関数 |
 | `onMediaUpload(file)` | `async function` | 画像・動画アップロード処理。`mid` を返すと自動で `[[mid]]` 形式で挿入されます |
 | `modalToolbar` | `HTMLElement` | モーダルメニュー（mmenu）を任意の DOM スロットに差し込む場合に指定 |
+| `modalMenu` | `boolean` | 既定 `true`。`false` でモーダルメニュー（mmenu）を表示しない（タブバーのインラインボタンが全アクションをミラーするため機能は失われません）。`modalToolbar` より優先 |
+| `saveUi` | `boolean` | 既定 `true`。`false` で保存 UI（自動保存チェック＋保存ボタン。タブバー・mmenu 両方）を非表示にし、内蔵の自動保存も無効化。保存をホスト側が `onDirty` + `getContent()` で完全管理する場合に |
+| `canvasDark` | `boolean` | 任意。編集キャンバスの初期ダークモードをホストが強制。指定時は localStorage の保存値より優先され、トグルしても localStorage に書き込みません。未指定なら従来どおり localStorage 復元（既定ライト） |
+| `canvasDarkUi` | `boolean` | 既定 `false`（非表示）。`true` でタブバーに「ダーク」トグルチェックを表示。非表示でも `canvasDark` / `setCanvasDark()` による切替は有効です |
 
 ### onSave の例
 
