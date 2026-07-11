@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.4.0'
+export const VERSION = '2.5.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -198,6 +198,26 @@ const ICON = {
     `<circle cx="3.5" cy="6" r="1"/>` +
     `<rect x="6" y="5.3" width="6" height="1.4" rx="0.7"/>`
   ),
+  // ── clipboard icons (clipControl option) ─────────────────────────────────
+  // Copy — front sheet + back sheet outline
+  copy: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<rect x="4.5" y="4.5" width="9" height="9" rx="1.5"/>` +
+    `<path d="M9.5 1.5 H3 A1.5 1.5 0 0 0 1.5 3 V9.5"/>` +
+  `</svg>`,
+  // Cut — scissors: two ring handles + crossing blades
+  cut: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true">` +
+    `<circle cx="3" cy="11" r="2"/>` +
+    `<circle cx="11" cy="11" r="2"/>` +
+    `<line x1="12" y1="1.5" x2="4.6" y2="9.4"/>` +
+    `<line x1="2" y1="1.5" x2="9.4" y2="9.4"/>` +
+  `</svg>`,
+  // Paste — clipboard: board + top clip + content lines
+  paste: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<rect x="2.5" y="2.5" width="9" height="11" rx="1.5"/>` +
+    `<rect x="4.8" y="0.8" width="4.4" height="3" rx="0.8"/>` +
+    `<line x1="4.8" y1="7.2" x2="9.2" y2="7.2"/>` +
+    `<line x1="4.8" y1="10" x2="7.8" y2="10"/>` +
+  `</svg>`,
 }
 
 /** Basic emoji set — face → gesture → symbol → nature → tech → music */
@@ -247,6 +267,9 @@ const POPM_TITLES = {
   justifyFull:         '両端揃え',
   insertUnorderedList: '箇条書きリスト',
   insertOrderedList:   '番号付きリスト',
+  clipCopy:            'コピー',
+  clipCut:             '切り取り',
+  clipPaste:           '貼り付け',
 }
 
 const EMOJI_SHORTCODES = {
@@ -4520,6 +4543,22 @@ export class KuroEditor {
    *     cellFocusBg?: string,
    *     dragOverBg?: string,
    *   } | null,
+   *   clipControl?: boolean,       // true で文字選択ポップアップにコピー/切り取り/貼り付けの
+   *                                // 3 ボタンを表示（既定 false = 非表示）。WebView 埋め込み等、
+   *                                // ホストがクリップボードを仲介する環境向け。
+   *   onClipCopy?: ({text, html}) => void,
+   *                                // コピーボタンのタップ時に選択内容とともに呼ばれる。
+   *                                // 未指定時は navigator.clipboard.writeText にフォールバック。
+   *   onClipCut?: ({text, html}) => void,
+   *                                // 切り取りボタンのタップ時に選択内容とともに呼ばれる。
+   *                                // 呼び出し後、エディタ側で選択範囲を削除する。
+   *                                // 未指定時は navigator.clipboard.writeText にフォールバック。
+   *   onClipPaste?: () => (string | Promise<string> | void),
+   *                                // 貼り付けボタンのタップ時に呼ばれる。string（または
+   *                                // string を resolve する Promise）を返すと選択位置に
+   *                                // プレーンテキストとして挿入。何も返さなければ挿入は
+   *                                // ホスト側に委ねる。未指定時は
+   *                                // navigator.clipboard.readText にフォールバック。
    * }} [options]
    */
   constructor(mountEl, options = {}) {
@@ -4537,6 +4576,10 @@ export class KuroEditor {
       blockIds: false,
       canvasColors: null,
       canvasDarkColors: null,
+      clipControl: false,
+      onClipCopy: null,
+      onClipCut: null,
+      onClipPaste: null,
       ...options,
     }
     this._mode          = 'wysiwyg'
@@ -4969,6 +5012,94 @@ export class KuroEditor {
       .initOLStylePanel(
         (style) => this._applyListStyle(style),
       )
+
+    // clipControl: true → コピー / 切り取り / 貼り付けのクリップボード操作
+    // ボタンを末尾に追加（既定 false = 非表示）。ホストが onClipCopy /
+    // onClipCut / onClipPaste を渡せばそちらへ委譲、無ければ
+    // navigator.clipboard へフォールバック。
+    if (this.options.clipControl) {
+      this.popm
+        .addDivider()
+        .addButton(ICON.copy,  'clipCopy',  () => this._clipCopy())
+        .addButton(ICON.cut,   'clipCut',   () => this._clipCut())
+        .addButton(ICON.paste, 'clipPaste', () => this._clipPaste())
+    }
+  }
+
+  // ── Clipboard buttons (clipControl option) ───────────────────────────────
+
+  /**
+   * 現在の選択範囲を { text, html, range } で返す（選択なしは null）。
+   * clipCopy / clipCut がホストへ渡すペイロードの元。
+   */
+  _selectionPayload() {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount || sel.isCollapsed) return null
+    const range = sel.getRangeAt(0)
+    const div = document.createElement('div')
+    div.appendChild(range.cloneContents())
+    return { text: sel.toString(), html: div.innerHTML, range }
+  }
+
+  /** コピーボタン: 選択内容をホストへ通知（無ければ Clipboard API へ）。 */
+  _clipCopy() {
+    const payload = this._selectionPayload()
+    if (!payload) return
+    if (this.options.onClipCopy) {
+      this.options.onClipCopy({ text: payload.text, html: payload.html })
+      return
+    }
+    try { navigator.clipboard?.writeText(payload.text) } catch {}
+  }
+
+  /** 切り取りボタン: コピーと同じ通知の後、選択範囲をエディタから削除。 */
+  _clipCut() {
+    const payload = this._selectionPayload()
+    if (!payload) return
+    if (this.options.onClipCut) {
+      this.options.onClipCut({ text: payload.text, html: payload.html })
+    } else {
+      try { navigator.clipboard?.writeText(payload.text) } catch {}
+    }
+    payload.range.deleteContents()
+    const sel = window.getSelection()
+    try {
+      sel.setBaseAndExtent(
+        payload.range.startContainer, payload.range.startOffset,
+        payload.range.startContainer, payload.range.startOffset,
+      )
+    } catch {}
+    this.popm.hide()
+    this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  /**
+   * 貼り付けボタン: onClipPaste が string（or Promise<string>）を返せば
+   * 選択位置にプレーンテキストとして挿入。何も返さなければ挿入はホストに
+   * 委ねる。コールバック未指定時は navigator.clipboard.readText を試す。
+   */
+  async _clipPaste() {
+    // async 完了時に focus / selection が動いていても戻せるよう先に保存
+    const sel   = window.getSelection()
+    const saved = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null
+    let text
+    if (this.options.onClipPaste) {
+      text = await this.options.onClipPaste()
+      if (typeof text !== 'string' || text === '') return  // ホスト側で処理済み
+    } else {
+      try { text = await navigator.clipboard.readText() } catch { return }
+      if (!text) return
+    }
+    this.wysiwyg.focus()
+    if (saved) {
+      try {
+        sel.setBaseAndExtent(
+          saved.startContainer, saved.startOffset,
+          saved.endContainer, saved.endOffset,
+        )
+      } catch {}
+    }
+    execFormat('insertText', text)
   }
 
   // ── Image Menu (ipopm) ────────────────────────────────────────────────────

@@ -200,6 +200,10 @@ KuroEditor が出力する HTML は、クラスベースのブロック（角丸
 | `canvasDarkUi` | `boolean` | 既定 `false`（非表示）。`true` でタブバーに「ダーク」トグルチェックを表示。非表示でも `canvasDark` / `setCanvasDark()` による切替は有効です |
 | `canvasColors` | `object` | 任意。ライト（通常）モードのキャンバス配色をホストサイトの実際の色に合わせます。`{ bg, text, caret, placeholder, cellFocusBg, dragOverBg }`（各値 CSS color、部分指定可）。省略キーは既定（白地/slate-900 系）のまま。実行時変更は `setCanvasColors()` |
 | `canvasDarkColors` | `object` | 任意。ダークモードのキャンバス配色。shape は `canvasColors` と同じで、ダーク表示中のみ適用。省略キーはダーク既定（`#171717`/`#f5f5f5` 系）のまま。実行時変更は `setCanvasDarkColors()` |
+| `clipControl` | `boolean` | 既定 `false`（非表示）。`true` で文字選択ポップアップの末尾にコピー / 切り取り / 貼り付けの 3 ボタンを表示。WebView 埋め込み等、ホストがクリップボードを仲介する環境向け |
+| `onClipCopy({text, html})` | `function` | コピーボタンのタップ時に選択内容（プレーンテキストと HTML）とともに呼ばれる。未指定時は `navigator.clipboard.writeText(text)` にフォールバック |
+| `onClipCut({text, html})` | `function` | 切り取りボタンのタップ時に選択内容とともに呼ばれる。呼び出し後、エディタ側で選択範囲を削除。未指定時は `navigator.clipboard.writeText(text)` にフォールバック |
+| `onClipPaste()` | `function` | 貼り付けボタンのタップ時に呼ばれる。`string`（または `string` を resolve する `Promise`）を返すと選択位置にプレーンテキストとして挿入。何も返さなければ挿入はホスト側に委ねる。未指定時は `navigator.clipboard.readText()` にフォールバック |
 
 ### onSave の例
 

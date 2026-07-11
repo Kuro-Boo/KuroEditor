@@ -206,6 +206,10 @@ Main options you can pass to `new KuroEditor(mountEl, options)`:
 | `canvasDarkUi` | `boolean` | Default `false` (hidden). Set `true` to show the "dark" toggle checkbox in the tab bar. Even when hidden, `canvasDark` / `setCanvasDark()` still switch the canvas |
 | `canvasColors` | `object` | Optional. Match the light-mode canvas palette to your site's real colors: `{ bg, text, caret, placeholder, cellFocusBg, dragOverBg }` (each a CSS color; all keys optional). Omitted keys keep the stylesheet defaults (white / slate-900). Change at runtime with `setCanvasColors()` |
 | `canvasDarkColors` | `object` | Optional. Dark-mode canvas palette, same shape as `canvasColors`; applied only while the canvas is dark. Omitted keys keep the dark defaults (`#171717` / `#f5f5f5`). Change at runtime with `setCanvasDarkColors()` |
+| `clipControl` | `boolean` | Default `false` (hidden). Set `true` to add copy / cut / paste buttons at the end of the text-selection popup — for hosts (e.g. WebView embeds) that mediate clipboard access themselves |
+| `onClipCopy({text, html})` | `function` | Called when the copy button is tapped, with the selection as plain text and HTML. Falls back to `navigator.clipboard.writeText(text)` when omitted |
+| `onClipCut({text, html})` | `function` | Called when the cut button is tapped, with the selection payload; the editor then deletes the selected range. Falls back to `navigator.clipboard.writeText(text)` when omitted |
+| `onClipPaste()` | `function` | Called when the paste button is tapped. Return a `string` (or a `Promise<string>`) to have it inserted as plain text at the selection; return nothing to handle insertion on the host side. Falls back to `navigator.clipboard.readText()` when omitted |
 
 ### onSave example
 
