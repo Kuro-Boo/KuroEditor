@@ -308,4 +308,102 @@ describe('KuroEditor', () => {
       expect(e.defaultPrevented).toBe(false)
     })
   })
+
+  // ── ホスト設定オプション (modalMenu / saveUi / canvasDark) ─────────────────
+
+  describe('host options', () => {
+    it('default: mmenu is mounted to document.body', () => {
+      expect(document.body.contains(editor.mmenu)).toBe(true)
+    })
+
+    it('modalMenu: false keeps mmenu out of the DOM but the reference alive', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { modalMenu: false })
+      expect(ed.mmenu).toBeDefined()
+      expect(document.body.contains(ed.mmenu)).toBe(false)
+    })
+
+    it('modalMenu: false wins over modalToolbar slot', () => {
+      document.body.innerHTML = ''
+      const slot = document.createElement('div')
+      document.body.appendChild(slot)
+      const ed = new KuroEditor(makeMount(), { modalMenu: false, modalToolbar: slot })
+      expect(slot.contains(ed.mmenu)).toBe(false)
+    })
+
+    it('default: save UI (autosave check + save buttons) is visible', () => {
+      expect(editor.root.contains(editor.tabSaveBtn)).toBe(true)
+      expect(editor.root.contains(editor.tabAutoSaveCheck)).toBe(true)
+      expect(editor.mmenu.contains(editor.saveBtn)).toBe(true)
+    })
+
+    it('saveUi: false hides save button + autosave check in tabs and mmenu', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { saveUi: false })
+      expect(ed.root.contains(ed.tabSaveBtn)).toBe(false)
+      expect(ed.root.contains(ed.tabAutoSaveCheck)).toBe(false)
+      expect(ed.mmenu.contains(ed.saveBtn)).toBe(false)
+    })
+
+    it('saveUi: false disables the built-in auto-save timer', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { saveUi: false })
+      expect(ed._autoSaveTimer).toBeNull()
+      ed._startAutoSave()           // 明示的に呼ばれても起動しない
+      expect(ed._autoSaveTimer).toBeNull()
+    })
+
+    it('default: canvas follows the persisted preference (light when unset)', () => {
+      expect(editor.isCanvasDark()).toBe(false)
+    })
+
+    it('default: dark-mode toggle checkbox is hidden', () => {
+      expect(editor.root.contains(editor.tabCanvasDarkCheck)).toBe(false)
+    })
+
+    it('canvasDarkUi: true shows the dark-mode toggle checkbox', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { canvasDarkUi: true })
+      expect(ed.root.contains(ed.tabCanvasDarkCheck)).toBe(true)
+    })
+
+    it('toggle hidden → setCanvasDark still switches the canvas', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { canvasDark: false })
+      ed.setCanvasDark(true)
+      expect(ed.isCanvasDark()).toBe(true)
+      expect(ed.tabCanvasDarkCheck.checked).toBe(true)  // 生成済み要素は同期される
+    })
+
+    it('canvasDark: true forces initial dark mode and syncs the checkbox', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { canvasDark: true })
+      expect(ed.isCanvasDark()).toBe(true)
+      expect(ed.tabCanvasDarkCheck.checked).toBe(true)
+    })
+
+    it('canvasDark: false overrides a persisted dark preference', () => {
+      window.localStorage.setItem('kuro-editor-canvas-dark', '1')
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { canvasDark: false })
+      expect(ed.isCanvasDark()).toBe(false)
+      window.localStorage.removeItem('kuro-editor-canvas-dark')
+    })
+
+    it('canvasDark specified → toggling does not write localStorage', () => {
+      window.localStorage.removeItem('kuro-editor-canvas-dark')
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { canvasDark: true })
+      ed.setCanvasDark(false)
+      expect(window.localStorage.getItem('kuro-editor-canvas-dark')).toBeNull()
+    })
+
+    it('canvasDark unspecified → toggling persists to localStorage (現状動作)', () => {
+      editor.setCanvasDark(true)
+      expect(window.localStorage.getItem('kuro-editor-canvas-dark')).toBe('1')
+      editor.setCanvasDark(false)
+      expect(window.localStorage.getItem('kuro-editor-canvas-dark')).toBe('0')
+      window.localStorage.removeItem('kuro-editor-canvas-dark')
+    })
+  })
 })
