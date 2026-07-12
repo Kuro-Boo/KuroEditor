@@ -5,6 +5,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   createElement,
   renderSpecialLinks,
+  unrenderSpecialLinks,
   defaultResolver,
   createTableHtml,
   contrastTextColor,
@@ -68,6 +69,38 @@ describe('renderSpecialLinks', () => {
     const result = renderSpecialLinks('[[https://example.com]]')
     expect(result).toContain('href="https://example.com"')
     expect(result).toContain('target="_blank"')
+  })
+
+  // ── URL card [[slug|]] — 表題なしを明示した記法 ──────────────────────────
+
+  it('renders [[URL|]] (empty label) as a URL card, not a text link', () => {
+    const result = renderSpecialLinks('[[https://example.com/blog/post|]]')
+    expect(result).toContain('kuro-url-card')
+    expect(result).toContain('href="https://example.com/blog/post"')
+    expect(result).toContain('target="_blank"')
+    expect(result).toContain('contenteditable="false"')
+    // タイトル行は URL から取得したホスト名、URL 行はフル URL
+    expect(result).toContain('<span class="kuro-url-card__title">example.com</span>')
+    expect(result).toContain('<span class="kuro-url-card__url">https://example.com/blog/post</span>')
+  })
+
+  it('renders [[slug|]] with an internal slug as a card (title = slug, same tab)', () => {
+    const result = renderSpecialLinks('[[my-article|]]')
+    expect(result).toContain('kuro-url-card')
+    expect(result).toContain('href="/my-article"')
+    expect(result).not.toContain('target="_blank"')
+    expect(result).toContain('<span class="kuro-url-card__title">my-article</span>')
+  })
+
+  it('URL card round-trips through unrenderSpecialLinks', () => {
+    const raw = '[[https://example.com/post|]]'
+    expect(unrenderSpecialLinks(renderSpecialLinks(raw))).toBe(raw)
+  })
+
+  it('media URL with empty label also becomes a card (明示された意図を優先)', () => {
+    const result = renderSpecialLinks('[[https://example.com/hero.jpg|]]')
+    expect(result).toContain('kuro-url-card')
+    expect(result).not.toContain('<figure')
   })
 
   it('processes card before wiki before hyper (correct precedence)', () => {
@@ -414,6 +447,11 @@ describe('readLinkParts', () => {
     const a = makeA('<a href="https://plain.example">click</a>')
     expect(readLinkParts(a)).toEqual({ text: 'click', url: 'https://plain.example' })
   })
+
+  it('reads URL cards: text = empty, url = raw slug', () => {
+    const a = makeA(renderSpecialLinks('[[https://example.com/post|]]'))
+    expect(readLinkParts(a)).toEqual({ text: '', url: 'https://example.com/post' })
+  })
 })
 
 describe('writeLinkParts', () => {
@@ -423,11 +461,37 @@ describe('writeLinkParts', () => {
     return div.querySelector('a')
   }
 
-  it('rejects empty text or url without touching the link', () => {
+  it('rejects empty url without touching the link', () => {
     const a = makeA(renderSpecialLinks('[[slug|text]]'))
-    expect(writeLinkParts(a, '', 'slug')).toBe(false)
     expect(writeLinkParts(a, 'text', '')).toBe(false)
     expect(a.textContent).toBe('text')
+  })
+
+  it('rejects empty text on a plain <a> (non-kuro links stay unchanged)', () => {
+    const a = makeA('<a href="https://plain.example">click</a>')
+    expect(writeLinkParts(a, '', 'https://plain.example')).toBe(false)
+    expect(a.textContent).toBe('click')
+  })
+
+  it('kuro link + empty text converts to URL card form [[url|]]', () => {
+    const a = makeA(renderSpecialLinks('[[https://example.com/post|お知らせ]]'))
+    expect(writeLinkParts(a, '', 'https://example.com/post')).toBe(true)
+    expect(decodeURIComponent(a.getAttribute('data-kuro-wiki'))).toBe('[[https://example.com/post|]]')
+    expect(a.classList.contains('kuro-url-card')).toBe(true)
+    expect(a.getAttribute('contenteditable')).toBe('false')
+    expect(a.getAttribute('target')).toBe('_blank')
+    expect(a.querySelector('.kuro-url-card__title').textContent).toBe('example.com')
+    expect(a.querySelector('.kuro-url-card__url').textContent).toBe('https://example.com/post')
+  })
+
+  it('URL card + text converts back to a normal text link', () => {
+    const a = makeA(renderSpecialLinks('[[https://example.com/post|]]'))
+    expect(a.classList.contains('kuro-url-card')).toBe(true)
+    expect(writeLinkParts(a, 'お知らせ', 'https://example.com/post')).toBe(true)
+    expect(a.classList.contains('kuro-url-card')).toBe(false)
+    expect(a.hasAttribute('contenteditable')).toBe(false)
+    expect(a.textContent).toBe('お知らせ')
+    expect(decodeURIComponent(a.getAttribute('data-kuro-wiki'))).toBe('[[https://example.com/post|お知らせ]]')
   })
 
   it('kuro link with text !== url becomes wiki form', () => {

@@ -517,6 +517,156 @@ describe('KuroEditor', () => {
     })
   })
 
+  // ── URL カード ([[URL|]] — 表題なしを明示するとカード表示) ─────────────────
+
+  describe('URL card', () => {
+    it('setContent renders [[URL|]] as a card and getContent round-trips', () => {
+      editor.setContent('<p>[[https://example.com/post|]]</p>')
+      const card = editor.wysiwyg.querySelector('.kuro-url-card')
+      expect(card).not.toBeNull()
+      expect(card.getAttribute('contenteditable')).toBe('false')
+      expect(card.querySelector('.kuro-url-card__title').textContent).toBe('example.com')
+      expect(editor.getContent()).toBe('<p>[[https://example.com/post|]]</p>')
+    })
+
+    it('[[URL]] (パイプなし) は従来どおり青いテキストリンクのまま', () => {
+      editor.setContent('<p>[[https://example.com/post]]</p>')
+      expect(editor.wysiwyg.querySelector('.kuro-url-card')).toBeNull()
+      const a = editor.wysiwyg.querySelector('a[data-kuro-link]')
+      expect(a).not.toBeNull()
+      expect(a.textContent).toBe('https://example.com/post')
+    })
+
+    it('link edit popup shows the no-title → card hint', () => {
+      const hint = editor.linkEditPopup.el.querySelector('.kuro-link-edit__hint')
+      expect(hint).not.toBeNull()
+      expect(hint.textContent).toContain('カード表示')
+    })
+
+    it('clicking a card inside the editor opens the link edit popup instead of navigating', () => {
+      editor.setContent('<p>[[https://example.com/post|]]</p>')
+      const card = editor.wysiwyg.querySelector('.kuro-url-card')
+      const e = new MouseEvent('click', { bubbles: true, cancelable: true })
+      card.dispatchEvent(e)
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.linkEditPopup.isVisible).toBe(true)
+      expect(editor.linkEditPopup.activeLink).toBe(card)
+      // readLinkParts 経由でフィールドが同期される（表示テキストは空）
+      expect(editor.linkEditPopup._textInput.value).toBe('')
+      expect(editor.linkEditPopup._urlInput.value).toBe('https://example.com/post')
+    })
+  })
+
+  // ── URL カードの豪華表示 (onFetchUrlMeta / 2 段階表示) ───────────────────────
+
+  describe('URL card enhancement (onFetchUrlMeta)', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0))
+
+    it('default: no onFetchUrlMeta → card stays as the simple hostname display', async () => {
+      editor.setContent('<p>[[https://example.com/post|]]</p>')
+      await flush()
+      const card = editor.wysiwyg.querySelector('.kuro-url-card')
+      expect(card.classList.contains('kuro-url-card--rich')).toBe(false)
+      expect(card.querySelector('.kuro-url-card__favicon')).toBeNull()
+      expect(card.querySelector('.kuro-url-card__title').textContent).toBe('example.com')
+    })
+
+    it('step 1 is synchronous (simple card) then step 2 upgrades in place', async () => {
+      document.body.innerHTML = ''
+      const onFetchUrlMeta = vi.fn(async () => ({
+        title: '記事タイトル',
+        description: '記事の説明文',
+        favicon: 'https://example.com/favicon.ico',
+        image: 'https://example.com/og.png',
+      }))
+      const ed = new KuroEditor(makeMount(), { onFetchUrlMeta })
+      ed.setContent('<p>[[https://example.com/post|]]</p>')
+      // 同期直後: 簡易表示（ホスト名）でありネットワークを待っていない
+      const card = ed.wysiwyg.querySelector('.kuro-url-card')
+      expect(card.classList.contains('kuro-url-card--rich')).toBe(false)
+      expect(card.querySelector('.kuro-url-card__title').textContent).toBe('example.com')
+      // 非同期解決後: 豪華表示に差し替わる
+      await flush()
+      expect(onFetchUrlMeta).toHaveBeenCalledWith('https://example.com/post')
+      expect(card.classList.contains('kuro-url-card--rich')).toBe(true)
+      expect(card.querySelector('.kuro-url-card__title').textContent).toBe('記事タイトル')
+      expect(card.querySelector('.kuro-url-card__desc').textContent).toBe('記事の説明文')
+      expect(card.querySelector('.kuro-url-card__favicon').getAttribute('src')).toBe('https://example.com/favicon.ico')
+      expect(card.querySelector('.kuro-url-card__thumb').getAttribute('src')).toBe('https://example.com/og.png')
+    })
+
+    it('enhancement is presentational only — getContent still returns [[slug|]]', async () => {
+      document.body.innerHTML = ''
+      const onFetchUrlMeta = vi.fn(async () => ({ title: 'T', favicon: 'https://x/f.ico' }))
+      const ed = new KuroEditor(makeMount(), { onFetchUrlMeta })
+      ed.setContent('<p>[[https://example.com/post|]]</p>')
+      await flush()
+      expect(ed.wysiwyg.querySelector('.kuro-url-card--rich')).not.toBeNull()
+      expect(ed.getContent()).toBe('<p>[[https://example.com/post|]]</p>')
+    })
+
+    it('enhancement does not mark the document dirty', async () => {
+      document.body.innerHTML = ''
+      const onDirty = vi.fn()
+      const onFetchUrlMeta = vi.fn(async () => ({ title: 'T' }))
+      const ed = new KuroEditor(makeMount(), { onFetchUrlMeta, onDirty })
+      ed.setContent('<p>[[https://example.com/post|]]</p>')
+      await flush()
+      expect(ed.wysiwyg.querySelector('.kuro-url-card--rich')).not.toBeNull()
+      expect(ed.isDirty()).toBe(false)
+      expect(onDirty).not.toHaveBeenCalled()
+    })
+
+    it('caches per slug — the same URL is fetched only once across re-renders', async () => {
+      document.body.innerHTML = ''
+      const onFetchUrlMeta = vi.fn(async () => ({ title: 'T' }))
+      const ed = new KuroEditor(makeMount(), { onFetchUrlMeta })
+      ed.setContent('<p>[[https://example.com/post|]]</p>')
+      await flush()
+      ed.setContent('<p>[[https://example.com/post|]]</p>')  // 再描画
+      await flush()
+      expect(onFetchUrlMeta).toHaveBeenCalledTimes(1)
+    })
+
+    it('null / failed fetch keeps the simple card (no crash)', async () => {
+      document.body.innerHTML = ''
+      const onFetchUrlMeta = vi.fn(async () => { throw new Error('network') })
+      const ed = new KuroEditor(makeMount(), { onFetchUrlMeta })
+      ed.setContent('<p>[[https://example.com/post|]]</p>')
+      await flush()
+      const card = ed.wysiwyg.querySelector('.kuro-url-card')
+      expect(card).not.toBeNull()
+      expect(card.classList.contains('kuro-url-card--rich')).toBe(false)
+      expect(card.querySelector('.kuro-url-card__title').textContent).toBe('example.com')
+    })
+
+    it('escapes untrusted fetched title/description (XSS-safe)', async () => {
+      document.body.innerHTML = ''
+      const onFetchUrlMeta = vi.fn(async () => ({ title: '<img src=x onerror=alert(1)>hi' }))
+      const ed = new KuroEditor(makeMount(), { onFetchUrlMeta })
+      ed.setContent('<p>[[https://example.com/post|]]</p>')
+      await flush()
+      const titleEl = ed.wysiwyg.querySelector('.kuro-url-card__title')
+      // タグとして解釈されず、テキストとして入る
+      expect(titleEl.querySelector('img')).toBeNull()
+      expect(titleEl.textContent).toBe('<img src=x onerror=alert(1)>hi')
+    })
+
+    it('drops non-http(s) favicon/image URLs (only safe schemes rendered)', async () => {
+      document.body.innerHTML = ''
+      const onFetchUrlMeta = vi.fn(async () => ({
+        title: 'T', favicon: 'javascript:alert(1)', image: 'ftp://x/y.png',
+      }))
+      const ed = new KuroEditor(makeMount(), { onFetchUrlMeta })
+      ed.setContent('<p>[[https://example.com/post|]]</p>')
+      await flush()
+      const card = ed.wysiwyg.querySelector('.kuro-url-card')
+      expect(card.querySelector('.kuro-url-card__favicon')).toBeNull()  // 不正 → 内蔵 SVG のまま
+      expect(card.querySelector('.kuro-url-card__thumb')).toBeNull()
+      expect(card.querySelector('.kuro-url-card__icon svg')).not.toBeNull()
+    })
+  })
+
   // ── キャンバス配色 (canvasColors / canvasDarkColors) ────────────────────────
 
   describe('canvas colors', () => {
