@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.5.0'
+export const VERSION = '2.6.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -385,9 +385,99 @@ const AUDIO_EXT_RE = /\.(mp3|wav|aac|flac|m4a|oga)(\?.*)?$/i
 /** Image-size presets shown in the ImageMenu toolbar. */
 const IMAGE_SIZE_OPTIONS = ['25%', '33%', '50%', '60%', '75%', '100%']
 
+/** Inline globe icon for URL cards (self-contained SVG, currentColor). */
+const URL_CARD_ICON =
+  '<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">' +
+  '<circle cx="8" cy="8" r="6.5"/>' +
+  '<ellipse cx="8" cy="8" rx="2.8" ry="6.5"/>' +
+  '<line x1="1.5" y1="8" x2="14.5" y2="8"/>' +
+  '</svg>'
+
+/** Escape text for safe insertion as HTML text / attribute value. */
+function _escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/**
+ * Sanitize a host-supplied image URL (favicon / og:image) for use in a src
+ * attribute. Only http(s) and data:image URLs are allowed — anything else
+ * (javascript:, etc.) is dropped so the untrusted fetched metadata can't
+ * inject an active URL.
+ */
+function _safeImgUrl(u) {
+  if (typeof u !== 'string') return ''
+  const t = u.trim()
+  return /^(https?:\/\/|data:image\/)/i.test(t) ? t : ''
+}
+
+/**
+ * Inner markup of a URL card (icon + title/url lines + arrow).
+ *
+ * Two-step display:
+ *   - Step 1 (no meta): the title is what can be derived from the URL itself
+ *     without a network fetch — the hostname for http(s) URLs, the slug as-is
+ *     for internal slugs (the browser can't read a foreign page's <title> due
+ *     to CORS). This renders synchronously so the screen never blocks.
+ *   - Step 2 (meta present): the host-provided metadata upgrades the card in
+ *     place — real title, description, favicon, and thumbnail. All fetched
+ *     text is escaped (untrusted, comes from an arbitrary external page).
+ *
+ * @param {string} slug - raw slug/URL from the [[slug|]] notation
+ * @param {string} url  - resolved href
+ * @param {{title?:string,description?:string,favicon?:string,image?:string}|null} [meta]
+ */
+function _urlCardInner(slug, url, meta = null) {
+  let title = slug
+  const isHttp = /^https?:\/\//i.test(slug)
+  if (isHttp) {
+    try { title = new URL(slug).hostname } catch {}
+  }
+  const sub = isHttp ? slug : url
+  const m = (meta && typeof meta === 'object') ? meta : null
+
+  const favUrl = m ? _safeImgUrl(m.favicon) : ''
+  const icon = favUrl
+    ? `<img class="kuro-url-card__favicon" src="${_escapeHtml(favUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+    : URL_CARD_ICON
+
+  const titleText = (m && typeof m.title === 'string' && m.title.trim()) ? m.title.trim() : title
+  const descText  = (m && typeof m.description === 'string') ? m.description.trim() : ''
+  const descHtml  = descText
+    ? `<span class="kuro-url-card__desc">${_escapeHtml(descText)}</span>` : ''
+
+  const imgUrl = m ? _safeImgUrl(m.image) : ''
+  const thumb  = imgUrl
+    ? `<img class="kuro-url-card__thumb" src="${_escapeHtml(imgUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''
+
+  return `<span class="kuro-url-card__icon">${icon}</span>` +
+    `<span class="kuro-url-card__body">` +
+      `<span class="kuro-url-card__title">${_escapeHtml(titleText)}</span>` +
+      descHtml +
+      `<span class="kuro-url-card__url">${_escapeHtml(sub)}</span>` +
+    `</span>` +
+    thumb +
+    `<span class="kuro-url-card__arrow">↗</span>`
+}
+
+/**
+ * Build the URL card anchor for [[slug|]] — the "explicitly no title" form.
+ * contenteditable=false so the card behaves as one atomic object while editing
+ * (deleted in one Backspace, no caret inside).
+ */
+function _buildUrlCard(slug, url) {
+  const ext = slug.startsWith('http')
+  return `<a href="${url}"${ext ? ' target="_blank" rel="noopener"' : ''} class="kuro-url-card" contenteditable="false" data-kuro-wiki="${encodeURIComponent('[[' + slug + '|]]')}">${_urlCardInner(slug, url)}</a>`
+}
+
 export function renderSpecialLinks(text, resolver = defaultResolver) {
-  // Combined single-pass regex — order of alternation is card > wiki > hyper
-  const RE = /\[\[\[([^\]]+)\]\]\]|\[\[([^\]|]+)\|([^\]]+)\]\]|\[\[([^\]]+)\]\]/g
+  // Combined single-pass regex — order of alternation is card > wiki > hyper.
+  // The wiki label allows empty ([^\]]*) so [[slug|]] (表題なしの明示) matches
+  // here as a URL card instead of falling through to hyper with a broken slug.
+  const RE = /\[\[\[([^\]]+)\]\]\]|\[\[([^\]|]+)\|([^\]]*)\]\]|\[\[([^\]]+)\]\]/g
   return text.replace(RE, (match, card, wikiSlug, wikiLabel, hyper) => {
     if (card !== undefined) {
       const url = resolver(card)
@@ -401,6 +491,10 @@ export function renderSpecialLinks(text, resolver = defaultResolver) {
     //   "|https://example.com"          → image with click link only
     if (wikiSlug !== undefined) {
       const url = resolver(wikiSlug)
+
+      // ⓪ empty label = 表題なしの明示 [[slug|]] → URL card (Dropbox Paper 方式)。
+      //   メディア URL でも空表題なら常にカード — 明示された意図を優先する。
+      if (wikiLabel === '') return _buildUrlCard(wikiSlug, url)
 
       // ① iframe embed (YouTube, Vimeo, …) — checked before media extension
       const embedUrl = resolveEmbedUrl(url)
@@ -546,7 +640,8 @@ export function unrenderSpecialLinks(html) {
 export function readLinkParts(a) {
   const wiki = a.getAttribute('data-kuro-wiki')
   if (wiki) {
-    const m = decodeURIComponent(wiki).match(/^\[\[([^\]|]+)\|([^\]]+)\]\]$/)
+    // Label may be empty — [[slug|]] is the URL card form, read as text: ''
+    const m = decodeURIComponent(wiki).match(/^\[\[([^\]|]+)\|([^\]]*)\]\]$/)
     if (m) return { text: m[2], url: m[1] }
   }
   const link = a.getAttribute('data-kuro-link')
@@ -560,8 +655,10 @@ export function readLinkParts(a) {
 /**
  * Write text + url back into a rendered link, keeping the data-kuro-* notation
  * attributes consistent so source mode still round-trips.
- * kuro links: text === url → [[url]] hyper form, otherwise [[url|text]] wiki form.
- * Plain <a> (no data-kuro-*) stays plain — href is set verbatim.
+ * kuro links: text === url → [[url]] hyper form, otherwise [[url|text]] wiki form,
+ * empty text → [[url|]] URL card form (the element is restyled in place so a
+ * LinkEditPopup that holds this <a> keeps working across the conversion).
+ * Plain <a> (no data-kuro-*) stays plain — href is set verbatim, text required.
  * @param {HTMLAnchorElement} a
  * @param {string} text
  * @param {string} url
@@ -569,22 +666,50 @@ export function readLinkParts(a) {
  * @returns {boolean} true when applied (false = rejected, link untouched)
  */
 export function writeLinkParts(a, text, url, resolver = defaultResolver) {
-  if (!text || !url) return false
+  if (!url) return false
   const isKuro = a.hasAttribute('data-kuro-wiki') || a.hasAttribute('data-kuro-link')
-  if (isKuro) {
-    // Notation guard: "]"/"|" in the slug or "]" in the label would break [[...]]
-    if (/[\]|]/.test(url) || text.includes(']')) return false
-    if (text === url) {
-      a.setAttribute('data-kuro-link', encodeURIComponent(`[[${url}]]`))
-      a.removeAttribute('data-kuro-wiki')
-    } else {
-      a.setAttribute('data-kuro-wiki', encodeURIComponent(`[[${url}|${text}]]`))
-      a.removeAttribute('data-kuro-link')
-    }
-    a.setAttribute('href', resolver(url))
-  } else {
+  if (!isKuro) {
+    if (!text) return false
     a.setAttribute('href', url)
+    if (a.textContent !== text) a.textContent = text
+    return true
   }
+  // Notation guard: "]"/"|" in the slug or "]" in the label would break [[...]]
+  if (/[\]|]/.test(url) || text.includes(']')) return false
+  if (!text) {
+    // 表題を空にする = [[url|]] → URL カード化（Dropbox Paper 方式）
+    a.setAttribute('data-kuro-wiki', encodeURIComponent(`[[${url}|]]`))
+    a.removeAttribute('data-kuro-link')
+    a.setAttribute('href', resolver(url))
+    a.classList.add('kuro-url-card')
+    a.classList.remove('kuro-url-card--rich')
+    a.removeAttribute('data-meta-state')  // 再度メタ取得の対象にする（往復時）
+    a.setAttribute('contenteditable', 'false')
+    if (url.startsWith('http')) {
+      a.setAttribute('target', '_blank')
+      a.setAttribute('rel', 'noopener')
+    } else {
+      a.removeAttribute('target')
+      a.removeAttribute('rel')
+    }
+    a.innerHTML = _urlCardInner(url, a.getAttribute('href'))
+    return true
+  }
+  // カードに表題が入った → カードの内部 DOM を捨てて通常のテキストリンクへ戻す
+  if (a.classList.contains('kuro-url-card')) {
+    a.classList.remove('kuro-url-card', 'kuro-url-card--rich')
+    a.removeAttribute('contenteditable')
+    a.removeAttribute('data-meta-state')
+    a.textContent = ''
+  }
+  if (text === url) {
+    a.setAttribute('data-kuro-link', encodeURIComponent(`[[${url}]]`))
+    a.removeAttribute('data-kuro-wiki')
+  } else {
+    a.setAttribute('data-kuro-wiki', encodeURIComponent(`[[${url}|${text}]]`))
+    a.removeAttribute('data-kuro-link')
+  }
+  a.setAttribute('href', resolver(url))
   // Only touch children when the text really changed — keeps inline markup
   // inside the link intact while the user is editing just the URL.
   if (a.textContent !== text) a.textContent = text
@@ -3961,6 +4086,12 @@ export class LinkEditPopup {
     })
     this._textInput = this._makeField('表示テキスト')
     this._urlInput  = this._makeField('URL')
+    // 表題なし → カード表示の案内。カード化は writeLinkParts が
+    // 「表示テキスト空 + URL あり」を [[URL|]] 記法として処理することで実現する
+    this.el.appendChild(createElement('div', {
+      className: 'kuro-link-edit__hint',
+      html: '💡 表示テキストを空にすると、URL から取得した情報（ドメイン名など）のカード表示になります',
+    }))
     this._jumpBtn   = this._makeJumpButton()
     document.body.appendChild(this.el)
   }
@@ -4050,7 +4181,13 @@ export class LinkEditPopup {
       this.editor.options.urlResolver,
     )
     // Notify the editor (ToC / auto-save) exactly like normal typing would
-    if (ok) this.editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+    if (ok) {
+      this.editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      // 表示テキストを空にして URL カード化した場合は豪華表示を後追い取得。
+      // writeLinkParts が同じ <a> を作り替える (data-meta-state は付かない) ので
+      // _enhanceUrlCards が新しいカードとして処理する。
+      if (a.classList.contains('kuro-url-card')) this.editor._enhanceUrlCards()
+    }
   }
 
   destroy() { this.el.remove() }
@@ -4559,6 +4696,17 @@ export class KuroEditor {
    *                                // プレーンテキストとして挿入。何も返さなければ挿入は
    *                                // ホスト側に委ねる。未指定時は
    *                                // navigator.clipboard.readText にフォールバック。
+   *   onFetchUrlMeta?: (slug: string) =>
+   *       Promise<{ title?: string, description?: string, favicon?: string, image?: string } | null>,
+   *                                // URL カード [[slug|]] の「豪華表示」用メタ取得（任意）。
+   *                                // カードはまず URL 由来の簡易表示で即描画され（画面は
+   *                                // ブロックしない）、この async が解決したらそのカードだけ
+   *                                // タイトル/説明/favicon/サムネイルで差し替える 2 段階方式。
+   *                                // ブラウザは CORS で外部ページの <title> を読めないため、
+   *                                // ホストがサーバー側 fetch や unfurl サービスで解決して返す。
+   *                                // 返り値は取得できたキーだけでよく、null/失敗/未指定なら
+   *                                // 簡易表示のまま。取得結果は保存されない（getContent は
+   *                                // 常に [[slug|]] に戻す）ため、セッション内キャッシュのみ。
    * }} [options]
    */
   constructor(mountEl, options = {}) {
@@ -4580,6 +4728,7 @@ export class KuroEditor {
       onClipCopy: null,
       onClipCut: null,
       onClipPaste: null,
+      onFetchUrlMeta: null,
       ...options,
     }
     this._mode          = 'wysiwyg'
@@ -4587,6 +4736,8 @@ export class KuroEditor {
     this._savedRange              = null   // last known caret range (for emoji insert)
     this._imageMenuJustDeactivated = false // deactivated by mousedown; skip re-activate on click
     this._autoSaveTimer = null
+    this._urlMetaCache    = new Map()   // slug → resolved meta|null (session-only; never persisted)
+    this._urlMetaInflight = new Map()   // slug → in-flight Promise (dedupes concurrent fetches)
 
     this._build()
     this._bindEvents()
@@ -5102,6 +5253,68 @@ export class KuroEditor {
     execFormat('insertText', text)
   }
 
+  // ── URL card enhancement (onFetchUrlMeta) ─────────────────────────────────
+  //
+  // 2 段階表示: renderSpecialLinks が URL 由来の簡易カードを同期描画した後、
+  // ここでホストの onFetchUrlMeta を非同期に呼び、解決したカードだけを
+  // タイトル/説明/favicon/サムネイル付きに差し替える。取得は待たない
+  // (画面をブロックしない)。取得結果は保存されない — getContent は常に
+  // [[slug|]] に戻すため、メタは表示専用でセッション内キャッシュのみ。
+
+  /** slug → メタ取得（キャッシュ + in-flight 重複排除）。失敗時は null を記憶。 */
+  _fetchUrlMeta(slug) {
+    if (this._urlMetaCache.has(slug)) return Promise.resolve(this._urlMetaCache.get(slug))
+    if (this._urlMetaInflight.has(slug)) return this._urlMetaInflight.get(slug)
+    const p = (async () => {
+      try {
+        const meta = await this.options.onFetchUrlMeta(slug)
+        const val = (meta && typeof meta === 'object') ? meta : null
+        this._urlMetaCache.set(slug, val)
+        return val
+      } catch {
+        this._urlMetaCache.set(slug, null)   // 失敗も記憶して再取得しない
+        return null
+      } finally {
+        this._urlMetaInflight.delete(slug)
+      }
+    })()
+    this._urlMetaInflight.set(slug, p)
+    return p
+  }
+
+  /**
+   * root 内の未処理 URL カードにメタ取得をスケジュールする。同期部分は
+   * querySelectorAll + コールバック起動のみで、ネットワークは待たない。
+   * data-meta-state は要素マーカー（getContent 時に unrender が丸ごと捨てるので
+   * 保存には残らない）。
+   */
+  _enhanceUrlCards(root = this.wysiwyg) {
+    if (typeof this.options.onFetchUrlMeta !== 'function') return
+    for (const card of root.querySelectorAll('.kuro-url-card')) {
+      if (card.dataset.metaState) continue   // pending / done 済みは触らない
+      const raw = card.getAttribute('data-kuro-wiki')
+      const m   = raw && decodeURIComponent(raw).match(/^\[\[([^\]|]+)\|\]\]$/)
+      if (!m) continue
+      const slug = m[1]
+      const url  = card.getAttribute('href') || slug
+      card.dataset.metaState = 'pending'
+      this._fetchUrlMeta(slug).then((meta) => {
+        // カードが消えた / テキストリンクに戻った場合は破棄
+        if (!card.isConnected || !card.classList.contains('kuro-url-card')) return
+        card.dataset.metaState = 'done'
+        if (meta) this._applyUrlCardMeta(card, slug, url, meta)
+      })
+    }
+  }
+
+  /** 取得済みメタでカードを豪華表示に差し替える（dirty 検知は止める＝編集ではない）。 */
+  _applyUrlCardMeta(card, slug, url, meta) {
+    this._suspendDirty(() => {
+      card.innerHTML = _urlCardInner(slug, url, meta)
+      card.classList.add('kuro-url-card--rich')
+    })
+  }
+
   // ── Image Menu (ipopm) ────────────────────────────────────────────────────
 
   _buildImageMenu() {
@@ -5348,6 +5561,18 @@ export class KuroEditor {
       if (this.imageMenu.isVisible) this.imageMenu.deactivate()
       // Code blocks are <textarea>-based now; their own input listener handles
       // gutter sync. Nothing to do at the wysiwyg level.
+    })
+
+    // URL カード ([[URL|]]) は contenteditable=false なので、クリックが
+    // ブラウザのリンク遷移になってしまう。編集中は遷移させず、リンク編集
+    // ポップアップを開く（遷移はポップアップの「ジャンプ」ボタンで可能）。
+    // 公開ページでは JS が介在しないため通常のリンクとして遷移する。
+    this.wysiwyg.addEventListener('click', (e) => {
+      const card = e.target.closest?.('.kuro-url-card')
+      if (card && this.wysiwyg.contains(card)) {
+        e.preventDefault()
+        this.linkEditPopup.open(card)
+      }
     })
 
     // Remember caret before losing focus (for emoji insert after panel opens)
@@ -5692,8 +5917,9 @@ export class KuroEditor {
     const offset = range.startOffset
     const before = text.slice(0, offset)
 
-    // Match any complete [[...]] / [[...|...]] / [[[...]]] ending exactly at cursor
-    const RE_END = /(?:\[\[\[([^\]]+)\]\]\]|\[\[([^\]|]+)\|([^\]]+)\]\]|\[\[([^\]]+)\]\])$/
+    // Match any complete [[...]] / [[...|...]] / [[[...]]] ending exactly at cursor.
+    // The wiki label allows empty so [[URL|]] (URL card) expands too.
+    const RE_END = /(?:\[\[\[([^\]]+)\]\]\]|\[\[([^\]|]+)\|([^\]]*)\]\]|\[\[([^\]]+)\]\])$/
     const m = RE_END.exec(before)
     if (!m) return
 
@@ -5728,6 +5954,9 @@ export class KuroEditor {
     sel.removeAllRanges()
     sel.addRange(newRange)
     sentinel.remove()
+
+    // 入力で URL カード [[slug|]] が展開されたら豪華表示を後追い取得
+    if (rendered.includes('kuro-url-card')) this._enhanceUrlCards()
   }
 
   /**
@@ -5918,6 +6147,7 @@ export class KuroEditor {
         this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver)
         this._initAllCodeBlocks()
       })
+      this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
       this.pane.classList.remove('kuro-pane--source')
       this.tabSource.classList.remove('kuro-tab--active')
       this.tabWysiwyg.classList.add('kuro-tab--active')
@@ -7388,6 +7618,7 @@ export class KuroEditor {
       if (this.options.blockIds) this._refreshBlockIds()
     })
     this._clearDirty()  // プログラムからの差し替えは「未保存の変更」ではない
+    this._enhanceUrlCards()  // URL カードの豪華表示を後追いで取得（非ブロッキング）
   }
 
   /**

@@ -210,6 +210,7 @@ Main options you can pass to `new KuroEditor(mountEl, options)`:
 | `onClipCopy({text, html})` | `function` | Called when the copy button is tapped, with the selection as plain text and HTML. Falls back to `navigator.clipboard.writeText(text)` when omitted |
 | `onClipCut({text, html})` | `function` | Called when the cut button is tapped, with the selection payload; the editor then deletes the selected range. Falls back to `navigator.clipboard.writeText(text)` when omitted |
 | `onClipPaste()` | `function` | Called when the paste button is tapped. Return a `string` (or a `Promise<string>`) to have it inserted as plain text at the selection; return nothing to handle insertion on the host side. Falls back to `navigator.clipboard.readText()` when omitted |
+| `onFetchUrlMeta(slug)` | `async function` | Optional. Fetches rich metadata for URL cards (`[[slug\|]]`). Return `{ title?, description?, favicon?, image? }` (or `null`). **Two-step display**: the card renders immediately from the URL alone (never blocks the screen), then, once this resolves, that one card is upgraded in place with the title/description/favicon/thumbnail. Omitted / `null` / failure keeps the simple display |
 
 ### onSave example
 
@@ -269,13 +270,20 @@ The editor supports the following link syntaxes:
 
 | Syntax | Purpose | Example |
 |---|---|---|
-| `[[slug]]` | Hyperlink (inline) | `[[about]]` |
-| `[[[slug]]]` | Card-style link (opens in a new tab) | `[[[recipe-curry]]]` |
+| `[[slug]]` | Hyperlink (inline; display text = slug) | `[[about]]` |
 | `[[slug\|label]]` | WiKi style (custom display text) | `[[about\|About us]]` |
+| `[[slug\|]]` | **URL card** (explicitly no title → Dropbox Paper–style card) | `[[https://example.com\|]]` |
+| `[[[slug]]]` | Card-style link (opens in a new tab) | `[[[recipe-curry]]]` |
 | `[[mid\|60%,right]]` | Media (size & alignment) | `[[mid-001\|50%,center]]` |
 | `[[url\|60%\|https://...]]` | Click image to open in a new tab | — |
 
 A `slug` starting with `http` is treated as an external link.
+
+**URL card (`[[slug|]]`)** — leaving the display text empty (an explicit "no title") renders an icon + title + URL card (Dropbox Paper style) instead of a blue text link. Clear the display-text field in the link edit popup to turn any link into a card, and re-enter text to turn it back. In the editor the card is a single `contenteditable="false"` object; clicking it opens the link edit popup instead of navigating (on the published page it navigates like a normal link).
+
+**Two-step (rich) display** — by default the card title uses only what can be derived from the URL (the hostname for http(s) URLs, the slug string for internal slugs), because the browser can't read a foreign page's `<title>` due to CORS. Pass `onFetchUrlMeta` and it becomes two steps: ① the simple card is rendered **synchronously** (never blocks the screen), then ② when the host resolves the metadata (title / description / favicon / thumbnail) via a server-side fetch or unfurl service, that one card is **swapped** to the rich display. A slow or failed fetch simply leaves the simple card in place.
+
+> **⚠️ By design** — the rich metadata is **not saved** (`getContent()` always restores `[[slug|]]`); it is re-fetched via `onFetchUrlMeta` every time the card renders. Therefore, **if the target URL's article (its title, favicon, OG image, etc.) changes between edit time and production display time, the card's appearance may change. This is intentional** — the link itself (`[[slug|]]`) is immutable; the card always paints "the current state of that URL".
 
 ---
 

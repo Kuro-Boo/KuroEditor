@@ -805,6 +805,13 @@
            cursor-pointer select-none transition-colors;
   }
 
+  /* 表題なし → カード表示の案内文 */
+  .kuro-link-edit__hint {
+    @apply px-0.5 text-neutral-500;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
   /* ════════════════════════════════════════════════════════
      LINE POPUP MENU
      ════════════════════════════════════════════════════════ */
