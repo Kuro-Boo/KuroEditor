@@ -17,6 +17,7 @@ import {
   readLinkParts,
   writeLinkParts,
   linkAtCaret,
+  normalizePastedLinks,
 } from '../src/editor.js'
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
@@ -593,5 +594,77 @@ describe('linkAtCaret', () => {
     r.setStart(a.firstChild, 0)
     r.setEnd(a.firstChild, 2)
     expect(linkAtCaret(r, root)).toBe(null)
+  })
+})
+
+
+// ─── normalizePastedLinks ─────────────────────────────────────────────────────
+
+describe('normalizePastedLinks', () => {
+  const container = (html) => {
+    const div = document.createElement('div')
+    div.innerHTML = html
+    return div
+  }
+
+  it('converts a plain external link to the wiki form', () => {
+    const div = container('<a href="https://example.com/docs" target="_blank" rel="noopener noreferrer" class="ext" style="color:red">Read the docs</a>')
+    normalizePastedLinks(div)
+    const a = div.querySelector('a')
+    expect(decodeURIComponent(a.getAttribute('data-kuro-wiki'))).toBe('[[https://example.com/docs|Read the docs]]')
+    // paste-noise attributes are stripped
+    expect(a.hasAttribute('class')).toBe(false)
+    expect(a.hasAttribute('style')).toBe(false)
+    expect(a.hasAttribute('target')).toBe(false)
+    expect(a.hasAttribute('rel')).toBe(false)
+    // and the save path stores the token
+    expect(unrenderSpecialLinks(div.innerHTML)).toBe('[[https://example.com/docs|Read the docs]]')
+  })
+
+  it('uses the hyper form when text equals the url', () => {
+    const div = container('<a href="https://example.com/">https://example.com/</a>')
+    normalizePastedLinks(div)
+    expect(unrenderSpecialLinks(div.innerHTML)).toBe('[[https://example.com/]]')
+  })
+
+  it('keeps non-http links plain', () => {
+    const html = '<a href="mailto:a@b.c">mail</a><a href="#sec">jump</a><a href="/local">rel</a>'
+    const div = container(html)
+    normalizePastedLinks(div)
+    expect(div.innerHTML).toBe(html)
+  })
+
+  it('keeps links with element children plain', () => {
+    const html = '<a href="https://example.com"><strong>bold</strong> link</a>'
+    const div = container(html)
+    normalizePastedLinks(div)
+    expect(div.innerHTML).toBe(html)
+  })
+
+  it('keeps empty links plain', () => {
+    const html = '<a href="https://example.com"></a>'
+    const div = container(html)
+    normalizePastedLinks(div)
+    expect(div.innerHTML).toBe(html)
+  })
+
+  it('keeps notation-breaking urls/labels plain', () => {
+    const html = '<a href="https://example.com/a|b">pipe</a><a href="https://example.com/">brack]et</a>'
+    const div = container(html)
+    normalizePastedLinks(div)
+    expect(div.innerHTML).toBe(html)
+  })
+
+  it('does not touch existing kuro links', () => {
+    const div = container(renderSpecialLinks('[[https://example.com|already]]'))
+    const before = div.innerHTML
+    normalizePastedLinks(div)
+    expect(div.innerHTML).toBe(before)
+  })
+
+  it('resolves the href through the provided resolver', () => {
+    const div = container('<a href="https://example.com">x</a>')
+    normalizePastedLinks(div, (slug) => slug + '?resolved')
+    expect(div.querySelector('a').getAttribute('href')).toBe('https://example.com?resolved')
   })
 })

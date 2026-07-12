@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.6.0'
+export const VERSION = '2.6.1'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -714,6 +714,53 @@ export function writeLinkParts(a, text, url, resolver = defaultResolver) {
   // inside the link intact while the user is editing just the URL.
   if (a.textContent !== text) a.textContent = text
   return true
+}
+
+/**
+ * Normalize plain pasted `<a href>` anchors into kuro link notation, in place.
+ * The rendered element gets the data-kuro-* attribute, so the save path
+ * (unrenderSpecialLinks) stores it as a `[[...]]` token — the same split as
+ * writeLinkParts: text === url → `[[url]]` hyper form, otherwise
+ * `[[url|text]]` wiki form.
+ *
+ * Anchors stay PLAIN (untouched) when the notation cannot represent them:
+ *   - non-http(s) href (mailto:, tel:, #fragment, relative paths)
+ *   - element children inside the link (bold/img — labels are plain text only)
+ *   - empty text (likely markup remnants; not turned into URL cards)
+ *   - `]` or `|` in the url, or `]` in the text (would break `[[...]]`)
+ *   - already-kuro anchors (data-kuro-wiki / data-kuro-link / data-kuro-card)
+ * Converted anchors are stripped down to href + notation attribute — class /
+ * style / target / rel from the source page are paste noise for a kuro link
+ * (the canvas restyles it, and unrender discards the element anyway).
+ *
+ * @param {HTMLElement} root - container holding the pasted fragment
+ * @param {(slug: string) => string} [resolver]
+ */
+export function normalizePastedLinks(root, resolver = defaultResolver) {
+  for (const a of root.querySelectorAll('a[href]')) {
+    if (
+      a.hasAttribute('data-kuro-wiki') ||
+      a.hasAttribute('data-kuro-link') ||
+      a.hasAttribute('data-kuro-card')
+    ) continue
+    const url = a.getAttribute('href') ?? ''
+    if (!/^https?:\/\//i.test(url)) continue
+    if (a.children.length > 0) continue
+    const text = (a.textContent ?? '').trim()
+    if (!text) continue
+    if (/[\]|]/.test(url) || text.includes(']')) continue
+    if (text === url) {
+      a.setAttribute('data-kuro-link', encodeURIComponent(`[[${url}]]`))
+    } else {
+      a.setAttribute('data-kuro-wiki', encodeURIComponent(`[[${url}|${text}]]`))
+    }
+    const keep = new Set(['href', 'data-kuro-wiki', 'data-kuro-link'])
+    for (const attr of [...a.attributes]) {
+      if (!keep.has(attr.name)) a.removeAttribute(attr.name)
+    }
+    if (a.textContent !== text) a.textContent = text
+    a.setAttribute('href', resolver(url))
+  }
 }
 
 /**
@@ -5740,6 +5787,8 @@ export class KuroEditor {
         if (el.getAttribute('style') === '') el.removeAttribute('style')
       }
     }
+
+    normalizePastedLinks(body, this.options.urlResolver)
 
     const clean = body.innerHTML
     if (clean) execFormat('insertHTML', clean)
