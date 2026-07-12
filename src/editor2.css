@@ -805,6 +805,17 @@
            cursor-pointer select-none transition-colors;
   }
 
+  /* カード表示を明示するチェックボックス行 */
+  .kuro-link-edit__card-toggle {
+    @apply flex items-center gap-1.5 px-0.5 py-0.5
+           text-neutral-300 cursor-pointer select-none;
+    font-size: 11px;
+  }
+
+  .kuro-link-edit__card-toggle input {
+    @apply cursor-pointer accent-indigo-500;
+  }
+
   /* 表題なし → カード表示の案内文 */
   .kuro-link-edit__hint {
     @apply px-0.5 text-neutral-500;

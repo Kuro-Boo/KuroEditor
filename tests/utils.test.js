@@ -18,6 +18,7 @@ import {
   writeLinkParts,
   linkAtCaret,
   normalizePastedLinks,
+  popupBottomLimit,
 } from '../src/editor.js'
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
@@ -666,5 +667,51 @@ describe('normalizePastedLinks', () => {
     const div = container('<a href="https://example.com">x</a>')
     normalizePastedLinks(div, (slug) => slug + '?resolved')
     expect(div.querySelector('a').getAttribute('href')).toBe('https://example.com?resolved')
+  })
+})
+
+// ─── popupBottomLimit ─────────────────────────────────────────────────────────
+
+describe('popupBottomLimit', () => {
+  /** rect を返す mmenu 風の要素を作って body に載せる */
+  function mmenu(top, height = 48) {
+    const el = document.createElement('div')
+    el.className = 'kuro-mmenu'
+    el.getBoundingClientRect = () => ({
+      top, bottom: top + height, height, left: 0, right: 100, width: 100,
+    })
+    document.body.appendChild(el)
+    return el
+  }
+
+  it('returns viewport bottom when mmenu is missing', () => {
+    expect(popupBottomLimit(null)).toBe(window.innerHeight - 4)
+    expect(popupBottomLimit(undefined, 10)).toBe(window.innerHeight - 10)
+  })
+
+  it('returns viewport bottom when mmenu is not in the DOM (modalMenu: false)', () => {
+    const el = mmenu(0, 0)
+    el.remove()
+    expect(popupBottomLimit(el)).toBe(window.innerHeight - 4)
+  })
+
+  it('returns viewport bottom for slotted mmenu (host toolbar, not fixed)', () => {
+    const el = mmenu(300)
+    el.classList.add('kuro-mmenu--slotted')
+    expect(popupBottomLimit(el)).toBe(window.innerHeight - 4)
+    el.remove()
+  })
+
+  it('stops above a visible fixed mmenu (top - 6)', () => {
+    const top = window.innerHeight - 60
+    const el = mmenu(top)
+    expect(popupBottomLimit(el)).toBe(top - 6)
+    el.remove()
+  })
+
+  it('never exceeds the viewport bottom even if mmenu sits lower', () => {
+    const el = mmenu(window.innerHeight + 100)
+    expect(popupBottomLimit(el)).toBe(window.innerHeight - 4)
+    el.remove()
   })
 })

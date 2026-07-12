@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.6.1'
+export const VERSION = '2.7.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -353,6 +353,28 @@ export function getSelectionRect() {
 function debounce(fn, ms) {
   let t
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms) }
+}
+
+/**
+ * Fixed ポップアップが使ってよい viewport 下端の Y 座標を返す。
+ * 画面下部に浮いている mmenu（モーダルメニュー）があるときはその上端 - GAP を
+ * 下限とし、ポップアップが mmenu に重なってボタンが押せなくなるのを防ぐ。
+ * mmenu が非表示（modalMenu:false で DOM 外）やホストスロット組込み
+ * （--slotted、fixed でない）のときは通常の viewport 下端を返す。
+ * @param {HTMLElement|null|undefined} mmenuEl - KuroEditor#mmenu
+ * @param {number} [margin=4] - viewport 下端との余白
+ * @returns {number}
+ */
+export function popupBottomLimit(mmenuEl, margin = 4) {
+  const vpBottom = window.innerHeight - margin
+  if (
+    mmenuEl?.isConnected &&
+    !mmenuEl.classList.contains('kuro-mmenu--slotted')
+  ) {
+    const r = mmenuEl.getBoundingClientRect()
+    if (r.height > 0) return Math.min(vpBottom, r.top - 6)
+  }
+  return vpBottom
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1461,6 +1483,7 @@ export class PopupMenu {
   constructor(container, constraintEl = null) {
     this.container      = container
     this.constraintEl   = constraintEl   // edit pane — keeps popm inside its horizontal bounds
+    this._editor        = null   // set by KuroEditor — mmenu 回避の位置決めに使う
     this._commands      = []
     this._clearColorFn  = null   // set by KuroEditor via setClearColorFn()
     this._applyColorFn  = null   // set by KuroEditor via setApplyColorFn()
@@ -2499,6 +2522,9 @@ export class PopupMenu {
     const GAP = 18
     let top = rect.top - popH - GAP
     if (top < 4) top = rect.bottom + 6   // flip below when too close to viewport top
+    // mmenu（下部バー）に食い込まないよう下限をクランプ
+    const bLimit = popupBottomLimit(this._editor?.mmenu)
+    if (top + popH > bLimit) top = Math.max(4, bLimit - popH)
 
     // ── Horizontal: fixed to the left edge of the constraint (pane) ────────
     // The popm does NOT follow the caret horizontally — it stays at the pane
@@ -2779,13 +2805,11 @@ export class RoundboxMenu {
       }
     }
 
-    // Avoid mmenu (bottom bar) — push up if needed, but stay outside the box
-    const mmenuEl = this._editor?.mmenu
-    if (mmenuEl) {
-      const mr = mmenuEl.getBoundingClientRect()
-      if (top + menuH > mr.top - GAP) {
-        top = topAbove >= VPM ? topAbove : mr.top - menuH - GAP
-      }
+    // Avoid mmenu (bottom bar) — push up if needed, but stay outside the box.
+    // popupBottomLimit は mmenu 非表示 (modalMenu:false) / slotted を自動で除外する
+    const bLimit = popupBottomLimit(this._editor?.mmenu, VPM)
+    if (top + menuH > bLimit) {
+      top = topAbove >= VPM ? topAbove : bLimit - menuH
     }
 
     // Final viewport clamp
@@ -3028,6 +3052,10 @@ export class TableManager {
       if (popmRect && overlaps(top, popmRect)) {
         top = popmRect.bottom + GAP
       }
+
+      // Avoid mmenu (bottom bar) — mmenu のボタンが最優先なので最後にクランプ
+      const limit = popupBottomLimit(this.editor?.mmenu)
+      if (top + menuH > limit) top = Math.max(4, limit - menuH)
 
       const left = Math.max(4, Math.min(refRect.left, window.innerWidth - menuW - 4))
 
@@ -3611,7 +3639,9 @@ export class TableInserter {
  *   - Closes on outside click, on selection change, or when opened again.
  */
 export class LinePopupMenu {
-  constructor() {
+  /** @param {KuroEditor|null} [editor] - mmenu 回避の位置決めに使う（省略可） */
+  constructor(editor = null) {
+    this._editor = editor
     this._target = null         // { table, axis: 'row'|'col', idx } passed from caller
     this._scope  = 'single'
     this._lastBorder = null     // last picked border style (e.g. '2px solid')
@@ -3776,11 +3806,13 @@ export class LinePopupMenu {
       const popH  = this.el.offsetHeight || 140
       const GAP   = 6
       const M     = 4  // viewport margin
+      // 下限は mmenu（下部バー）の上端まで — 重なるとボタンが押せない
+      const limit = popupBottomLimit(this._editor?.mmenu, M)
 
       let top, left
       if (target.axis === 'row') {
         // 行ボタン: 通常は右に表示。 右がはみ出るなら左に。
-        top  = Math.max(M, Math.min(aRect.top + aRect.height / 2 - popH / 2, window.innerHeight - popH - M))
+        top  = Math.max(M, Math.min(aRect.top + aRect.height / 2 - popH / 2, limit - popH))
         left = aRect.right + GAP
         if (left + popW > window.innerWidth - M) left = aRect.left - popW - GAP
       } else {
@@ -3791,12 +3823,12 @@ export class LinePopupMenu {
         if (left + popW > window.innerWidth - M) left = window.innerWidth - popW - M
         if (left < M) left = M
         top  = aRect.bottom + GAP
-        if (top + popH > window.innerHeight - M) top = aRect.top - popH - GAP
+        if (top + popH > limit) top = aRect.top - popH - GAP
       }
 
-      // 最終クランプ: どの軸でも viewport 内に収める
-      left = Math.max(M, Math.min(left, window.innerWidth  - popW - M))
-      top  = Math.max(M, Math.min(top,  window.innerHeight - popH - M))
+      // 最終クランプ: どの軸でも viewport 内 (mmenu の上) に収める
+      left = Math.max(M, Math.min(left, window.innerWidth - popW - M))
+      top  = Math.max(M, Math.min(top,  limit - popH))
 
       this.el.style.top  = `${top}px`
       this.el.style.left = `${left}px`
@@ -4133,11 +4165,13 @@ export class LinkEditPopup {
     })
     this._textInput = this._makeField('表示テキスト')
     this._urlInput  = this._makeField('URL')
-    // 表題なし → カード表示の案内。カード化は writeLinkParts が
-    // 「表示テキスト空 + URL あり」を [[URL|]] 記法として処理することで実現する
+    // カード表示を明示するチェックボックス。ON = 表題なし [[URL|]] 記法へ、
+    // OFF = 通常のテキストリンクへ切り替える(内部的には writeLinkParts に委譲)。
+    this._cardToggle = this._makeCardToggle()
+    // 補足: チェックのほか「表示テキストを空」にしても同じくカード化する
     this.el.appendChild(createElement('div', {
       className: 'kuro-link-edit__hint',
-      html: '💡 表示テキストを空にすると、URL から取得した情報（ドメイン名など）のカード表示になります',
+      html: '💡 「カード表示」にすると、URL から取得した情報（タイトル・favicon など）のカードで表示されます',
     }))
     this._jumpBtn   = this._makeJumpButton()
     document.body.appendChild(this.el)
@@ -4182,6 +4216,35 @@ export class LinkEditPopup {
     return input
   }
 
+  /**
+   * カード表示を明示する ☐ チェックボックス。ON→表示テキストを空にしてカード化、
+   * OFF→URL を表示テキストにしたテキストリンクへ戻す(どちらも _apply → writeLinkParts)。
+   */
+  _makeCardToggle() {
+    const row = createElement('label', { className: 'kuro-link-edit__card-toggle' })
+    const cb = createElement('input', { attrs: { type: 'checkbox' } })
+    row.appendChild(cb)
+    row.appendChild(createElement('span', { html: 'カード表示（表題なし）' }))
+    cb.addEventListener('change', () => {
+      const a = this.activeLink
+      if (!a?.isConnected) return
+      if (cb.checked) {
+        this._textInput.value = ''                       // 空 → [[URL|]] カード
+      } else if (!this._textInput.value.trim()) {
+        this._textInput.value = this._urlInput.value.trim()  // カード解除 → 既定表示 = URL
+      }
+      this._apply()
+      if (!cb.checked) this._textInput.focus()
+    })
+    this.el.appendChild(row)
+    return cb
+  }
+
+  /** URL カードかどうかにチェック状態を合わせる。 */
+  _syncCardUi(isCard) {
+    if (this._cardToggle) this._cardToggle.checked = isCard
+  }
+
   get isVisible() { return this.el.classList.contains('kuro-link-edit--visible') }
 
   /** Open for (or re-sync to) the given <a>. Never steals focus. */
@@ -4193,6 +4256,7 @@ export class LinkEditPopup {
       const { text, url } = readLinkParts(a)
       this._textInput.value = text
       this._urlInput.value  = url
+      this._syncCardUi(a.classList.contains('kuro-url-card'))
     }
     if (changedTarget || !this.isVisible) this._position(a)
     this.el.classList.add('kuro-link-edit--visible')
@@ -4209,9 +4273,12 @@ export class LinkEditPopup {
     // Element is always laid out (hidden via opacity) → offsetWidth is live
     const w = this.el.offsetWidth  || 280
     const h = this.el.offsetHeight || 90
+    // mmenu（下部バー）に食い込むと決定系ボタンが押せなくなるので、
+    // 下限は viewport ではなく mmenu 上端を基準にする
+    const limit = popupBottomLimit(this.editor?.mmenu)
     let top = rect.bottom + 6
-    if (top + h > window.innerHeight - 4) top = rect.top - h - 6
-    top = Math.max(4, top)
+    if (top + h > limit) top = rect.top - h - 6
+    top = Math.max(4, Math.min(top, limit - h))
     const left = Math.max(4, Math.min(rect.left, window.innerWidth - w - 4))
     this.el.style.top  = `${top}px`
     this.el.style.left = `${left}px`
@@ -4230,10 +4297,12 @@ export class LinkEditPopup {
     // Notify the editor (ToC / auto-save) exactly like normal typing would
     if (ok) {
       this.editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      const isCard = a.classList.contains('kuro-url-card')
+      this._syncCardUi(isCard) // 表示テキストの手入力で空↔非空になった時もチェックを追従
       // 表示テキストを空にして URL カード化した場合は豪華表示を後追い取得。
       // writeLinkParts が同じ <a> を作り替える (data-meta-state は付かない) ので
       // _enhanceUrlCards が新しいカードとして処理する。
-      if (a.classList.contains('kuro-url-card')) this.editor._enhanceUrlCards()
+      if (isCard) this.editor._enhanceUrlCards()
     }
   }
 
@@ -5131,7 +5200,7 @@ export class KuroEditor {
     // --- Sub-managers ---
     this.toc = new TableOfContents(this.tocPanelEl, this.wysiwyg)
 
-    this.linePopupMenu = new LinePopupMenu()
+    this.linePopupMenu = new LinePopupMenu(this)
     this.linkEditPopup = new LinkEditPopup(this)
     this.roundboxMenu  = new RoundboxMenu(this)
     this.tableManager  = new TableManager(this)
@@ -5157,6 +5226,7 @@ export class KuroEditor {
   _buildPopm() {
     // Pass wysiwyg as constraint: popm stays within its horizontal bounds
     this.popm = new PopupMenu(this.root, this.wysiwyg)
+    this.popm._editor = this
     // Provide colour handlers (DOM-based, no execCommand selection side-effects)
     this.popm.setClearColorFn(() => this._clearColor())
     this.popm.setApplyColorFn((color) => this._applyColor(color))
