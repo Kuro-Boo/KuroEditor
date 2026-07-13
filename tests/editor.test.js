@@ -689,11 +689,31 @@ describe('KuroEditor', () => {
       document.dispatchEvent(new Event('selectionchange'))
     }
 
-    it('リンク内部にキャレットがあるだけでは開かない', () => {
-      editor.setContent('<p>前 [[https://example.com/x|リンク]] 後</p>')
+    it('リンク文字列の【途中】にキャレットがあるだけでは開かない', () => {
+      editor.setContent('<p>前 [[https://example.com/xyz|リンクの文字]] 後</p>')
       const a = editor.wysiwyg.querySelector('a')
-      caretAt(a.firstChild, 2)   // リンク文字列の途中
+      caretAt(a.firstChild, 3)   // リンク文字列の途中
       expect(editor.linkEditPopup.isVisible).toBe(false)
+    })
+
+    // ブラウザはリンクのすぐ右（左）をクリックすると、キャレットを <a> の外ではなく
+    // 【内側テキストの末尾（先頭）】に置く。DOM 上の隣接だけを見ていた v2.11.0/2.11.1 では
+    // 「リンクの右にキャレットがあるのにポップアップが出ない」状態だった。
+    it('リンク内側テキストの末尾（＝見た目はリンクの右）でも開く', () => {
+      editor.setContent('<p>[[https://kuro.boo/|黒兎]]</p>')
+      const a = editor.wysiwyg.querySelector('a')
+      const t = a.firstChild
+      caretAt(t, t.textContent.length)
+      expect(editor.linkEditPopup.isVisible).toBe(true)
+      expect(editor.linkEditPopup.activeLink).toBe(a)
+    })
+
+    it('リンク内側テキストの先頭（＝見た目はリンクの左）でも開く', () => {
+      editor.setContent('<p>[[https://kuro.boo/|黒兎]]</p>')
+      const a = editor.wysiwyg.querySelector('a')
+      caretAt(a.firstChild, 0)
+      expect(editor.linkEditPopup.isVisible).toBe(true)
+      expect(editor.linkEditPopup.activeLink).toBe(a)
     })
 
     it('リンクの直後にキャレットが来たら開く', () => {

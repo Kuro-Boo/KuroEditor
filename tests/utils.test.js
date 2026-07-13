@@ -557,20 +557,31 @@ describe('linkAtCaret', () => {
     return r
   }
 
-  // v2.11.0: リンクの「内部」は対象外になった（直前 / 直後だけ）。
-  // 内部でも拾っていた頃は、リンク文字列の途中にキャレットがあるだけで
-  // ポップアップが出て、しかもリンク要素基準の位置決めで遠くに浮いていた。
-  it('returns null when the caret is INSIDE the link (adjacent only)', () => {
+  // v2.11.0〜: 判定は「リンクの左端 / 右端」だけ。ただし “端” は【見た目の位置】で
+  // あって DOM 上の隣接ではない。ブラウザはリンクのすぐ右をクリックすると、
+  // キャレットを <a> の外ではなく【内側テキストの末尾】に置くため
+  // (v2.11.2 でこの取りこぼしを修正)。
+  it('returns null when the caret is in the MIDDLE of the link', () => {
     setup('before <a href="/x">link</a> after')
     const a = root.querySelector('a')
     expect(linkAtCaret(rangeAt(a.firstChild, 2), root)).toBe(null)
   })
 
-  it('returns null at the start / end inside the link text', () => {
+  it('finds the link at the start / end INSIDE the link text (視覚的な左右の端)', () => {
     setup('before <a href="/x">link</a> after')
     const a = root.querySelector('a')
-    expect(linkAtCaret(rangeAt(a.firstChild, 0), root)).toBe(null)
-    expect(linkAtCaret(rangeAt(a.firstChild, 4), root)).toBe(null)
+    expect(linkAtCaret(rangeAt(a.firstChild, 0), root)).toBe(a)   // 見た目は左端
+    expect(linkAtCaret(rangeAt(a.firstChild, 4), root)).toBe(a)   // 見た目は右端
+  })
+
+  it('端の判定は入れ子の装飾タグ越しでも効く', () => {
+    setup('before <a href="/x"><b>bold</b> tail</a> after')
+    const a = root.querySelector('a')
+    const b = root.querySelector('b')
+    const tail = a.lastChild                        // " tail"
+    expect(linkAtCaret(rangeAt(b.firstChild, 0), root)).toBe(a)                       // 先頭
+    expect(linkAtCaret(rangeAt(tail, tail.textContent.length), root)).toBe(a)         // 末尾
+    expect(linkAtCaret(rangeAt(b.firstChild, 2), root)).toBe(null)                    // 途中
   })
 
   it('finds the link when the caret is immediately before it', () => {
