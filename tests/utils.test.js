@@ -557,10 +557,20 @@ describe('linkAtCaret', () => {
     return r
   }
 
-  it('finds the link when the caret is inside it', () => {
+  // v2.11.0: リンクの「内部」は対象外になった（直前 / 直後だけ）。
+  // 内部でも拾っていた頃は、リンク文字列の途中にキャレットがあるだけで
+  // ポップアップが出て、しかもリンク要素基準の位置決めで遠くに浮いていた。
+  it('returns null when the caret is INSIDE the link (adjacent only)', () => {
     setup('before <a href="/x">link</a> after')
     const a = root.querySelector('a')
-    expect(linkAtCaret(rangeAt(a.firstChild, 2), root)).toBe(a)
+    expect(linkAtCaret(rangeAt(a.firstChild, 2), root)).toBe(null)
+  })
+
+  it('returns null at the start / end inside the link text', () => {
+    setup('before <a href="/x">link</a> after')
+    const a = root.querySelector('a')
+    expect(linkAtCaret(rangeAt(a.firstChild, 0), root)).toBe(null)
+    expect(linkAtCaret(rangeAt(a.firstChild, 4), root)).toBe(null)
   })
 
   it('finds the link when the caret is immediately before it', () => {
@@ -583,10 +593,11 @@ describe('linkAtCaret', () => {
     expect(linkAtCaret(rangeAt(afterText, 3), root)).toBe(null)
   })
 
-  it('excludes card links', () => {
-    setup(renderSpecialLinks('[[[my-card]]]'))
+  it('excludes card links (even when the caret is adjacent)', () => {
+    setup(renderSpecialLinks('[[[my-card]]]') + ' after')
     const a = root.querySelector('a')
-    expect(linkAtCaret(rangeAt(a.firstChild, 1), root)).toBe(null)
+    // 直後に立っても対象外（編集ポップアップは開かない）
+    expect(linkAtCaret(rangeAt(root, [...root.childNodes].indexOf(a) + 1), root)).toBe(null)
   })
 
   it('returns null for a non-collapsed range', () => {

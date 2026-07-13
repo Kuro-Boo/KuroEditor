@@ -2,7 +2,7 @@
  * Integration tests — KuroEditor class (DOM interaction via happy-dom)
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { KuroEditor, createTableHtml } from '../src/editor.js'
+import { KuroEditor, createTableHtml, linkAtCaret } from '../src/editor.js'
 
 function makeMount() {
   const el = document.createElement('div')
@@ -677,6 +677,99 @@ describe('KuroEditor', () => {
 
       expect(editor.wysiwyg.querySelector('.kuro-url-card')).toBeNull()
       expect(onInput).toHaveBeenCalled()
+    })
+  })
+
+  // ── リンクポップアップの出現条件と位置（v2.11.0） ──────────────────────────
+
+  describe('link popup — 出現条件はリンクの直前 / 直後のみ', () => {
+    const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    const caretAt = (node, offset) => {
+      window.getSelection().setBaseAndExtent(node, offset, node, offset)
+      document.dispatchEvent(new Event('selectionchange'))
+    }
+
+    it('リンク内部にキャレットがあるだけでは開かない', () => {
+      editor.setContent('<p>前 [[https://example.com/x|リンク]] 後</p>')
+      const a = editor.wysiwyg.querySelector('a')
+      caretAt(a.firstChild, 2)   // リンク文字列の途中
+      expect(editor.linkEditPopup.isVisible).toBe(false)
+    })
+
+    it('リンクの直後にキャレットが来たら開く', () => {
+      editor.setContent('<p>前 [[https://example.com/x|リンク]] 後</p>')
+      const a = editor.wysiwyg.querySelector('a')
+      caretAt(a.nextSibling, 0)  // リンクの直後（後続テキストの先頭）
+      expect(editor.linkEditPopup.isVisible).toBe(true)
+      expect(editor.linkEditPopup.activeLink).toBe(a)
+    })
+
+    it('リンクの直前にキャレットが来ても開く', () => {
+      editor.setContent('<p>前 [[https://example.com/x|リンク]] 後</p>')
+      const a = editor.wysiwyg.querySelector('a')
+      const before = a.previousSibling
+      caretAt(before, before.textContent.length)
+      expect(editor.linkEditPopup.isVisible).toBe(true)
+      expect(editor.linkEditPopup.activeLink).toBe(a)
+    })
+
+    it('リンクをクリックするとキャレットがリンクの直後へ移り、そこで開く', () => {
+      editor.setContent('<p>前 [[https://example.com/x|リンク]] 後</p>')
+      const a = editor.wysiwyg.querySelector('a')
+      const e = new MouseEvent('click', { bubbles: true, cancelable: true })
+      a.dispatchEvent(e)
+
+      expect(e.defaultPrevented).toBe(true)   // 遷移させない
+      expect(editor.linkEditPopup.isVisible).toBe(true)
+      expect(editor.linkEditPopup.activeLink).toBe(a)
+
+      // キャレットはリンクの「中」ではなく「直後」に立っている
+      const r = window.getSelection().getRangeAt(0)
+      expect(r.collapsed).toBe(true)
+      expect(linkAtCaret(r, editor.wysiwyg)).toBe(a)   // 隣接だけが true になる関数
+      expect(a.contains(r.startContainer)).toBe(false) // リンクの内部ではない
+    })
+
+    it('URL カードをクリックしてもキャレットはカードの直後へ移る', () => {
+      editor.setContent('<p>[[https://example.com/post|]]</p>')
+      const card = editor.wysiwyg.querySelector('.kuro-url-card')
+      click(card)
+
+      expect(editor.linkEditPopup.activeLink).toBe(card)
+      const r = window.getSelection().getRangeAt(0)
+      expect(linkAtCaret(r, editor.wysiwyg)).toBe(card)
+      expect(card.contains(r.startContainer)).toBe(false)
+    })
+
+    it('カード型リンク [[[slug]]] は編集対象外（遷移させる）', () => {
+      editor.setContent('<p>[[[my-page]]]</p>')
+      const a = editor.wysiwyg.querySelector('a.kuro-card-link')
+      const e = new MouseEvent('click', { bubbles: true, cancelable: true })
+      a.dispatchEvent(e)
+
+      expect(e.defaultPrevented).toBe(false)  // 従来どおりブラウザに任せる
+      expect(editor.linkEditPopup.isVisible).toBe(false)
+    })
+
+    it('位置決めはリンク要素ではなくキャレット基準', () => {
+      editor.setContent('<p>前 [[https://example.com/x|リンク]] 後</p>')
+      const a = editor.wysiwyg.querySelector('a')
+      // リンク要素は遠く（下 500px）、キャレットは近く（上 100px）という状況を作る。
+      // getRangeAt() は毎回新しい Range を返すので prototype 側を差し替える
+      a.getBoundingClientRect = () => ({ top: 500, bottom: 520, left: 500, right: 700, width: 200, height: 20 })
+      const orig = Range.prototype.getBoundingClientRect
+      Range.prototype.getBoundingClientRect = () =>
+        ({ top: 100, bottom: 120, left: 40, right: 40, width: 0, height: 20 })
+      try {
+        const sel = window.getSelection()
+        sel.setBaseAndExtent(a.nextSibling, 0, a.nextSibling, 0)
+        editor.linkEditPopup.open(a)
+      } finally {
+        Range.prototype.getBoundingClientRect = orig
+      }
+      // キャレットのすぐ下（bottom + 6）に出る。リンク基準なら 526px になる
+      expect(editor.linkEditPopup.el.style.top).toBe('126px')
+      expect(editor.linkEditPopup.el.style.left).toBe('40px')
     })
   })
 
