@@ -680,6 +680,144 @@ describe('KuroEditor', () => {
     })
   })
 
+  // ── ツールバーのリンクボタン（新規リンク挿入） ─────────────────────────────
+
+  describe('toolbar link button', () => {
+    const popup = () => editor.linkEditPopup
+    /** キャレット（またはテキスト選択）を本文に置く */
+    const select = (start, end) => {
+      const t = editor.wysiwyg.querySelector('p').firstChild
+      window.getSelection().setBaseAndExtent(t, start, t, end)
+    }
+    const type = (input, value) => {
+      input.value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
+    it('リンクボタンがツールバー（タブバー / mmenu 両方）にある', () => {
+      expect(editor._tabActionBtns.link).toBeDefined()
+      expect(editor._mmenuBtns.link).toBeDefined()
+      expect(editor._tabActionBtns.link.getAttribute('title')).toContain('リンク')
+    })
+
+    it('押すとカーソル位置でリンクポップアップが開く（本文はまだ変わらない）', () => {
+      editor.setContent('<p>ここに入れる</p>')
+      select(3, 3)
+      editor._tabActionBtns.link.click()
+
+      expect(popup().isVisible).toBe(true)
+      expect(popup().activeLink).toBeNull()          // <a> はまだ作らない
+      expect(popup()._pendingRange).not.toBeNull()
+      expect(editor.getContent()).toBe('<p>ここに入れる</p>')
+    })
+
+    it('URL を入れた時点でリンクが本文へ挿入される', () => {
+      editor.setContent('<p>ここに入れる</p>')
+      select(3, 3)
+      editor._tabActionBtns.link.click()
+      type(popup()._textInput, '公式サイト')
+      type(popup()._urlInput, 'https://example.com/post')
+
+      expect(editor.getContent()).toBe('<p>ここに[[https://example.com/post|公式サイト]]入れる</p>')
+      expect(popup().activeLink).not.toBeNull()
+      expect(popup()._pendingRange).toBeNull()
+    })
+
+    it('選択していた文字列が表示テキストの初期値になり、リンクに置き換わる', () => {
+      editor.setContent('<p>前 選択語 後</p>')
+      select(2, 5)   // 「選択語」
+      editor._tabActionBtns.link.click()
+      expect(popup()._textInput.value).toBe('選択語')
+
+      type(popup()._urlInput, 'https://example.com/x')
+      expect(editor.getContent()).toBe('<p>前 [[https://example.com/x|選択語]] 後</p>')
+    })
+
+    it('URL を入れずに閉じると本文には何も残らない', () => {
+      editor.setContent('<p>そのまま</p>')
+      select(2, 2)
+      editor._tabActionBtns.link.click()
+      type(popup()._textInput, 'テキストだけ入れた')
+      popup().close()
+
+      expect(editor.wysiwyg.querySelector('a')).toBeNull()
+      expect(editor.getContent()).toBe('<p>そのまま</p>')
+    })
+
+    it('新規リンクで 🗑 はキャンセル（本文を触らずに閉じる）', () => {
+      editor.setContent('<p>そのまま</p>')
+      select(2, 2)
+      editor._tabActionBtns.link.click()
+      popup()._delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+
+      expect(popup().isVisible).toBe(false)
+      expect(editor.getContent()).toBe('<p>そのまま</p>')
+    })
+
+    it('新規リンクは表示テキスト空でもカード化しない（URL を表示テキストにする）', () => {
+      // 既存リンクの「表示テキストを空にする = カード化」を新規リンクに適用すると、
+      // URL を打ち始めた瞬間にカード化し、カード中は隠れる仕様の表示テキスト欄が
+      // 消えて題名を入力できなくなる。新規リンクではカードはチェックで明示させる。
+      editor.setContent('<p>x</p>')
+      select(1, 1)
+      editor._tabActionBtns.link.click()
+      type(popup()._urlInput, 'https://example.com/post')
+
+      expect(editor.wysiwyg.querySelector('.kuro-url-card')).toBeNull()
+      expect(editor.getContent()).toBe('<p>x[[https://example.com/post]]</p>')
+      // 題名を入力できる状態が保たれている
+      expect(popup()._textRow.hidden).toBe(false)
+      expect(popup()._textInput.disabled).toBe(false)
+
+      // 続けて題名を打てば通常のテキストリンクになる
+      type(popup()._textInput, '記事')
+      expect(editor.getContent()).toBe('<p>x[[https://example.com/post|記事]]</p>')
+    })
+
+    it('新規リンクでもカード表示チェックを入れれば URL カードで挿入される', () => {
+      editor.setContent('<p>x</p>')
+      select(1, 1)
+      editor._tabActionBtns.link.click()
+      popup()._cardToggle.checked = true
+      popup()._cardToggle.dispatchEvent(new Event('change', { bubbles: true }))
+      type(popup()._urlInput, 'https://example.com/post')
+
+      expect(editor.wysiwyg.querySelector('.kuro-url-card')).not.toBeNull()
+      expect(editor.getContent()).toBe('<p>x[[https://example.com/post|]]</p>')
+    })
+
+    it('記法を壊す URL は挿入されない（リンクを作らない）', () => {
+      editor.setContent('<p>x</p>')
+      select(1, 1)
+      editor._tabActionBtns.link.click()
+      type(popup()._textInput, 'ラベル')
+      type(popup()._urlInput, 'https://example.com/a|b')
+
+      expect(editor.wysiwyg.querySelector('a')).toBeNull()
+      expect(editor.getContent()).toBe('<p>x</p>')
+    })
+
+    it('挿入したリンクは undo で消せる', () => {
+      editor.setContent('<p>ここに入れる</p>')
+      select(3, 3)
+      editor._tabActionBtns.link.click()
+      type(popup()._textInput, 'ラベル')
+      type(popup()._urlInput, 'https://example.com/z')
+      editor._commitSnapshot()
+      expect(editor.getContent()).toContain('[[https://example.com/z|ラベル]]')
+
+      editor._undo()
+      expect(editor.getContent()).toBe('<p>ここに入れる</p>')
+    })
+
+    it('閲覧モードではリンクボタンが無効', () => {
+      editor.setMode('view')
+      expect(editor._tabActionBtns.link.disabled).toBe(true)
+      editor._handleMMenu('link')
+      expect(editor.linkEditPopup.isVisible).toBe(false)
+    })
+  })
+
   // ── Undo / Redo (自前スナップショット履歴) ─────────────────────────────────
 
   describe('undo / redo', () => {
