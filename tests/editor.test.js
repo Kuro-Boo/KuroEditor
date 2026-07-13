@@ -2,7 +2,7 @@
  * Integration tests — KuroEditor class (DOM interaction via happy-dom)
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { KuroEditor } from '../src/editor.js'
+import { KuroEditor, createTableHtml } from '../src/editor.js'
 
 function makeMount() {
   const el = document.createElement('div')
@@ -537,10 +537,10 @@ describe('KuroEditor', () => {
       expect(a.textContent).toBe('https://example.com/post')
     })
 
-    it('link edit popup shows the no-title → card hint', () => {
-      const hint = editor.linkEditPopup.el.querySelector('.kuro-link-edit__hint')
-      expect(hint).not.toBeNull()
-      expect(hint.textContent).toContain('カード表示')
+    it('link edit popup has the card toggle (説明文は置かず、チェックボックスで示す)', () => {
+      const popup = editor.linkEditPopup.el
+      expect(popup.querySelector('.kuro-link-edit__card-toggle')).not.toBeNull()
+      expect(popup.querySelector('.kuro-link-edit__hint')).toBeNull()
     })
 
     it('clicking a card inside the editor opens the link edit popup instead of navigating', () => {
@@ -644,6 +644,31 @@ describe('KuroEditor', () => {
       expect(editor.wysiwyg.querySelector('li')).toBeNull()
     })
 
+    it('IME 変換確定の Enter ではポップアップを閉じない', () => {
+      openOn('<p>[[https://example.com/post|タイトル]]</p>')
+      expect(popup().isVisible).toBe(true)
+
+      // 日本語入力で漢字を確定した Enter（composition 中）
+      popup()._textInput.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter', bubbles: true, cancelable: true, isComposing: true,
+      }))
+      expect(popup().isVisible).toBe(true)
+
+      // 変換確定ではない素の Enter は従来どおり閉じる
+      popup()._textInput.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter', bubbles: true, cancelable: true,
+      }))
+      expect(popup().isVisible).toBe(false)
+    })
+
+    it('IME 用の keyCode 229 の Enter でも閉じない（古い Safari / Android IME）', () => {
+      openOn('<p>[[https://example.com/post|タイトル]]</p>')
+      const e = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      Object.defineProperty(e, 'keyCode', { value: 229 })
+      popup()._textInput.dispatchEvent(e)
+      expect(popup().isVisible).toBe(true)
+    })
+
     it('🗑 → カードも同じく削除でき、input イベントで保存が走る', () => {
       openOn('<p>[[https://example.com/post|]]</p>')
       const onInput = vi.fn()
@@ -652,6 +677,129 @@ describe('KuroEditor', () => {
 
       expect(editor.wysiwyg.querySelector('.kuro-url-card')).toBeNull()
       expect(onInput).toHaveBeenCalled()
+    })
+  })
+
+  // ── Undo / Redo (自前スナップショット履歴) ─────────────────────────────────
+
+  describe('undo / redo', () => {
+    /** MutationObserver → デバウンス を待たずに履歴へ確定させる */
+    const commit = () => editor._commitSnapshot()
+    /**
+     * DOM 直接操作をシミュレートする。テーブル・水平線などの実際の挿入は
+     * execFormat('insertHTML') 経由で、テスト環境では execCommand が stub の
+     * ため走らない。履歴が見ているのは「wysiwyg の DOM が変わったか」なので、
+     * ここでは同じ土俵（DOM を直接いじる）に置き換えて検証する。
+     */
+    const domEdit = (html) => { editor.wysiwyg.insertAdjacentHTML('beforeend', html) }
+
+    it('DOM 直接操作 (水平線の挿入) を undo で取り消せる', () => {
+      editor.setContent('<p>元の本文</p>')
+      domEdit('<hr class="kuro-hr">')
+      commit()
+      expect(editor.getContent()).toContain('<hr')
+
+      editor._undo()
+      expect(editor.getContent()).not.toContain('<hr')
+      expect(editor.getContent()).toContain('元の本文')
+    })
+
+    it('undo した DOM 直接操作を redo でやり直せる', () => {
+      editor.setContent('<p>元の本文</p>')
+      domEdit('<hr class="kuro-hr">')
+      commit()
+      editor._undo()
+      expect(editor.getContent()).not.toContain('<hr')
+
+      editor._redo()
+      expect(editor.getContent()).toContain('<hr')
+    })
+
+    it('🗑 のリンク削除も undo で戻る (ブラウザ内蔵履歴には載らない操作)', () => {
+      editor.setContent('<ol><li>[[https://example.com/1|出典 1]]</li><li>[[https://example.com/2|出典 2]]</li></ol>')
+      const a = editor.wysiwyg.querySelector('a')
+      editor.linkEditPopup.open(a)
+      editor.linkEditPopup._delBtn.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      commit()
+      expect(editor.getContent()).not.toContain('出典 1')
+
+      editor._undo()
+      expect(editor.getContent()).toContain('出典 1')
+      expect(editor.getContent()).toContain('出典 2')
+    })
+
+    it('テーブル挿入 → undo → テーブルが消え、直前の本文が残る', () => {
+      editor.setContent('<p>base</p>')
+      domEdit(createTableHtml(2, 2))
+      commit()
+      expect(editor.getContent()).toContain('<table')
+
+      editor._undo()
+      expect(editor.getContent()).not.toContain('<table')
+      expect(editor.getContent()).toContain('base')
+    })
+
+    it('複数手を積んで 1 手ずつ戻れる', () => {
+      editor.setContent('<p>0</p>')
+      domEdit('<hr class="kuro-hr">');   commit()
+      domEdit(createTableHtml(2, 2));    commit()
+
+      editor._undo()   // テーブルだけ取り消し
+      expect(editor.getContent()).not.toContain('<table')
+      expect(editor.getContent()).toContain('<hr')
+
+      editor._undo()   // 水平線も取り消し
+      expect(editor.getContent()).not.toContain('<hr')
+      expect(editor.getContent()).toContain('<p>0</p>')
+    })
+
+    it('undo 後に新しい編集をすると redo 分は捨てられる', () => {
+      editor.setContent('<p>0</p>')
+      domEdit('<hr class="kuro-hr">'); commit()
+      editor._undo()
+      expect(editor.getContent()).not.toContain('<hr')
+
+      domEdit(createTableHtml(2, 2)); commit()
+      editor._redo()   // 捨てられた <hr> は戻らない
+      expect(editor.getContent()).toContain('<table')
+      expect(editor.getContent()).not.toContain('<hr')
+    })
+
+    it('setContent は履歴をリセットする（前の文書へは戻さない）', () => {
+      editor.setContent('<p>文書 A</p>')
+      editor._insertHR(); commit()
+      editor.setContent('<p>文書 B</p>')
+
+      editor._undo()
+      expect(editor.getContent()).toBe('<p>文書 B</p>')
+    })
+
+    it('最初の状態より前には戻らない / 最新より先には進まない', () => {
+      editor.setContent('<p>only</p>')
+      editor._undo(); editor._undo()
+      expect(editor.getContent()).toBe('<p>only</p>')
+      editor._redo(); editor._redo()
+      expect(editor.getContent()).toBe('<p>only</p>')
+    })
+
+    it('undo すると未保存状態になる（保存ボタンが押せる）', () => {
+      editor.setContent('<p>x</p>')
+      domEdit('<hr class="kuro-hr">'); commit()
+      editor._clearDirty()
+      expect(editor.saveBtn.disabled).toBe(true)
+
+      editor._undo()
+      expect(editor.saveBtn.disabled).toBe(false)
+    })
+
+    it('閲覧モードでは undo / redo が効かない', () => {
+      editor.setContent('<p>base</p>')
+      domEdit('<hr class="kuro-hr">'); commit()
+      editor.setMode('view')
+
+      editor._undo()
+      expect(editor.getContent()).toContain('<hr')
     })
   })
 

@@ -19,6 +19,7 @@ import {
   linkAtCaret,
   normalizePastedLinks,
   popupBottomLimit,
+  isImeComposing,
 } from '../src/editor.js'
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
@@ -713,5 +714,27 @@ describe('popupBottomLimit', () => {
     const el = mmenu(window.innerHeight + 100)
     expect(popupBottomLimit(el)).toBe(window.innerHeight - 4)
     el.remove()
+  })
+})
+
+// ─── isImeComposing ───────────────────────────────────────────────────────────
+
+describe('isImeComposing', () => {
+  it('true while the IME is composing (isComposing)', () => {
+    expect(isImeComposing({ key: 'Enter', isComposing: true })).toBe(true)
+  })
+
+  it('true for the legacy keyCode 229 (old Safari / Android IME)', () => {
+    expect(isImeComposing({ key: 'Enter', keyCode: 229 })).toBe(true)
+  })
+
+  it('false for a plain key press', () => {
+    expect(isImeComposing({ key: 'Enter', isComposing: false, keyCode: 13 })).toBe(false)
+    expect(isImeComposing({ key: 'Escape' })).toBe(false)
+  })
+
+  it('false for null / undefined events', () => {
+    expect(isImeComposing(null)).toBe(false)
+    expect(isImeComposing(undefined)).toBe(false)
   })
 })
