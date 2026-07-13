@@ -557,6 +557,254 @@ describe('KuroEditor', () => {
     })
   })
 
+  // ── リンク編集ポップアップ: カード切替 UI と削除ボタン ───────────────────────
+
+  describe('LinkEditPopup — card toggle / delete', () => {
+    /** 本文の最初の <a> を掴んでポップアップを開く */
+    const openOn = (html) => {
+      editor.setContent(html)
+      const a = editor.wysiwyg.querySelector('a')
+      editor.linkEditPopup.open(a)
+      return a
+    }
+    const popup = () => editor.linkEditPopup
+    const check = (on) => {
+      popup()._cardToggle.checked = on
+      popup()._cardToggle.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    it('カード表示 ON → 表示テキスト欄を隠して編集不可にする', () => {
+      openOn('<p>[[https://example.com/post|タイトル]]</p>')
+      expect(popup()._textRow.hidden).toBe(false)
+      expect(popup()._textInput.disabled).toBe(false)
+
+      check(true)
+      expect(popup()._textRow.hidden).toBe(true)
+      expect(popup()._textInput.disabled).toBe(true)
+      expect(editor.wysiwyg.querySelector('.kuro-url-card')).not.toBeNull()
+      expect(editor.getContent()).toBe('<p>[[https://example.com/post|]]</p>')
+    })
+
+    it('カード表示 OFF → 表示テキスト欄が戻り、URL が既定の表示テキストになる', () => {
+      openOn('<p>[[https://example.com/post|]]</p>')
+      expect(popup()._textRow.hidden).toBe(true)   // 開いた時点でカード → 隠れている
+
+      check(false)
+      expect(popup()._textRow.hidden).toBe(false)
+      expect(popup()._textInput.disabled).toBe(false)
+      expect(editor.wysiwyg.querySelector('.kuro-url-card')).toBeNull()
+      expect(editor.getContent()).toBe('<p>[[https://example.com/post]]</p>')
+    })
+
+    it('既存カードを開くと、チェック済み + 表示テキスト欄が隠れた状態で開く', () => {
+      openOn('<p>[[https://example.com/post|]]</p>')
+      expect(popup()._cardToggle.checked).toBe(true)
+      expect(popup()._textRow.hidden).toBe(true)
+      expect(popup()._textInput.disabled).toBe(true)
+    })
+
+    it('表示テキストを手で空にした場合もチェックと欄の状態が実態に追従する', () => {
+      const a = openOn('<p>[[https://example.com/post|タイトル]]</p>')
+      // 入力中はフォーカスが飛ばないよう欄は出したまま、チェックだけ追従する
+      popup()._textInput.focus()
+      popup()._textInput.value = ''
+      popup()._textInput.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(popup()._cardToggle.checked).toBe(true)
+      expect(popup()._textRow.hidden).toBe(false)
+
+      // 欄から抜けたら畳む
+      popup()._textInput.blur()
+      expect(popup()._textRow.hidden).toBe(true)
+      expect(popup()._textInput.disabled).toBe(true)
+    })
+
+    it('🗑 → リンクだけの行 (li) は行ごと消える', () => {
+      openOn('<ol><li>[[https://example.com/1|出典 1]]</li><li>[[https://example.com/2|出典 2]]</li></ol>')
+      popup()._delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+
+      const items = editor.wysiwyg.querySelectorAll('li')
+      expect(items.length).toBe(1)
+      expect(items[0].textContent).toBe('出典 2')
+      expect(popup().isVisible).toBe(false)
+    })
+
+    it('🗑 → 文中のリンクは周囲のテキストを残してリンクだけ消える', () => {
+      openOn('<p>前 [[https://example.com/post|リンク]] 後</p>')
+      popup()._delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+
+      expect(editor.wysiwyg.querySelector('a')).toBeNull()
+      expect(editor.wysiwyg.querySelector('p').textContent).toBe('前  後')
+    })
+
+    it('🗑 → 最後の li を消すとリスト自体も片付ける', () => {
+      openOn('<ol><li>[[https://example.com/1|出典 1]]</li></ol>')
+      popup()._delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+
+      expect(editor.wysiwyg.querySelector('ol')).toBeNull()
+      expect(editor.wysiwyg.querySelector('li')).toBeNull()
+    })
+
+    it('🗑 → カードも同じく削除でき、input イベントで保存が走る', () => {
+      openOn('<p>[[https://example.com/post|]]</p>')
+      const onInput = vi.fn()
+      editor.wysiwyg.addEventListener('input', onInput)
+      popup()._delBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+
+      expect(editor.wysiwyg.querySelector('.kuro-url-card')).toBeNull()
+      expect(onInput).toHaveBeenCalled()
+    })
+  })
+
+  // ── 閲覧モード (view) ───────────────────────────────────────────────────────
+
+  describe('view mode (閲覧・編集不可)', () => {
+    const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+
+    it('タブは 編集 / 閲覧 / HTML の 3 つ', () => {
+      const tabs = [...editor.root.querySelectorAll('.kuro-tab')].map((t) => t.getAttribute('data-tab'))
+      expect(tabs).toEqual(['wysiwyg', 'view', 'source'])
+    })
+
+    it('閲覧タブ → contenteditable を切り、編集アクションを無効化する', () => {
+      click(editor.tabView)
+      expect(editor.getMode()).toBe('view')
+      expect(editor.wysiwyg.getAttribute('contenteditable')).toBe('false')
+      expect(editor.tabView.classList.contains('kuro-tab--active')).toBe(true)
+      expect(editor.tabWysiwyg.classList.contains('kuro-tab--active')).toBe(false)
+      expect(editor._tabActionBtns.table.disabled).toBe(true)
+      expect(editor._mmenuBtns.media.disabled).toBe(true)
+      expect(editor._tabUndoBtn.disabled).toBe(true)
+
+      click(editor.tabWysiwyg)
+      expect(editor.wysiwyg.getAttribute('contenteditable')).toBe('true')
+      expect(editor._tabActionBtns.table.disabled).toBe(false)
+      expect(editor._mmenuBtns.media.disabled).toBe(false)
+    })
+
+    it('編集 ⇔ 閲覧 の往復で本文が失われない (sourceArea で上書きしない)', () => {
+      editor.setContent('<p>生きている本文</p>')
+      click(editor.tabView)
+      expect(editor.wysiwyg.textContent).toContain('生きている本文')
+      click(editor.tabWysiwyg)
+      expect(editor.getContent()).toBe('<p>生きている本文</p>')
+    })
+
+    it('閲覧モードのリンククリック → 遷移せず確認ダイアログが出る（編集ポップアップは出ない）', () => {
+      editor.setContent('<p>[[https://example.com/post|記事]]</p>')
+      click(editor.tabView)
+
+      const a = editor.wysiwyg.querySelector('a')
+      const e = new MouseEvent('click', { bubbles: true, cancelable: true })
+      a.dispatchEvent(e)
+
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.linkOpenDialog.isVisible).toBe(true)
+      expect(editor.linkOpenDialog._url.textContent).toContain('https://example.com/post')
+      expect(editor.linkOpenDialog._label.textContent).toBe('記事')
+      expect(editor.linkEditPopup.isVisible).toBe(false)
+    })
+
+    it('確認ダイアログ: 開く → window.open / キャンセル → 何もしない', () => {
+      const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+      editor.setContent('<p>[[https://example.com/post|記事]]</p>')
+      click(editor.tabView)
+
+      click(editor.wysiwyg.querySelector('a'))
+      click(editor.linkOpenDialog._cancelBtn)
+      expect(open).not.toHaveBeenCalled()
+      expect(editor.linkOpenDialog.isVisible).toBe(false)
+
+      click(editor.wysiwyg.querySelector('a'))
+      click(editor.linkOpenDialog._openBtn)
+      expect(open).toHaveBeenCalledWith('https://example.com/post', '_blank', 'noopener')
+      expect(editor.linkOpenDialog.isVisible).toBe(false)
+      open.mockRestore()
+    })
+
+    it('閲覧モードの URL カードも編集ポップアップではなく確認ダイアログ', () => {
+      editor.setContent('<p>[[https://example.com/post|]]</p>')
+      click(editor.tabView)
+
+      click(editor.wysiwyg.querySelector('.kuro-url-card'))
+      expect(editor.linkOpenDialog.isVisible).toBe(true)
+      expect(editor.linkEditPopup.isVisible).toBe(false)
+    })
+
+    it('閲覧モードでは選択しても書式ポップアップ (popm) が出ない', () => {
+      editor.setContent('<p>選択されるテキスト</p>')
+      click(editor.tabView)
+
+      const p = editor.wysiwyg.querySelector('p')
+      window.getSelection().setBaseAndExtent(p.firstChild, 0, p.firstChild, 5)
+      editor.wysiwyg.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+
+      expect(editor.popm.el.classList.contains('kuro-popm--visible')).toBe(false)
+    })
+
+    it('閲覧モードではコードブロックの textarea も編集不可 (readOnly)', () => {
+      editor.setContent('<pre class="kuro-code"><code>const a = 1</code></pre>')
+      const ta = editor.wysiwyg.querySelector('.kuro-code__area')
+      expect(ta).not.toBeNull()
+      expect(ta.readOnly).toBe(false)
+
+      click(editor.tabView)
+      expect(ta.readOnly).toBe(true)
+      click(editor.tabWysiwyg)
+      expect(ta.readOnly).toBe(false)
+    })
+
+    it('閲覧モード中に setContent されたコードブロックも readOnly で張られる', () => {
+      click(editor.tabView)
+      editor.setContent('<pre class="kuro-code"><code>const a = 1</code></pre>')
+      expect(editor.wysiwyg.querySelector('.kuro-code__area').readOnly).toBe(true)
+    })
+
+    it('閲覧モードでは挿入 API (_handleMMenu) を呼んでも本文が変わらない', () => {
+      editor.setContent('<p>Hello</p>')
+      click(editor.tabView)
+      editor._handleMMenu('table')
+      editor._handleMMenu('hr')
+      expect(editor.wysiwyg.querySelector('table')).toBeNull()
+      expect(editor.wysiwyg.querySelector('hr')).toBeNull()
+    })
+
+    it('閲覧モードではメディアのドロップを受け付けない', () => {
+      const onMediaUpload = vi.fn()
+      const ed = new KuroEditor(makeMount(), { initialContent: '<p>Hi</p>', onMediaUpload })
+      ed.setMode('view')
+
+      const file = new File(['x'], 'a.png', { type: 'image/png' })
+      const drop = new Event('drop', { bubbles: true, cancelable: true })
+      drop.dataTransfer = { files: [file], types: ['Files'] }
+      ed.wysiwyg.dispatchEvent(drop)
+
+      expect(onMediaUpload).not.toHaveBeenCalled()
+      expect(ed.wysiwyg.querySelector('figure')).toBeNull()
+      expect(drop.defaultPrevented).toBe(true)   // ブラウザにファイルを開かせもしない
+    })
+
+    it('閲覧モードでは画像ペーストも挿入しない', () => {
+      const onMediaUpload = vi.fn()
+      const ed = new KuroEditor(makeMount(), { initialContent: '<p>Hi</p>', onMediaUpload })
+      ed.setMode('view')
+
+      const file = new File(['x'], 'a.png', { type: 'image/png' })
+      const paste = new Event('paste', { bubbles: true, cancelable: true })
+      paste.clipboardData = { items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }] }
+      ed.wysiwyg.dispatchEvent(paste)
+
+      expect(onMediaUpload).not.toHaveBeenCalled()
+      expect(ed.wysiwyg.querySelector('figure')).toBeNull()
+    })
+
+    it('閲覧モードでは列幅ドラッグ (TableResizer) が始まらない', () => {
+      click(editor.tabView)
+      expect(editor.tableResizer._enabled).toBe(false)
+      click(editor.tabWysiwyg)
+      expect(editor.tableResizer._enabled).toBe(true)
+    })
+  })
+
   // ── URL カードの豪華表示 (onFetchUrlMeta / 2 段階表示) ───────────────────────
 
   describe('URL card enhancement (onFetchUrlMeta)', () => {
