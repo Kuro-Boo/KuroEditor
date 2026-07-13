@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.10.0'
+export const VERSION = '2.11.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -839,12 +839,11 @@ export function linkAtCaret(range, root) {
   const asLink = (n) =>
     (n?.nodeType === Node.ELEMENT_NODE && n.tagName === 'A') ? editable(n) : null
 
-  // ① Caret inside the link text
-  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node
-  const inside = el?.closest?.('a')
-  if (inside && root.contains(inside)) return editable(inside)
-
-  // ② Caret immediately after / before an adjacent <a>
+  // キャレットがリンクの【直前 / 直後】にあるときだけリンクとみなす。
+  // リンクの「内部」は対象外 (v2.11.0〜)。内部も拾っていた頃は、リンク文字列の
+  // 途中にキャレットがあるだけでポップアップが出てしまい、しかも位置はリンク要素
+  // 基準だったのでキャレットから遠くに浮いていた。リンクをクリックしたときは
+  // KuroEditor 側でキャレットをリンクの直後へ移してから開く（＝常に端に立つ）。
   let prev = null
   let next = null
   if (node.nodeType === Node.TEXT_NODE) {
@@ -4428,8 +4427,44 @@ export class LinkEditPopup {
     this.el.classList.remove('kuro-link-edit--visible')
   }
 
-  /** Below the link; flips above when there's no room at the bottom. */
-  _position(a) { this._positionAtRect(a.getBoundingClientRect()) }
+  /**
+   * キャレットのすぐ下（入らなければキャレットに重ならないよう、すぐ上）に出す。
+   * 基準はリンク要素ではなく【キャレット】。リンクは長いことがあり（URL カードは
+   * 1 行まるごと）、要素基準だとキャレットからかなり離れた位置に浮いて見づらい。
+   */
+  _position(a) { this._positionAtRect(this._anchorRect(a)) }
+
+  /** 位置決めの基準矩形: キャレット → （取れなければ）リンク要素 → 本文。 */
+  _anchorRect(a = null) {
+    const sel = window.getSelection()
+    if (sel?.rangeCount) {
+      const r = sel.getRangeAt(0)
+      if (this.editor.wysiwyg.contains(r.startContainer)) {
+        const rect = r.getBoundingClientRect()
+        if (rect.height) return rect
+        // 要素の境界（親, index）にキャレットがあると、ブラウザは 0 の矩形を返す
+        // （リンクが行末で、直後にテキストノードが無い場合など）。その場合は
+        // 直前の要素＝ふつうはリンク自身の【最後の行の右端】をキャレット位置とみなす。
+        const boundary = this._boundaryCaretRect(r)
+        if (boundary) return boundary
+      }
+    }
+    if (a?.isConnected) return a.getBoundingClientRect()
+    return this.editor.wysiwyg.getBoundingClientRect()
+  }
+
+  /** 要素境界のキャレット → 直前ノードの最終行の右端を「キャレットの矩形」として返す。 */
+  _boundaryCaretRect(range) {
+    const node = range.startContainer
+    if (node.nodeType !== Node.ELEMENT_NODE) return null
+    const prev = node.childNodes[range.startOffset - 1]
+    if (prev?.nodeType !== Node.ELEMENT_NODE) return null
+    const rects = prev.getClientRects?.()
+    const last = rects?.length ? rects[rects.length - 1] : prev.getBoundingClientRect()
+    if (!last?.height) return null
+    // 折り返しているリンクでも「最後の行の右端」= キャレットが実際に立つ位置
+    return { top: last.top, bottom: last.bottom, left: last.right, right: last.right, width: 0, height: last.height }
+  }
 
   /** 折りたたんだ range の矩形は 0x0 になることがある → 本文の矩形へフォールバック。 */
   _caretRect(range) {
@@ -4442,11 +4477,12 @@ export class LinkEditPopup {
     // Element is always laid out (hidden via opacity) → offsetWidth is live
     const w = this.el.offsetWidth  || 280
     const h = this.el.offsetHeight || 90
+    const GAP = 6   // キャレット（行）に重ならない程度の隙間
     // mmenu（下部バー）に食い込むと決定系ボタンが押せなくなるので、
     // 下限は viewport ではなく mmenu 上端を基準にする
     const limit = popupBottomLimit(this.editor?.mmenu)
-    let top = rect.bottom + 6
-    if (top + h > limit) top = rect.top - h - 6
+    let top = rect.bottom + GAP           // キャレットのちょっと下
+    if (top + h > limit) top = rect.top - h - GAP   // 入らなければちょっと上（重ねない）
     top = Math.max(4, Math.min(top, limit - h))
     const left = Math.max(4, Math.min(rect.left, window.innerWidth - w - 4))
     this.el.style.top  = `${top}px`
@@ -5976,9 +6012,14 @@ export class KuroEditor {
     // リンククリックの扱いはモードで分かれる。
     //  - 閲覧 ('view'): どのリンクも遷移させず、「新しいタブで開くか」を確認する
     //    （閲覧中に踏み外して記事から飛ばされるのを防ぐ）
-    //  - 編集 ('wysiwyg'): URL カード ([[URL|]]) は contenteditable=false なので
-    //    素のままだとブラウザのリンク遷移になってしまう。遷移させずリンク編集
-    //    ポップアップを開く（遷移はポップアップの「ジャンプ」ボタンで可能）。
+    //  - 編集 ('wysiwyg'): 遷移させず、【キャレットをリンクの直後へ移してから】
+    //    リンク編集ポップアップを開く。ポップアップはキャレット基準で位置決めする
+    //    ので、こうすると必ずリンクの末尾（＝クリックした要素のすぐそば）に出る。
+    //    リンク内部にキャレットが入った状態ではポップアップを出さない仕様
+    //    （linkAtCaret は直前 / 直後のみ）ため、この移動が必要。
+    //    URL カード ([[URL|]]) は contenteditable=false なので、そのままだと
+    //    ブラウザのリンク遷移になってしまう点でも preventDefault が要る。
+    //    （遷移はポップアップの「ジャンプ」ボタンで可能）
     // 公開ページでは JS が介在しないため通常のリンクとして遷移する。
     this.wysiwyg.addEventListener('click', (e) => {
       const a = e.target.closest?.('a')
@@ -5989,11 +6030,13 @@ export class KuroEditor {
         return
       }
       if (this._mode !== 'wysiwyg') return
-      const card = a.closest('.kuro-url-card')
-      if (card) {
-        e.preventDefault()
-        this.linkEditPopup.open(card)
-      }
+      // 編集対象外のリンクは従来どおり（カード型 [[[slug]]] とメディアのリンク
+      // ボタンは、そのままブラウザに遷移させる）
+      if (a.classList.contains('kuro-card-link') ||
+          a.classList.contains('kuro-media-open-link')) return
+      e.preventDefault()
+      this._caretAfter(a)
+      this.linkEditPopup.open(a)
     })
 
     // Remember caret before losing focus (for emoji insert after panel opens)
@@ -7735,6 +7778,31 @@ export class KuroEditor {
   _saveRange() {
     const sel = window.getSelection()
     if (sel?.rangeCount) this._savedRange = sel.getRangeAt(0).cloneRange()
+  }
+
+  /**
+   * キャレットを要素の直後（＝親の中でその要素の次の位置）へ置く。
+   * リンクをクリックしたときに使う: リンク内部にキャレットがあると
+   * ポップアップを出さない仕様なので、必ず「右隣」に立たせる。
+   * （removeAllRanges + addRange は使わない — プロジェクト方針）
+   */
+  _caretAfter(el) {
+    const parent = el.parentNode
+    if (!parent) return
+    const sel = window.getSelection()
+    if (!sel) return
+    this.wysiwyg.focus()
+    // 直後がテキストノードならその先頭に置く。要素の境界（親, index）に置くと
+    // ブラウザが返すキャレット矩形が 0 になり、ポップアップの位置決めが
+    // キャレット基準にならないため（＝リンク要素基準に落ちて遠くに出る）。
+    const next = el.nextSibling
+    if (next?.nodeType === Node.TEXT_NODE) {
+      sel.setBaseAndExtent(next, 0, next, 0)
+    } else {
+      const idx = Array.prototype.indexOf.call(parent.childNodes, el) + 1
+      sel.setBaseAndExtent(parent, idx, parent, idx)
+    }
+    this._saveRange()
   }
 
   _insertTable() {
