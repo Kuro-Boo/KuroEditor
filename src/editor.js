@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.11.2'
+export const VERSION = '2.12.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -848,7 +848,16 @@ export function linkAtCaret(range, root) {
   const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node
   const inside = el?.closest?.('a')
   if (inside && root.contains(inside)) {
-    return atEdgeOfNode(inside, node, offset) ? editable(inside) : null
+    const edge = edgeOfNode(inside, node, offset)
+    if (!edge) return null                       // リンク文字列の途中 → 出さない
+    if (edge === 'start') {
+      // リンクが 2 つ隣接していて、その境目にキャレットがある場合、ブラウザは
+      // 「後ろのリンクの内側先頭」に置くことがある。ユーザーから見れば
+      // キャレットの【前】にあるリンクが対象なので、そちらを優先する。
+      const before = asLink(inside.previousSibling)
+      if (before) return before
+    }
+    return editable(inside)
   }
 
   // <a> の外側にキャレットがある場合は、DOM 上で直前 / 直後のノードを見る
@@ -865,26 +874,27 @@ export function linkAtCaret(range, root) {
 }
 
 /**
- * キャレット (node, offset) が要素の内容の【先頭または末尾】にあるか。
+ * キャレット (node, offset) が要素の内容の【先頭 / 末尾】どちらの端にあるか。
  * 中身が入れ子（<a><b>text</b></a> など）でも効くよう、テキスト量で判定する。
  * @param {HTMLElement} el
  * @param {Node} node
  * @param {number} offset
- * @returns {boolean}
+ * @returns {'start'|'end'|null} 途中なら null
  */
-export function atEdgeOfNode(el, node, offset) {
+export function edgeOfNode(el, node, offset) {
   try {
     const head = document.createRange()
     head.selectNodeContents(el)
     head.setEnd(node, offset)
-    if (head.toString().length === 0) return true          // 先頭（＝見た目の左端）
+    if (head.toString().length === 0) return 'start'       // 先頭（＝見た目の左端）
 
     const tail = document.createRange()
     tail.selectNodeContents(el)
     tail.setStart(node, offset)
-    return tail.toString().length === 0                    // 末尾（＝見た目の右端）
+    if (tail.toString().length === 0) return 'end'         // 末尾（＝見た目の右端）
+    return null
   } catch {
-    return false
+    return null
   }
 }
 
