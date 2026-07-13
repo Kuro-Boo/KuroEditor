@@ -1049,9 +1049,6 @@
   .kuro-link-open__msg {
     @apply text-sm text-neutral-100;
   }
-  .kuro-link-open__label {
-    @apply text-sm font-semibold text-neutral-200 truncate;
-  }
   .kuro-link-open__url {
     @apply px-2 py-1.5 rounded-lg
            bg-neutral-900 border border-neutral-700

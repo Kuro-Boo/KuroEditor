@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.8.0'
+export const VERSION = '2.8.1'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -4434,9 +4434,7 @@ export class LinkOpenDialog {
       className: 'kuro-link-open__msg',
       html: 'このリンクを新しいタブで開きますか？',
     }))
-    this._label = createElement('div', { className: 'kuro-link-open__label' })
-    this._url   = createElement('div', { className: 'kuro-link-open__url' })
-    this._box.appendChild(this._label)
+    this._url = createElement('div', { className: 'kuro-link-open__url' })
     this._box.appendChild(this._url)
 
     const footer = createElement('div', { className: 'kuro-link-open__footer' })
@@ -4477,14 +4475,11 @@ export class LinkOpenDialog {
   get isVisible() { return this.el.classList.contains('kuro-link-open--visible') }
 
   /**
-   * @param {string} href  - 解決済みの遷移先 (a.href)
-   * @param {string} [label] - リンクの表示テキスト（カードなら空になりうる）
+   * @param {string} href - 解決済みの遷移先 (a.href)
    */
-  open(href, label = '') {
+  open(href) {
     if (!href) return
     this._href = href
-    this._label.textContent = label
-    this._label.hidden = !label
     this._url.textContent = href
     this.el.classList.add('kuro-link-open--visible')
     this._openBtn.focus()
@@ -5895,7 +5890,7 @@ export class KuroEditor {
       if (!a || !this.wysiwyg.contains(a)) return
       if (this._mode === 'view') {
         e.preventDefault()
-        this.linkOpenDialog.open(a.href, a.textContent.trim())
+        this.linkOpenDialog.open(a.href)
         return
       }
       if (this._mode !== 'wysiwyg') return
