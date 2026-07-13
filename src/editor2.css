@@ -804,15 +804,17 @@
     display: none;
   }
 
-  /* 右上の 🗑 — リンク削除。フィールドに被らないよう小さくコーナーに置く。
-     破壊的操作なので白ではなく赤寄りのピンクで示す */
+  /* カード表示チェック + 🗑 を 1 行に（🗑 は右端） */
+  .kuro-link-edit__card-row {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  /* 🗑 — リンク削除。破壊的操作なので白ではなく赤寄りのピンクで示す */
   .kuro-link-edit__delete {
-    @apply absolute flex items-center justify-center
+    @apply flex flex-shrink-0 items-center justify-center
            w-6 h-6 rounded-md
            text-rose-500 hover:text-rose-300 hover:bg-rose-500/20
            cursor-pointer transition-colors;
-    top: 0.25rem;
-    right: 0.25rem;
   }
 
   .kuro-link-edit__label {
@@ -848,13 +850,6 @@
 
   .kuro-link-edit__card-toggle input {
     @apply cursor-pointer accent-indigo-500;
-  }
-
-  /* 表題なし → カード表示の案内文 */
-  .kuro-link-edit__hint {
-    @apply px-0.5 text-neutral-500;
-    font-size: 10px;
-    line-height: 1.4;
   }
 
   /* ════════════════════════════════════════════════════════

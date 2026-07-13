@@ -9,7 +9,11 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.8.2'
+export const VERSION = '2.9.0'
+
+/** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
+const HIST_DEBOUNCE_MS = 400
+const HIST_LIMIT = 200
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -360,6 +364,18 @@ export function getSelectionRect() {
   const sel = getSelection()
   if (!sel || sel.rangeCount === 0) return null
   return sel.getRangeAt(0).getBoundingClientRect()
+}
+
+/**
+ * IME 変換中のキー入力か。
+ * 日本語入力では変換候補の確定に Enter を押すが、その keydown は
+ * 「文字を確定するための Enter」であって「Enter キーを押した」ではない。
+ * 素通しすると入力欄が閉じたり、本文で改行処理が走ったりする。
+ * isComposing が正、keyCode 229 は古い Safari / Android IME 向けの保険。
+ * @param {KeyboardEvent} e
+ */
+export function isImeComposing(e) {
+  return !!(e?.isComposing || e?.keyCode === 229)
 }
 
 /** Simple debounce helper */
@@ -4183,7 +4199,6 @@ export class LinkEditPopup {
       className: 'kuro-link-edit',
       attrs: { role: 'dialog', 'aria-label': 'リンク編集' },
     })
-    this._delBtn    = this._makeDeleteButton()
     this._textInput = this._makeField('表示テキスト')
     this._textRow   = this._textInput.closest('.kuro-link-edit__row')
     // 入力中は欄を消さない (_syncCardUi) ので、抜けた時点で実態に合わせ直す
@@ -4194,18 +4209,15 @@ export class LinkEditPopup {
     this._urlInput  = this._makeField('URL')
     // カード表示を明示するチェックボックス。ON = 表題なし [[URL|]] 記法へ、
     // OFF = 通常のテキストリンクへ切り替える(内部的には writeLinkParts に委譲)。
+    // チェックボックス自体が挙動を説明しているので、補足の説明文は置かない。
+    // 同じ行の右端に 🗑 (リンク削除) を並べる。
     this._cardToggle = this._makeCardToggle()
-    // 補足: チェックのほか「表示テキストを空」にしても同じくカード化する
-    this.el.appendChild(createElement('div', {
-      className: 'kuro-link-edit__hint',
-      html: '💡 「カード表示」にすると、URL から取得した情報（タイトル・favicon など）のカードで表示されます',
-    }))
     this._jumpBtn   = this._makeJumpButton()
     document.body.appendChild(this.el)
   }
 
   /**
-   * 右上の 🗑 — リンクを削除する。リンクだけを消した結果その行 (li / p / 見出し)
+   * 🗑 — リンクを削除する。リンクだけを消した結果その行 (li / p / 見出し)
    * が空になるなら行ごと畳む（出典リストのような「1 行 1 リンク」で空行が残らない）。
    * 文中のリンクを消したときは周囲のテキストを保ったままリンクだけが消える。
    */
@@ -4217,7 +4229,6 @@ export class LinkEditPopup {
     })
     // mousedown を潰さないと caret が動いて selectionchange → close() が先に走る
     btn.addEventListener('mousedown', (e) => { e.preventDefault(); this._deleteLink() })
-    this.el.appendChild(btn)
     return btn
   }
 
@@ -4294,6 +4305,8 @@ export class LinkEditPopup {
     })
     input.addEventListener('input', () => this._apply())
     input.addEventListener('keydown', (e) => {
+      // IME 変換確定の Enter でポップアップを閉じない（漢字を確定しただけ）
+      if (isImeComposing(e)) return
       if (e.key === 'Enter' || e.key === 'Escape') {
         e.preventDefault()
         this.close()
@@ -4309,10 +4322,17 @@ export class LinkEditPopup {
    * OFF→URL を表示テキストにしたテキストリンクへ戻す(どちらも _apply → writeLinkParts)。
    */
   _makeCardToggle() {
-    const row = createElement('label', { className: 'kuro-link-edit__card-toggle' })
+    // 1 行に [☐ カード表示（表題なし）] …… [🗑]。<label> の中に 🗑 を入れると
+    // クリックがチェックの切り替えになってしまうので、行は <div> にして
+    // チェック側だけを <label> で包む。
+    const row   = createElement('div', { className: 'kuro-link-edit__card-row' })
+    const label = createElement('label', { className: 'kuro-link-edit__card-toggle' })
     const cb = createElement('input', { attrs: { type: 'checkbox' } })
-    row.appendChild(cb)
-    row.appendChild(createElement('span', { html: 'カード表示（表題なし）' }))
+    label.appendChild(cb)
+    label.appendChild(createElement('span', { html: 'カード表示（表題なし）' }))
+    row.appendChild(label)
+    this._delBtn = this._makeDeleteButton()
+    row.appendChild(this._delBtn)
     cb.addEventListener('change', () => {
       const a = this.activeLink
       if (!a?.isConnected) return
@@ -4464,7 +4484,7 @@ export class LinkOpenDialog {
       if (!this._box.contains(e.target)) this.hide()
     })
     this._onKeydown = (e) => {
-      if (!this.isVisible) return
+      if (!this.isVisible || isImeComposing(e)) return
       if (e.key === 'Escape') { e.preventDefault(); this.hide() }
       else if (e.key === 'Enter') { e.preventDefault(); this._openBtn.click() }
     }
@@ -4583,6 +4603,7 @@ export class MediaDialog {
     })
 
     this._urlInput.addEventListener('keydown', (e) => {
+      if (isImeComposing(e)) return   // IME 変換確定の Enter で送信しない
       if (e.key === 'Enter') {
         e.preventDefault()
         const url = this._urlInput.value.trim()
@@ -4770,6 +4791,7 @@ export class ImageMenu {
     })
 
     this._linkInput.addEventListener('keydown', (e) => {
+      if (isImeComposing(e)) return   // IME 変換確定の Enter で確定しない
       if (e.key === 'Enter') { this._applyLink(this._linkInput.value.trim()); this._hideLinkPanel() }
       else if (e.key === 'Escape') { this._hideLinkPanel() }
     })
@@ -5050,6 +5072,7 @@ export class KuroEditor {
     this.setContent(this.options.initialContent)
     if (this.options.blockIds) this._initBlockIds()
     this._initDirtyTracking()
+    this._initHistory()
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -5866,8 +5889,9 @@ export class KuroEditor {
     // Content change → ToC + auto-list + special-link detection
     this.wysiwyg.addEventListener('input', (e) => {
       // コードブロック textarea の入力もここへバブルする(value 変更は
-      // MutationObserver に映らないので、dirty 検知はこの経路が担う)
+      // MutationObserver に映らないので、dirty 検知と undo 履歴はこの経路が担う)
       this._markDirty()
+      this._scheduleSnapshot()
       this.toc._update()
       this._detectAutoList(e)
       this._detectSpecialLink(e)
@@ -6362,6 +6386,9 @@ export class KuroEditor {
     // 閲覧モード: contenteditable=false でも Ctrl+B などのショートカットは
     // ここまで届く（そのまま通すと DOM 直操作の書式適用が走ってしまう）
     if (this._mode === 'view') return
+    // IME 変換中のキーは IME のもの。日本語入力の Enter (変換確定) で
+    // 引用/コールアウトの抜け出しや Tab のインデント処理を走らせない。
+    if (isImeComposing(e)) return
     // Dismiss image menu on any meaningful key — before input fires
     // (catches Delete / Backspace / Enter / printable chars; ignores pure modifiers)
     if (this.imageMenu.isVisible && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -6384,12 +6411,12 @@ export class KuroEditor {
         case 'i': e.preventDefault(); this._format('italic');    return
         case 'u': e.preventDefault(); this._format('underline'); return
         case 'z':
-          e.preventDefault()
-          e.shiftKey ? this._redo() : this._undo()
-          return
         case 'y':
+          // コードブロック (<textarea>) の中は、その textarea 自身の履歴に任せる。
+          // 本文全体を巻き戻すとコード編集がまとめて飛んでしまい直感に反する。
+          if (e.target.closest?.('.kuro-code-wrap')) return
           e.preventDefault()
-          this._redo()
+          ;(e.key.toLowerCase() === 'y' || e.shiftKey) ? this._redo() : this._undo()
           return
       }
     }
@@ -6514,6 +6541,9 @@ export class KuroEditor {
     for (const [tab, el] of [['wysiwyg', this.tabWysiwyg], ['view', this.tabView], ['source', this.tabSource]]) {
       el.classList.toggle('kuro-tab--active', tab === mode)
     }
+    // ソース編集の結果は WYSIWYG に戻った時点で 1 手として履歴に積む
+    // （_suspendDirty 中の書き換えは MutationObserver に映らないため明示的に）
+    if (from === 'source' && mode !== 'source') this._commitSnapshot()
 
     this.popm.hide()
     this.tableManager.deactivate()
@@ -7872,25 +7902,135 @@ export class KuroEditor {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // UNDO / REDO  (browser-provided history via execCommand)
+  // UNDO / REDO  (自前のスナップショット履歴)
   // ═══════════════════════════════════════════════════════════════════════════
   //
-  // Chrome / Safari / Firefox all maintain a per-element undo stack for
-  // contenteditable. execCommand('undo'/'redo') is stable enough for typical
-  // editing operations; complex DOM manipulations we do (table merge, callout
-  // wrap, etc.) may not be perfectly reversible, but a single undo always
-  // brings the user closer to the previous state.
+  // ブラウザ内蔵の履歴 (execCommand('undo')) は「ブラウザ自身が行った編集」
+  // しか覚えていない。このエディタはテーブル挿入・リンク削除・書式適用などを
+  // DOM 直接操作で行う (execCommand 禁止方針) ため、それらは内蔵履歴に一切
+  // 載らず、undo しても消えない / 関係ない過去のタイピングが巻き戻る、という
+  // 挙動になっていた。そこで本文のスナップショット (getContent() 相当の記法
+  // 文字列) を自前でスタックし、undo/redo はその復元として実装する。
+  //
+  // スナップショットの起点は _initDirtyTracking() の MutationObserver と
+  // input イベントの 2 系統 = dirty 検知と同じ経路なので、
+  // 「本文が変わったのに履歴に載らない操作」は原理的に存在しない。
+  // 連続タイピングは HIST_DEBOUNCE_MS の無操作でひとまとめに畳む。
+
+  _initHistory() {
+    this._hist        = [{ html: this.getContent(), caret: null }]
+    this._histIdx     = 0
+    this._histTimer   = null
+    this._histBusy    = false   // 復元中: 自分の書き換えを履歴に載せない
+  }
+
+  /** setContent など「新しい文書に差し替え」たときは履歴も作り直す。 */
+  _resetHistory() {
+    if (!this._hist) return     // 構築中 (初回 setContent) — _initHistory がこの後走る
+    clearTimeout(this._histTimer)
+    this._histTimer = null
+    this._hist    = [{ html: this.getContent(), caret: null }]
+    this._histIdx = 0
+  }
+
+  _scheduleSnapshot() {
+    if (this._histBusy || !this._hist) return
+    clearTimeout(this._histTimer)
+    this._histTimer = setTimeout(() => this._commitSnapshot(), HIST_DEBOUNCE_MS)
+  }
+
+  /** 保留中の変更を確定して 1 エントリ積む（変化が無ければ何もしない）。 */
+  _commitSnapshot() {
+    if (this._histBusy || !this._hist) return
+    clearTimeout(this._histTimer)
+    this._histTimer = null
+    // ソースモード中の getContent() は sourceArea の生テキスト。ソース編集は
+    // WYSIWYG に戻った時点で 1 手として積む (_setMode) ので、ここでは触らない
+    if (this._mode === 'source') return
+    const html = this.getContent()
+    if (html === this._hist[this._histIdx]?.html) return
+    this._hist.length = this._histIdx + 1        // redo 分を捨てる
+    this._hist.push({ html, caret: this._caretOffset() })
+    if (this._hist.length > HIST_LIMIT) this._hist.shift()
+    this._histIdx = this._hist.length - 1
+  }
 
   _undo() {
-    this.wysiwyg.focus()
-    try { document.execCommand('undo') } catch (_) {}
-    this._updateCharCount()
+    if (this._mode !== 'wysiwyg') return
+    this._commitSnapshot()      // 打ちかけのタイピングを 1 手として確定
+    if (this._histIdx <= 0) return
+    this._restoreSnapshot(this._hist[--this._histIdx])
   }
 
   _redo() {
-    this.wysiwyg.focus()
-    try { document.execCommand('redo') } catch (_) {}
-    this._updateCharCount()
+    if (this._mode !== 'wysiwyg') return
+    if (this._histIdx >= this._hist.length - 1) return
+    this._restoreSnapshot(this._hist[++this._histIdx])
+  }
+
+  _restoreSnapshot({ html, caret }) {
+    this._histBusy = true
+    try {
+      this._suspendDirty(() => {
+        this.wysiwyg.innerHTML = renderSpecialLinks(html, this.options.urlResolver)
+        this._initAllCodeBlocks()
+        if (this.options.blockIds) this._refreshBlockIds()
+      })
+      // 開きっぱなしのポップアップは復元後の DOM を指していないので畳む
+      this.popm.hide()
+      this.tableManager.deactivate()
+      this.tableInserter.deactivate()
+      this.imageMenu.deactivate()
+      this.roundboxMenu.deactivate()
+      this.linkEditPopup.close()
+
+      this.wysiwyg.focus()
+      this._restoreCaretOffset(caret)
+      this._enhanceUrlCards()
+      this.toc._doUpdate()
+      this._updateCharCount()
+    } finally {
+      this._histBusy = false
+    }
+    // undo/redo の結果は「保存されていない状態」— 保存ボタンは押せるままにする
+    this._markDirty()
+  }
+
+  /** キャレット位置を本文先頭からの文字数で表す（DOM 構造が変わっても復元できる）。 */
+  _caretOffset() {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return null
+    const r = sel.getRangeAt(0)
+    if (!this.wysiwyg.contains(r.startContainer)) return null
+    const pre = document.createRange()
+    pre.selectNodeContents(this.wysiwyg)
+    try { pre.setEnd(r.startContainer, r.startOffset) } catch { return null }
+    return pre.toString().length
+  }
+
+  _restoreCaretOffset(offset) {
+    const sel = window.getSelection()
+    if (!sel) return
+    if (offset == null) {
+      // 位置不明: 末尾に置く（何も選択していない状態を作らない）
+      const last = this.wysiwyg.lastChild
+      if (last) sel.setBaseAndExtent(last, 0, last, 0)
+      return
+    }
+    const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_TEXT)
+    let acc = 0
+    let node = null
+    while ((node = walker.nextNode())) {
+      const len = node.textContent.length
+      if (acc + len >= offset) {
+        const at = offset - acc
+        sel.setBaseAndExtent(node, at, node, at)
+        return
+      }
+      acc += len
+    }
+    const last = this.wysiwyg.lastChild
+    if (last) sel.setBaseAndExtent(last, 0, last, 0)
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -8008,6 +8148,7 @@ export class KuroEditor {
       if (this.options.blockIds) this._refreshBlockIds()
     })
     this._clearDirty()  // プログラムからの差し替えは「未保存の変更」ではない
+    this._resetHistory()     // 新しい文書 — それ以前の手には undo で戻さない
     this._enhanceUrlCards()  // URL カードの豪華表示を後追いで取得（非ブロッキング）
   }
 
@@ -8246,11 +8387,13 @@ export class KuroEditor {
   _initDirtyTracking() {
     this._dirty = false
     this._updateSaveButtons()
+    // 同じ MutationObserver が dirty 検知と undo 履歴の両方を駆動する。
+    // ポップアップ経由の書式適用・テーブル操作・リンク削除など input を
+    // 発火しない DOM 直接操作も、ここを通れば必ず履歴に載る。
     this._dirtyObserver = new MutationObserver((records) => {
-      if (this._dirty) return
-      for (const r of records) {
-        if (this._isContentMutation(r)) { this._markDirty(); return }
-      }
+      if (!records.some((r) => this._isContentMutation(r))) return
+      this._markDirty()         // 既に dirty なら no-op
+      this._scheduleSnapshot()
     })
     this._observeDirty()
   }
@@ -8328,6 +8471,7 @@ export class KuroEditor {
   destroy() {
     this._stopAutoSave()
     this._dirtyObserver?.disconnect()
+    clearTimeout(this._histTimer)
 
     // Remove document-level listeners registered in _bindEvents()
     document.removeEventListener('selectionchange', this._onDocSelChange)
