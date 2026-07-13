@@ -1,10 +1,17 @@
 node_modules/
 dist/
 coverage/
-docs/
-screen/
 .DS_Store
 *.local
+
+# 公開 main では追跡しない private 資産（リリーススクリプトが
+# KuroEditor_Private へ force-add してバックアップする）
+#   docs/   … 仕様書・告知資料
+#   deploy/ … Cloudflare Worker の設定 (kuroeditor-promotion)。インフラ情報なので非公開
+#   asset/  … ロゴ・スクリーンショット等の素材（旧 screen/）
+/docs/
+/deploy/
+/asset/
 
 # AI assistant local notes / memory (per-developer, do not commit)
 .claude/
