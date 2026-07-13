@@ -1,6 +1,6 @@
 {
   "name": "kuro-editor",
-  "version": "2.9.1",
+  "version": "2.9.2",
   "description": "WYSIWYG editor - Vanilla JS + HTML + Tailwind CSS, standalone embed",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -36,16 +36,16 @@
   },
   "scripts": {
     "dev": "vite",
-    "build:site": "tailwindcss -i scripts/landing-tailwind.css -o public/assets/compiled_tailwind_4_1_7.css --minify",
-    "build": "npm run build:site && vite build && rm -rf dist/src && node -e \"require('fs').copyFileSync('src/content.css','dist/kuro-content.css')\" && node scripts/emit-version.js",
+    "build:site": "tailwindcss -i build-scripts/landing-tailwind.css -o public/assets/compiled_tailwind_4_1_7.css --minify",
+    "build": "npm run build:site && vite build && rm -rf dist/src && node -e \"require('fs').copyFileSync('src/content.css','dist/kuro-content.css')\" && node build-scripts/emit-version.js",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "bup": "node scripts/bump.js && npm run build",
-    "bup:minor": "node scripts/bump.js minor && npm run build",
-    "bup:major": "node scripts/bump.js major && npm run build"
+    "bup": "node build-scripts/bump.js && npm run build",
+    "bup:minor": "node build-scripts/bump.js minor && npm run build",
+    "bup:major": "node build-scripts/bump.js major && npm run build"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.1",
