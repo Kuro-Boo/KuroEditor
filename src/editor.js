@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.9.5'
+export const VERSION = '2.10.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -221,6 +221,11 @@ const ICON = {
     `<rect x="4.8" y="0.8" width="4.4" height="3" rx="0.8"/>` +
     `<line x1="4.8" y1="7.2" x2="9.2" y2="7.2"/>` +
     `<line x1="4.8" y1="10" x2="7.8" y2="10"/>` +
+  `</svg>`,
+  // Link — 鎖の 2 リング（ツールバーのリンク挿入ボタン）
+  link: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">` +
+    `<path d="M6.5 9.5 a2.6 2.6 0 0 1 0-3.7l2.1-2.1 a2.6 2.6 0 0 1 3.7 3.7l-1 1"/>` +
+    `<path d="M9.5 6.5 a2.6 2.6 0 0 1 0 3.7l-2.1 2.1 a2.6 2.6 0 0 1-3.7-3.7l1-1"/>` +
   `</svg>`,
   // Pencil — 編集タブ (閲覧タブ = eye と対になる)
   pencil: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
@@ -4193,6 +4198,11 @@ export class LinkEditPopup {
   constructor(editor) {
     this.editor = editor
     this.activeLink = null
+    // ツールバーの 🔗 から開いた「新規リンク」状態で保持するキャレット位置。
+    // URL が入るまで <a> を作らないので、この間 activeLink は null のまま。
+    this._pendingRange = null
+    // 「ツールバーから作りかけのリンク」セッション中か（下記 _apply のカード判定用）
+    this._isNew        = false
     // 削除直後に隣のリンクで自動再オープンしないための抑止期限 (epoch ms)
     this._reopenBlockedUntil = 0
     this.el = createElement('div', {
@@ -4234,6 +4244,8 @@ export class LinkEditPopup {
 
   _deleteLink() {
     const a = this.activeLink
+    // まだ本文に差し込んでいない新規リンク → 何も消さずにキャンセル
+    if (!a && this._pendingRange) { this.close(); return }
     if (!a?.isConnected) return
     const wysiwyg = this.editor.wysiwyg
     if (!wysiwyg.contains(a)) return
@@ -4335,7 +4347,8 @@ export class LinkEditPopup {
     row.appendChild(this._delBtn)
     cb.addEventListener('change', () => {
       const a = this.activeLink
-      if (!a?.isConnected) return
+      // 新規リンク (pending) でもカード指定はできる。URL が入った時点でカードになる
+      if (!a?.isConnected && !this._pendingRange) return
       if (cb.checked) {
         this._textInput.value = ''                       // 空 → [[URL|]] カード
       } else if (!this._textInput.value.trim()) {
@@ -4345,7 +4358,8 @@ export class LinkEditPopup {
       this._apply()
       if (!cb.checked) this._textInput.focus()
       // 表示テキスト行の出し入れで高さが変わる → mmenu を避けたまま位置を取り直す
-      if (a.isConnected) this._position(a)
+      // (_apply が新規リンクを作った場合は activeLink が入れ替わっている)
+      if (this.activeLink?.isConnected) this._position(this.activeLink)
     })
     this.el.appendChild(row)
     return cb
@@ -4375,6 +4389,8 @@ export class LinkEditPopup {
   open(a) {
     const changedTarget = this.activeLink !== a
     this.activeLink = a
+    this._pendingRange = null
+    this._isNew        = false
     // Don't clobber fields while the user is typing in them
     if (changedTarget || !this.el.contains(document.activeElement)) {
       const { text, url } = readLinkParts(a)
@@ -4386,14 +4402,43 @@ export class LinkEditPopup {
     this.el.classList.add('kuro-link-edit--visible')
   }
 
+  /**
+   * ツールバーの 🔗 から開く「新規リンク」。キャレット位置（選択範囲）だけを覚え、
+   * <a> はまだ作らない。URL が入った時点で初めて生成して差し込む (_apply)。
+   * こうしないと、URL を入れずに閉じたときに空の <a> がゴミとして残ってしまう。
+   * 選択範囲があればその文字列を表示テキストの初期値にする。
+   * @param {Range} range
+   */
+  openNew(range) {
+    this.activeLink    = null
+    this._pendingRange = range.cloneRange()
+    this._isNew        = true
+    this._textInput.value = range.toString().trim()
+    this._urlInput.value  = ''
+    this._syncCardUi(false)
+    this._positionAtRect(this._caretRect(range))
+    this.el.classList.add('kuro-link-edit--visible')
+    this._urlInput.focus()   // まず URL を入れてもらう（無いとリンクが成立しない）
+  }
+
   close() {
-    this.activeLink = null
+    this.activeLink    = null
+    this._pendingRange = null
+    this._isNew        = false
     this.el.classList.remove('kuro-link-edit--visible')
   }
 
   /** Below the link; flips above when there's no room at the bottom. */
-  _position(a) {
-    const rect = a.getBoundingClientRect()
+  _position(a) { this._positionAtRect(a.getBoundingClientRect()) }
+
+  /** 折りたたんだ range の矩形は 0x0 になることがある → 本文の矩形へフォールバック。 */
+  _caretRect(range) {
+    const r = range.getBoundingClientRect()
+    if (r.width || r.height || r.top) return r
+    return this.editor.wysiwyg.getBoundingClientRect()
+  }
+
+  _positionAtRect(rect) {
     // Element is always laid out (hidden via opacity) → offsetWidth is live
     const w = this.el.offsetWidth  || 280
     const h = this.el.offsetHeight || 90
@@ -4410,24 +4455,48 @@ export class LinkEditPopup {
 
   /** Auto-save: push current field values into the link on every keystroke. */
   _apply() {
-    const a = this.activeLink
-    if (!a?.isConnected) return
-    const ok = writeLinkParts(
-      a,
-      this._textInput.value.trim(),
-      this._urlInput.value.trim(),
-      this.editor.options.urlResolver,
-    )
-    // Notify the editor (ToC / auto-save) exactly like normal typing would
-    if (ok) {
-      this.editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
-      const isCard = a.classList.contains('kuro-url-card')
-      this._syncCardUi(isCard) // 表示テキストの手入力で空↔非空になった時もチェックを追従
-      // 表示テキストを空にして URL カード化した場合は豪華表示を後追い取得。
-      // writeLinkParts が同じ <a> を作り替える (data-meta-state は付かない) ので
-      // _enhanceUrlCards が新しいカードとして処理する。
-      if (isCard) this.editor._enhanceUrlCards()
+    const text = this._textInput.value.trim()
+    const url  = this._urlInput.value.trim()
+
+    let a = this.activeLink
+    const fresh = !a
+    if (fresh) {
+      // 新規リンク: URL が入るまで本文には何も差し込まない
+      if (!this._pendingRange || !url) return
+      // data-kuro-wiki を付けておくと writeLinkParts が kuro リンクとして
+      // 正しい記法（[[url]] / [[url|text]] / [[url|]]）を書き込んでくれる
+      a = createElement('a', { attrs: { 'data-kuro-wiki': '' } })
+    } else if (!a.isConnected) {
+      return
     }
+
+    // 「表示テキストが空 = カード」は【既存リンクを編集しているとき】の仕様。
+    // ツールバーから作りかけのリンクにこれを適用すると、URL を打ち始めた瞬間
+    // （まだ題名を打っていないだけなのに）カード化し、カード中は隠れる仕様の
+    // 表示テキスト欄が消えて題名を入力できなくなる。新規セッション中は
+    // 空欄なら URL 自体を表示テキストとして扱い、カード化はチェックボックスで明示させる。
+    const effText = (this._isNew && !text && !this._cardToggle?.checked) ? url : text
+
+    const ok = writeLinkParts(a, effText, url, this.editor.options.urlResolver)
+    if (!ok) return   // 記法を壊す入力 → 本文には触らない（新規なら差し込まない）
+
+    if (fresh) {
+      const range = this._pendingRange
+      range.deleteContents()          // 選択していた文字はリンクに置き換わる
+      range.insertNode(a)
+      this._pendingRange = null
+      this.activeLink    = a
+    }
+
+    // Notify the editor (ToC / auto-save) exactly like normal typing would
+    this.editor.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+    const isCard = a.classList.contains('kuro-url-card')
+    this._syncCardUi(isCard) // 表示テキストの手入力で空↔非空になった時もチェックを追従
+    // 表示テキストを空にして URL カード化した場合は豪華表示を後追い取得。
+    // writeLinkParts が同じ <a> を作り替える (data-meta-state は付かない) ので
+    // _enhanceUrlCards が新しいカードとして処理する。
+    if (isCard) this.editor._enhanceUrlCards()
+    if (fresh) this._position(a)   // 実体ができたので、その <a> に位置を合わせ直す
   }
 
   destroy() { this.el.remove() }
@@ -5144,6 +5213,7 @@ export class KuroEditor {
       { label: ICON.code,     id: 'code',  title: 'コード' },
       { label: ICON.hr,       id: 'hr',       title: '水平線' },
       { label: ICON.roundbox, id: 'roundbox', title: '角丸ボックス' },
+      { label: ICON.link,     id: 'link',     title: 'リンク' },
     ]
 
     this._mmenuBtns = {}
@@ -5253,6 +5323,7 @@ export class KuroEditor {
       { label: ICON.code,  id: 'code',  title: 'コード' },
       { label: ICON.hr,       id: 'hr',       title: '水平線' },
       { label: ICON.roundbox, id: 'roundbox', title: '角丸ボックス' },
+      { label: ICON.link,     id: 'link',     title: 'リンク（カーソル位置に挿入）' },
     ]
     this._tabActionBtns = {}
     for (const { label, id, title } of tabActionDefs) {
@@ -7655,6 +7726,7 @@ export class KuroEditor {
       case 'table':    this._insertTable();     break
       case 'code':     this._insertCodeBlock(); break
       case 'hr':       this._insertHR();        break
+      case 'link':     this._insertLink();      break
       case 'media':    this._promptMedia();     break
       case 'roundbox': this._insertRoundbox();  break
     }
@@ -8052,6 +8124,32 @@ export class KuroEditor {
   _insertHR() {
     this.wysiwyg.focus()
     execFormat('insertHTML', '<hr class="kuro-hr"><p><br></p>')
+  }
+
+  /**
+   * ツールバーの 🔗 — カーソル位置に新しいリンクを作る。
+   * ここでは <a> をまだ挿入せず、リンク編集ポップアップを「新規」状態で開くだけ。
+   * URL が入った時点で初めて本文へ差し込むので、入力せずに閉じても何も残らない。
+   * 範囲選択していれば、その文字列が表示テキストの初期値になる。
+   */
+  _insertLink() {
+    // ツールバーのボタンを押した時点で wysiwyg は blur 済み。
+    // blur 時に保存した range（_savedRange）を使ってキャレット位置を復元する。
+    const sel = window.getSelection()
+    const live = sel?.rangeCount ? sel.getRangeAt(0) : null
+    let range = (live && this.wysiwyg.contains(live.startContainer))
+      ? live.cloneRange()
+      : this._savedRange?.cloneRange() ?? null
+
+    if (!range || !this.wysiwyg.contains(range.startContainer)) {
+      // 一度も本文に触っていない → 末尾に置く
+      const last = this.wysiwyg.lastChild
+      if (!last) return
+      range = document.createRange()
+      range.selectNodeContents(last)
+      range.collapse(false)
+    }
+    this.linkEditPopup.openNew(range)
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
