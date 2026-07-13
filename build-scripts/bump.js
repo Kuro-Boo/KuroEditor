@@ -10,10 +10,10 @@
  *   3. src/editor.js    → export const VERSION = 'x.y.z'
  *
  * Usage:
- *   node scripts/bump.js           # patch  0.3.1 → 0.3.2
- *   node scripts/bump.js minor     # minor  0.3.1 → 0.4.0
- *   node scripts/bump.js major     # major  0.3.1 → 1.0.0
- *   node scripts/bump.js sync      # sync only — no increment (fixes drift between files)
+ *   node build-scripts/bump.js           # patch  0.3.1 → 0.3.2
+ *   node build-scripts/bump.js minor     # minor  0.3.1 → 0.4.0
+ *   node build-scripts/bump.js major     # major  0.3.1 → 1.0.0
+ *   node build-scripts/bump.js sync      # sync only — no increment (fixes drift between files)
  *
  * npm aliases (package.json):
  *   npm run bup           → patch
