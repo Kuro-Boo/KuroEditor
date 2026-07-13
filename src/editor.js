@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.11.1'
+export const VERSION = '2.11.2'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -839,11 +839,19 @@ export function linkAtCaret(range, root) {
   const asLink = (n) =>
     (n?.nodeType === Node.ELEMENT_NODE && n.tagName === 'A') ? editable(n) : null
 
-  // キャレットがリンクの【直前 / 直後】にあるときだけリンクとみなす。
-  // リンクの「内部」は対象外 (v2.11.0〜)。内部も拾っていた頃は、リンク文字列の
-  // 途中にキャレットがあるだけでポップアップが出てしまい、しかも位置はリンク要素
-  // 基準だったのでキャレットから遠くに浮いていた。リンクをクリックしたときは
-  // KuroEditor 側でキャレットをリンクの直後へ移してから開く（＝常に端に立つ）。
+  // キャレットがリンクの【左端 / 右端】にあるときだけリンクとみなす（内部は対象外）。
+  //
+  // ここでいう「端」は【見た目の位置】であって DOM 上の隣接ではない。
+  // ブラウザはリンクのすぐ右をクリックすると、キャレットを <a> の外ではなく
+  // 【内側テキストの末尾】に置く（左も同様に内側の先頭）。DOM の隣接だけを見ると
+  // 「リンクの右にキャレットがあるのにポップアップが出ない」ことになる。
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node
+  const inside = el?.closest?.('a')
+  if (inside && root.contains(inside)) {
+    return atEdgeOfNode(inside, node, offset) ? editable(inside) : null
+  }
+
+  // <a> の外側にキャレットがある場合は、DOM 上で直前 / 直後のノードを見る
   let prev = null
   let next = null
   if (node.nodeType === Node.TEXT_NODE) {
@@ -854,6 +862,30 @@ export function linkAtCaret(range, root) {
     next = node.childNodes[offset] ?? null
   }
   return asLink(prev) ?? asLink(next)
+}
+
+/**
+ * キャレット (node, offset) が要素の内容の【先頭または末尾】にあるか。
+ * 中身が入れ子（<a><b>text</b></a> など）でも効くよう、テキスト量で判定する。
+ * @param {HTMLElement} el
+ * @param {Node} node
+ * @param {number} offset
+ * @returns {boolean}
+ */
+export function atEdgeOfNode(el, node, offset) {
+  try {
+    const head = document.createRange()
+    head.selectNodeContents(el)
+    head.setEnd(node, offset)
+    if (head.toString().length === 0) return true          // 先頭（＝見た目の左端）
+
+    const tail = document.createRange()
+    tail.selectNodeContents(el)
+    tail.setStart(node, offset)
+    return tail.toString().length === 0                    // 末尾（＝見た目の右端）
+  } catch {
+    return false
+  }
 }
 
 /**
