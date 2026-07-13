@@ -804,11 +804,12 @@
     display: none;
   }
 
-  /* 右上の 🗑 — リンク削除。フィールドに被らないよう小さくコーナーに置く */
+  /* 右上の 🗑 — リンク削除。フィールドに被らないよう小さくコーナーに置く。
+     破壊的操作なので白ではなく赤寄りのピンクで示す */
   .kuro-link-edit__delete {
     @apply absolute flex items-center justify-center
            w-6 h-6 rounded-md
-           text-neutral-400 hover:text-white hover:bg-red-600/80
+           text-rose-500 hover:text-rose-300 hover:bg-rose-500/20
            cursor-pointer transition-colors;
     top: 0.25rem;
     right: 0.25rem;
