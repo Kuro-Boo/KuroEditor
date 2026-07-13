@@ -23,18 +23,17 @@
 **コンテンツの見た目を「単一の正」に集約しました。** 編集中とサイト公開時の表示を構造的に一致（WYSIWYG）させ、将来の乖離を防ぎます。
 
 - **`src/content.css`** … 編集されるコンテンツの見た目（見出し・本文・引用・リスト・リンク・hr など）を**プレーンCSSで一元管理**。公開ページはこのファイルを読みます。色は `--kuro-*` 変数（既定はテーマ非依存／`inherit`）。
-- **`src/editor2.css`**（旧 `editor.css` をリネーム）… **エディタUI（ツールバー・メニュー等の枠）専用**。`@import "tailwindcss"` ＋ `@import "./content.css"` ＋ `.kuro-content { --kuro-*: <ダーク値> }` のみ。**コンテンツの見た目ルールは持ちません**。
-- `src/main.js` は `editor2.css` を読み込みます。
+- **`src/editor.css`** … **エディタUI（ツールバー・メニュー等の枠）専用**。`@import "tailwindcss"` ＋ `@import "./content.css"` ＋ `.kuro-content { --kuro-*: <ダーク値> }` のみ。**コンテンツの見た目ルールは持ちません**。
+- `src/main.js` は `editor.css` を読み込みます。
 
 **重要（公開側）**：見出し等はテンプレートの Tailwind preflight で素タグが小さくなるため、content.css は `.kuro-content` 配下に加え、**KuroEditor が見出しに付与する `id="kuro-h-*"`** にもスコープして公開ページで効くようにしています。
 
 ### 🛟 問題が出たら（旧CSSへフォールバック）
 v2 で表示崩れ等が起きた場合の戻し方：
 
-- **推奨（完全復元）**：組込み側（例: KuroCMS）で KuroEditor を **v1.0.8 にピン**する。v1.0.8 の `dist/`（旧 `editor.css` ＋ 旧 `content.css`）をそのまま使うので、確実に元の表示へ戻ります。
-- **暫定（その場で）**：`src/main.js` の import を `editor2.css` → `editor.css` に戻して `npm run build`。※ただし `content.css` は v2 で更新されているため、これは部分的な復元です（完全復元は v1.0.8 ピンを使用）。
+- **推奨（完全復元）**：組込み側（例: KuroCMS）で KuroEditor を **v1.0.8 にピン**する。v1.0.8 の `dist/`（旧モノリシック `editor.css` ＋ 旧 `content.css`）をそのまま使うので、確実に元の表示へ戻ります。
 
-> 旧 `editor.css` は削除せず**フォールバック用に残して**あります。完全な原状回復が必要な場合は v1.0.8 を利用してください。
+> 旧モノリシック `editor.css` は一時期フォールバック用にツリー内へ残していましたが、**削除済み**です（必要なら tag v1.0.8 / git 履歴から復元可能）。現在の `src/editor.css` は v2 の chrome 専用スタイルシート（旧 `editor2.css` をリネーム）です。
 
 ---
 
@@ -305,7 +304,8 @@ npm run build    # dist/ にビルド
 ```
 src/
   editor.js     # KuroEditor 本体（クラス + ユーティリティ）
-  editor.css    # Tailwind CSS スタイル
+  editor.css    # エディタ UI (chrome) のスタイル。content.css を import
+  content.css   # 本文のスタイル（公開ページと共有）
   main.js       # デモページのエントリ
   index.html    # 開発用デモ
 tests/          # Vitest テスト

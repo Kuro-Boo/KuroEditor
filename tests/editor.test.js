@@ -227,6 +227,32 @@ describe('KuroEditor', () => {
       expect(editor.isDirty()).toBe(false)
       expect(editor.saveBtn.disabled).toBe(true)
     })
+
+    // コードブロックの <textarea> は stopPropagation で wysiwyg へ input を
+    // 流さず、value 変更は MutationObserver にも映らない。dirty 検知は
+    // _wireCodeBlock 内の専用リスナーが直接駆動する。
+    it('code-block textarea input marks dirty (does not rely on bubbling)', () => {
+      editor.setContent('<pre class="kuro-code"><code>x</code></pre>')
+      const ta = editor.wysiwyg.querySelector('.kuro-code__area')
+      expect(ta).not.toBeNull()
+      expect(editor.isDirty()).toBe(false)
+
+      // 念のため: textarea の input は wysiwyg までバブルしない（仕様）
+      const leaked = vi.fn()
+      editor.wysiwyg.addEventListener('input', leaked)
+      ta.value = 'edited code'
+      ta.dispatchEvent(new Event('input', { bubbles: true }))
+      expect(leaked).not.toHaveBeenCalled()
+
+      expect(editor.isDirty()).toBe(true)
+      expect(editor.saveBtn.disabled).toBe(false)
+    })
+
+    it('setContent (load) with a code block does not mark dirty', async () => {
+      editor.setContent('<pre class="kuro-code"><code>loaded</code></pre>')
+      await new Promise((r) => setTimeout(r, 0))
+      expect(editor.isDirty()).toBe(false)
+    })
   })
 
   // ── Heading-safe block merge (Backspace / Delete) ──────────────────────────
@@ -1088,6 +1114,19 @@ describe('KuroEditor', () => {
 
       editor._undo()
       expect(editor.saveBtn.disabled).toBe(false)
+    })
+
+    it('コードブロック textarea の編集も履歴に載り undo で戻る', () => {
+      editor.setContent('<p>base</p><pre class="kuro-code"><code>before</code></pre>')
+      const ta = editor.wysiwyg.querySelector('.kuro-code__area')
+      ta.value = 'after'
+      ta.dispatchEvent(new Event('input', { bubbles: true }))
+      commit()
+      expect(editor.getContent()).toContain('after')
+
+      editor._undo()
+      expect(editor.getContent()).toContain('before')
+      expect(editor.getContent()).not.toContain('after')
     })
 
     it('閲覧モードでは undo / redo が効かない', () => {

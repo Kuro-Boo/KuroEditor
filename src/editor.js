@@ -1,6 +1,8 @@
 /**
- * KuroEditor v0.2.0
- * Vanilla JS WYSIWYG editor — Tailwind CSS, dark mode only, single-file embed target.
+ * KuroEditor
+ * Vanilla JS WYSIWYG editor — Tailwind CSS, single-file embed target.
+ * The canonical version lives in the VERSION constant below (synced by
+ * build-scripts/bump.js from the root VERSION file).
  *
  * Repo: https://github.com/Kuro-Boo/KuroEditor
  */
@@ -50,9 +52,6 @@ const COLOR_GROUPS = [
     '#e9d5ff', '#c084fc', '#a855f7',
   ]},
 ]
-/** Flat preset list (backward compat for any external use) */
-const PRESET_COLORS = COLOR_GROUPS.flatMap(g => g.colors)
-
 /** Font size presets (% of base).  100% = standard = highlighted as baseline. */
 const FONT_SIZE_OPTIONS = [
   { label: '75%',  value: '75%'  },
@@ -1389,10 +1388,6 @@ export function findCell(node) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// POPUP MENU (popm) — shown above/below selection
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // COLOR PICKER — shared color-selection UI used everywhere a color is chosen
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1549,6 +1544,10 @@ export class ColorPicker {
     try { localStorage.setItem('kuro-custom-colors', JSON.stringify(colors)) } catch {}
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POPUP MENU (popm) — shown above/below selection
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export class PopupMenu {
   /**
@@ -2329,7 +2328,6 @@ export class PopupMenu {
     // ── Marker color section (full-width row embedded in the panel) ───────
     this._olMarkerColorSection = createElement('div', { className: 'kuro-marker-color-section' })
     const olPicker = new ColorPicker({
-      defaultCustomColor: '#ef4444',
       onPick: (color) => {
         this._activeOLNode?.style.setProperty('--kuro-marker-color', color)
         this._olMarkerColorBtn.style.color = color
@@ -2341,7 +2339,6 @@ export class PopupMenu {
         this._olMarkerColorSection.classList.remove('kuro-marker-color-section--visible')
       },
     })
-    this._olMarkerColorInput = olPicker._customInput
     this._olMarkerColorSection.appendChild(olPicker.el)
     this._listStylePanel.appendChild(this._olMarkerColorSection)
 
@@ -2406,7 +2403,6 @@ export class PopupMenu {
       } else {
         const markerColor = olNode.style.getPropertyValue('--kuro-marker-color') || ''
         this._olMarkerColorBtn.style.color = markerColor || ''
-        if (this._olMarkerColorInput && markerColor) this._olMarkerColorInput.value = markerColor
       }
     }
   }
@@ -2471,7 +2467,6 @@ export class PopupMenu {
     // ── Marker color section ──────────────────────────────────────────────
     this._ulMarkerColorSection = createElement('div', { className: 'kuro-marker-color-section' })
     const ulPicker = new ColorPicker({
-      defaultCustomColor: '#ef4444',
       onPick: (color) => {
         this._activeULNode?.style.setProperty('--kuro-marker-color', color)
         this._ulMarkerColorBtn.style.color = color
@@ -2483,7 +2478,6 @@ export class PopupMenu {
         this._ulMarkerColorSection.classList.remove('kuro-marker-color-section--visible')
       },
     })
-    this._ulMarkerColorInput = ulPicker._customInput
     this._ulMarkerColorSection.appendChild(ulPicker.el)
     this._ulStylePanel.appendChild(this._ulMarkerColorSection)
 
@@ -2546,7 +2540,6 @@ export class PopupMenu {
       } else {
         const markerColor = ulNode.style.getPropertyValue('--kuro-marker-color') || ''
         this._ulMarkerColorBtn.style.color = markerColor || ''
-        if (this._ulMarkerColorInput && markerColor) this._ulMarkerColorInput.value = markerColor
       }
     }
   }
@@ -2701,10 +2694,6 @@ export class PopupMenu {
     this._updateCalloutActive()
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TABLE MANAGER — floating toolbar when cursor is inside a table
-// ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROUNDBOX MENU  (floating kmenu — appears when cursor is inside .kuro-roundbox)
@@ -2906,6 +2895,10 @@ export class RoundboxMenu {
   destroy() { this.el.remove() }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// TABLE MANAGER — floating toolbar when cursor is inside a table
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export class TableManager {
   /** @param {KuroEditor} editor */
   constructor(editor) {
@@ -3079,7 +3072,6 @@ export class TableManager {
     }
   }
 
-  /** Show toolbar anchored above (or below) the cursor position. */
   /** Show toolbar anchored above (or below) the cursor position. */
   activate(table) {
     this.activeTable = table
@@ -3652,6 +3644,8 @@ export class TableInserter {
     this.colBorderBtn.style.display = 'none'
     this._pendingRowIdx = null
     this._pendingColIdx = null
+    this._pendingRowBorderIdx = null
+    this._pendingColBorderIdx = null
   }
 
   _insertRow(index) {
@@ -3760,7 +3754,6 @@ export class LinePopupMenu {
     // Picking a color re-applies the last-chosen style with the new color
     // (so user can change just the color without re-clicking a style).
     this._colorPicker = new ColorPicker({
-      defaultCustomColor: '#9ca3af',
       onPick: (color) => {
         this._currentColor = color
         if (this._lastBorder) this._applyStyle(this._lastBorder)
@@ -4206,11 +4199,21 @@ export class EmojiPanel {
     this.el.appendChild(grid)
   }
 
-  /** Show panel anchored below `anchorEl`. */
+  /**
+   * Show panel anchored below `anchorEl` — flipped above when it would run off
+   * the bottom of the viewport (the anchor may be an mmenu button that floats
+   * at the very bottom of the screen; below-anchor would be entirely off-screen).
+   */
   show(anchorEl) {
     const rect = anchorEl.getBoundingClientRect()
-    this.el.style.top  = `${rect.bottom + 8}px`
-    this.el.style.left = `${Math.max(4, rect.left)}px`
+    // Element is always laid out (hidden via opacity) → offsetHeight is live
+    const h = this.el.offsetHeight || 288
+    let top = rect.bottom + 8
+    if (top + h > window.innerHeight - 4) top = Math.max(4, rect.top - h - 8)
+    const w = this.el.offsetWidth || 320
+    const left = Math.max(4, Math.min(rect.left, window.innerWidth - w - 4))
+    this.el.style.top  = `${top}px`
+    this.el.style.left = `${left}px`
     this.el.classList.add('kuro-emoji-panel--visible')
   }
 
@@ -4697,12 +4700,14 @@ export class MediaDialog {
    *   onURL:         (url: string) => void,
    *   onFile:        (file: File)  => void,
    *   hasFileUpload: boolean,
+   *   editor?:       KuroEditor,   // mmenu 回避の位置決めに使う（省略可）
    * }} opts
    */
-  constructor({ onURL, onFile, hasFileUpload = false }) {
+  constructor({ onURL, onFile, hasFileUpload = false, editor = null }) {
     this.onURL         = onURL
     this.onFile        = onFile
     this.hasFileUpload = hasFileUpload
+    this._editor       = editor
     this.el = createElement('div', {
       className: 'kuro-media-dialog',
       attrs: { role: 'dialog', 'aria-label': 'メディア挿入' },
@@ -4812,6 +4817,9 @@ export class MediaDialog {
     } else {
       top = Math.max(4, (window.innerHeight - popH) / 2)
     }
+    // mmenu（下部バー）に食い込むと決定系ボタンが押せなくなるのでクランプ
+    const limit = popupBottomLimit(this._editor?.mmenu)
+    if (top + popH > limit) top = Math.max(4, limit - popH)
 
     // ── Horizontal ───────────────────────────────────────────────────────────
     let left
@@ -5105,7 +5113,11 @@ export class ImageMenu {
       const rect  = figureEl.getBoundingClientRect()
       const menuH = this.el.offsetHeight || 72
       const menuW = this.el.offsetWidth  || 320
-      const top   = Math.max(4, rect.top - menuH - 6)
+      let top     = Math.max(4, rect.top - menuH - 6)
+      // 図が画面下部にあるとき、mmenu（下部バー）に食い込むとボタンが
+      // 押せなくなる — 下限は viewport ではなく mmenu の上端でクランプ
+      const limit = popupBottomLimit(this.editor?.mmenu)
+      if (top + menuH > limit) top = Math.max(4, limit - menuH)
       // Left-align with the figure, clamped to viewport
       const left  = Math.min(Math.max(4, rect.left), window.innerWidth - menuW - 4)
       this.el.style.top  = `${top}px`
@@ -5145,6 +5157,10 @@ export class KuroEditor {
    *                                // テーブル操作）も MutationObserver 経由で漏れなく通知する。
    *                                // ホストの保存 UI はこれを購読すること（input 監視では取りこぼす）。
    *   urlResolver?: (slug: string) => string,
+   *   onMediaUpload?: (file: File) => Promise<string>,
+   *                                // 画像/動画/音声のアップロード処理。mid を返すと [[mid]] で
+   *                                // 挿入される。未指定ならファイル選択ボタンは非表示。
+   *   autoSaveInterval?: number,   // 自動保存の間隔 (ms)。既定 30000。
    *   modalToolbar?: HTMLElement,  // host element to mount the modal menu bar into (slot mode)
    *   modalMenu?: boolean,         // false でモーダルメニュー(mmenu)を表示しない（既定 true）。
    *                                // 要素自体は生成されるので this.mmenu 参照は従来どおり有効。
@@ -5836,6 +5852,7 @@ export class KuroEditor {
       hasFileUpload: !!this.options.onMediaUpload,
       onURL:  (url)  => this._insertMediaURL(url),
       onFile: (file) => this._insertMediaFile(file),
+      editor: this,
     })
   }
 
@@ -6061,8 +6078,9 @@ export class KuroEditor {
 
     // Content change → ToC + auto-list + special-link detection
     this.wysiwyg.addEventListener('input', (e) => {
-      // コードブロック textarea の入力もここへバブルする(value 変更は
-      // MutationObserver に映らないので、dirty 検知と undo 履歴はこの経路が担う)
+      // コードブロック textarea の入力はここへは届かない（_wireCodeBlock が
+      // stopPropagation する）。textarea の dirty 検知 + undo 履歴は
+      // _wireCodeBlock 内の専用 input リスナーが直接駆動する。
       this._markDirty()
       this._scheduleSnapshot()
       this.toc._update()
@@ -6420,7 +6438,7 @@ export class KuroEditor {
     // a .kuro-code block creates an invalid <ul> inside an inline <code> element;
     // the browser then "fixes" the nesting by placing the second <li> as a direct
     // child of <code>, which makes it inherit the green-300 text color.  Guard here.
-    if (node.parentElement?.closest('.kuro-code')) return
+    if (node.parentElement?.closest('.kuro-code-wrap, .kuro-code')) return
 
     const text   = node.textContent
     const offset = range.startOffset
@@ -6456,7 +6474,7 @@ export class KuroEditor {
     const range = sel.getRangeAt(0)
     const node  = range.startContainer
     if (node.nodeType !== Node.TEXT_NODE) return
-    if (node.parentElement?.closest('.kuro-code')) return
+    if (node.parentElement?.closest('.kuro-code-wrap, .kuro-code')) return
 
     const text   = node.textContent
     const offset = range.startOffset
@@ -7947,6 +7965,17 @@ export class KuroEditor {
       ta.addEventListener(evt, stop)
     })
 
+    // ── Dirty 検知 + undo 履歴はここで直接駆動する ─────────────────────────
+    // textarea の value 変更は DOM 変異ではないので MutationObserver に映らず、
+    // input イベントも上の stopPropagation で wysiwyg のハンドラへ届かない。
+    // （sync() の style.height 書き換えが偶然 observer に拾われて動いていたが、
+    //   仕組みとして頼れないためここで明示する。wiring 時の sync() 直呼びは
+    //   input イベントを経由しないので、読込直後に dirty になることはない）
+    ta.addEventListener('input', () => {
+      this._markDirty()
+      this._scheduleSnapshot()
+    })
+
     // ── Delete button ──────────────────────────────────────────────────────
     const delBtn = wrap.querySelector('.kuro-code__del')
     if (delBtn) {
@@ -8473,11 +8502,11 @@ export class KuroEditor {
 
   /**
    * Switch edit mode.
-   * @param {'wysiwyg'|'source'} mode
+   * @param {'wysiwyg'|'view'|'source'} mode
    */
   setMode(mode)  { this._setMode(mode) }
 
-  /** @returns {'wysiwyg'|'source'} */
+  /** @returns {'wysiwyg'|'view'|'source'} */
   getMode()      { return this._mode }
 
   /** Read the persisted auto-save preference. Defaults to ON (true) when unset. */

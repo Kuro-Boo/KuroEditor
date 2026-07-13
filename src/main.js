@@ -1,8 +1,8 @@
-// v2 CSS architecture: editor2.css = editor UI (chrome) only; all CONTENT
-// styling lives in content.css (imported by editor2.css), shared with the
-// published page so the output is WYSIWYG. To fall back to the old monolithic
-// stylesheet, change this import back to './editor.css'. See README.
-import './editor2.css'
+// CSS architecture: editor.css = editor UI (chrome) only; all CONTENT
+// styling lives in content.css (imported by editor.css), shared with the
+// published page so the output is WYSIWYG. (The pre-v2 monolithic stylesheet
+// lived at this same path — recover it from tag v1.0.8 if ever needed.)
+import './editor.css'
 import { KuroEditor, VERSION } from './editor.js'
 
 // Expose as globals so KuroCMS (and other embedders) can use KuroEditor after

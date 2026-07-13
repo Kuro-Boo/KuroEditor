@@ -2,13 +2,41 @@
 @import "./content.css";
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Editor uses a DARK theme. content.css (imported above) defines the published
-   content blocks (rounded box, tables, list markers) and the @counter-style
-   rules with theme-neutral CSS variables + neutral defaults. Override those
-   variables to the editor's dark palette here. UNLAYERED so it beats
-   content.css's own (also unlayered) :root by source order.
+   CANVAS THEME. The editor chrome (toolbar/menus) is always dark, but the
+   editing CANVAS (.kuro-pane__wysiwyg) has two modes, toggled by the
+   `.kuro-editor--canvas-dark` modifier on the editor root:
+
+   - 通常 (default, no modifier): light/site-like. content.css keeps its
+     theme-neutral :root variable defaults — the same values the PUBLIC page
+     uses — so what you see is what publishes. The canvas surface colors come
+     from the --kuro-canvas-* variables below; an embedding host can override
+     them to match its actual site palette (each site's "normal" differs).
+   - ダーク (modifier present): the classic dark canvas. The --kuro-* content
+     variables are overridden to the dark palette, scoped to the modifier so
+     they never leak into 通常 mode. UNLAYERED so it beats content.css's
+     (also unlayered) :root defaults. The --kuro-canvas-* surface colors below
+     are likewise host-overridable (options.canvasDarkColors); unset keys keep
+     these stylesheet defaults.
    ────────────────────────────────────────────────────────────────────────── */
-:root {
+.kuro-editor {
+  /* 通常モードのキャンバス配色（サイト相当）。ホストが実サイトの配色に
+     合わせたいときはこの変数を上書きする。 */
+  --kuro-canvas-bg: #ffffff;
+  --kuro-canvas-text: #0f172a; /* slate-900 */
+  --kuro-canvas-caret: #4f46e5; /* indigo-600 */
+  --kuro-canvas-placeholder: #9ca3af; /* gray-400 */
+  --kuro-canvas-cellfocus-bg: #eef2ff; /* indigo-50 */
+  --kuro-canvas-dragover-bg: rgba(224, 231, 255, 0.5); /* indigo-100/50 */
+}
+.kuro-editor.kuro-editor--canvas-dark {
+  --kuro-canvas-bg: #171717; /* neutral-900 (shell bg) */
+  --kuro-canvas-text: #f5f5f5; /* neutral-100 */
+  --kuro-canvas-caret: #818cf8; /* indigo-400 */
+  --kuro-canvas-placeholder: #525252; /* neutral-600 */
+  --kuro-canvas-cellfocus-bg: #1e1b4b; /* indigo-950 */
+  --kuro-canvas-dragover-bg: rgba(30, 27, 75, 0.4); /* indigo-950/40 */
+
+  /* Content-block variables — dark palette (was the global :root override). */
   --kuro-box-border: #525252; /* neutral-600 */
   --kuro-box-bg: #1a1a1e;
   --kuro-box-border-nested: #737373; /* neutral-500 */
@@ -108,10 +136,6 @@
            transition-colors cursor-pointer select-none;
   }
 
-  .kuro-mmenu__btn--active {
-    @apply bg-neutral-700 text-white;
-  }
-
   .kuro-mmenu__autosave {
     @apply flex items-center gap-1.5 flex-shrink-0;
   }
@@ -130,6 +154,10 @@
            bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700
            text-sm font-semibold text-white
            transition-colors cursor-pointer flex-shrink-0;
+  }
+  /* 未保存の変更が無い間は暗くして押せなくする */
+  .kuro-mmenu__save:disabled {
+    @apply bg-neutral-700 text-neutral-500 cursor-default pointer-events-none;
   }
 
   /* ── Slotted mode: mounted inside host modalToolbar, not fixed to viewport ── */
@@ -231,11 +259,6 @@
            transition-colors select-none;
   }
 
-  /* Spacer — pushes autosave + save to the right */
-  .kuro-tabs__spacer {
-    @apply flex-1;
-  }
-
   /* Autosave wrap in tab bar (shares checkbox/label styles with mmenu) */
   .kuro-tabs__autosave {
     @apply flex items-center gap-1.5 px-2 text-xs text-neutral-500 select-none;
@@ -260,6 +283,10 @@
            bg-indigo-600 hover:bg-indigo-500 rounded
            transition-colors cursor-pointer flex-shrink-0;
   }
+  /* 未保存の変更が無い間は暗くして押せなくする */
+  .kuro-tabs__save:disabled {
+    @apply bg-neutral-700 text-neutral-500 cursor-default pointer-events-none;
+  }
 
   /* ════════════════════════════════════════════════════════
      BODY = pane + ToC
@@ -279,8 +306,10 @@
 
   .kuro-pane__wysiwyg {
     @apply flex-1 overflow-y-auto p-5 outline-none
-           text-neutral-100 leading-relaxed;
-    caret-color: theme('colors.indigo.400');
+           leading-relaxed;
+    background: var(--kuro-canvas-bg);
+    color: var(--kuro-canvas-text);
+    caret-color: var(--kuro-canvas-caret);
     min-height: 16rem;
     /* flex 子としても縮めるようにし、本文は見えている幅で折り返す。
        長い英字列/URL など分割不能なトークンも枠内に収める。 */
@@ -292,13 +321,14 @@
   .kuro-pane__wysiwyg.kuro-drag-over {
     outline: 2px dashed theme('colors.indigo.500');
     outline-offset: -3px;
-    @apply bg-indigo-950/40;
+    background: var(--kuro-canvas-dragover-bg);
   }
 
   /* Placeholder via CSS */
   .kuro-pane__wysiwyg:empty::before {
     content: attr(data-placeholder);
-    @apply text-neutral-600 pointer-events-none;
+    @apply pointer-events-none;
+    color: var(--kuro-canvas-placeholder);
   }
 
   .kuro-pane__source {
@@ -310,6 +340,23 @@
   /* Source mode: swap panels */
   .kuro-pane--source .kuro-pane__wysiwyg { @apply hidden; }
   .kuro-pane--source .kuro-pane__source  { @apply block; }
+
+  /* ── View mode (閲覧・編集不可) ─────────────────────────────────────────
+     編集の気配を消す: プレースホルダ・キャレット・リサイズ用ハンドル類を出さず、
+     リンクだけがクリックできる読み物として振る舞わせる */
+  .kuro-pane--view .kuro-pane__wysiwyg {
+    caret-color: transparent;
+  }
+  .kuro-pane--view .kuro-pane__wysiwyg:empty::before { content: none; }
+  /* コードブロックの 🗑 は編集用なので隠す（📋 コピーは閲覧でも使うので残す） */
+  .kuro-pane--view .kuro-code__del { display: none; }
+  .kuro-pane--view a { cursor: pointer; }
+
+  /* 閲覧モード中は編集アクション (挿入系・Undo/Redo) が disabled になる */
+  .kuro-tabs__action:disabled,
+  .kuro-mmenu__btn:disabled {
+    @apply opacity-40 pointer-events-none cursor-default;
+  }
 
   /* ════════════════════════════════════════════════════════
      TABLE OF CONTENTS (right panel)
@@ -365,10 +412,6 @@
 
   .kuro-toc__title {
     @apply px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-neutral-500;
-  }
-
-  .kuro-toc__empty {
-    @apply px-3 text-xs text-neutral-600 italic;
   }
 
   .kuro-toc__item {
@@ -479,11 +522,6 @@
   }
   .kuro-popm__sizes--visible { @apply flex; }
 
-  /* Vertical divider inside the font sub-panel — kept for legacy callers. */
-  .kuro-popm__sub-divider {
-    @apply w-px self-stretch mx-1 bg-neutral-700;
-  }
-
   /* "Web-Fonts" main-panel button — wider, ellipsis when label is "Web-Fonts: ..." */
   .kuro-size-btn--webfonts {
     max-width: 16rem;
@@ -525,6 +563,11 @@
     background: transparent;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* overflow:hidden makes a flex item's automatic min-height 0, so in the
+       flex-column list each row would be squashed (instead of the list
+       scrolling) once there are more fonts than fit — clipping the previews.
+       flex-shrink:0 keeps every row at its natural height. */
+    flex: 0 0 auto;
   }
   /* Currently active web font (matches the selection) */
   .kuro-web-font-btn--active {
@@ -608,11 +651,6 @@
   /* Hidden native color picker */
   .kuro-color-add-input {
     display: none;
-  }
-
-  /* Legacy grid class (kept for any external use) */
-  .kuro-color-grid {
-    @apply flex flex-wrap gap-1;
   }
 
   /* Marker color toggle button (● circle in list style panel) */
@@ -715,6 +753,81 @@
     user-select: none;
   }
   .kuro-table-border-btn:hover { transform: scale(1.1); }
+
+  /* ════════════════════════════════════════════════════════
+     LINK EDIT POPUP — caret on / next to a link
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-link-edit {
+    @apply fixed z-50 p-2 flex flex-col gap-1.5
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl
+           opacity-0 pointer-events-none
+           transition-opacity duration-100;
+    width: 18rem;
+  }
+
+  .kuro-link-edit--visible {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .kuro-link-edit__row {
+    @apply flex flex-col gap-0.5;
+  }
+
+  /* カード表示中は表示テキスト欄を隠す。 .kuro-link-edit__row の display:flex が
+     UA の [hidden]{display:none} に勝ってしまうので、明示的に打ち消す */
+  .kuro-link-edit__row[hidden] {
+    display: none;
+  }
+
+  /* カード表示チェック + 🗑 を 1 行に（🗑 は右端） */
+  .kuro-link-edit__card-row {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  /* 🗑 — リンク削除。破壊的操作なので白ではなく赤寄りのピンクで示す */
+  .kuro-link-edit__delete {
+    @apply flex flex-shrink-0 items-center justify-center
+           w-6 h-6 rounded-md
+           text-rose-500 hover:text-rose-300 hover:bg-rose-500/20
+           cursor-pointer transition-colors;
+  }
+
+  .kuro-link-edit__label {
+    @apply px-0.5 text-neutral-400;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .kuro-link-edit__input {
+    @apply w-full px-2 py-1 text-xs
+           bg-neutral-900 text-neutral-100
+           border border-neutral-600 rounded-md
+           outline-none;
+  }
+
+  .kuro-link-edit__input:focus {
+    @apply border-neutral-400;
+  }
+
+  .kuro-link-edit__jump-btn {
+    @apply w-full px-3 py-1.5 mt-0.5 rounded-lg
+           text-xs text-white bg-indigo-600
+           hover:bg-indigo-500
+           cursor-pointer select-none transition-colors;
+  }
+
+  /* カード表示を明示するチェックボックス行 */
+  .kuro-link-edit__card-toggle {
+    @apply flex items-center gap-1.5 px-0.5 py-0.5
+           text-neutral-300 cursor-pointer select-none;
+    font-size: 11px;
+  }
+
+  .kuro-link-edit__card-toggle input {
+    @apply cursor-pointer accent-indigo-500;
+  }
 
   /* ════════════════════════════════════════════════════════
      LINE POPUP MENU
@@ -838,10 +951,6 @@
     display: flex;
   }
 
-  .kuro-table-menu__border-row {
-    @apply flex items-center gap-1;
-  }
-
   .kuro-table-menu__btn--active {
     @apply bg-indigo-700 text-neutral-100;
   }
@@ -885,6 +994,46 @@
     @apply flex items-center justify-center w-7 h-7 rounded-md
            text-lg cursor-pointer
            hover:bg-neutral-700 transition-colors;
+  }
+
+  /* ── Link Open Dialog (閲覧モードでリンクを踏んだときの確認) ── */
+  .kuro-link-open {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4
+           opacity-0 pointer-events-none;
+    background: rgba(0, 0, 0, .55);
+    visibility: hidden;
+    transition: opacity 120ms;
+  }
+  .kuro-link-open--visible {
+    @apply opacity-100 pointer-events-auto;
+    visibility: visible;
+  }
+  .kuro-link-open__box {
+    @apply flex flex-col gap-2 p-4
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl;
+    width: 24rem;
+    max-width: 100%;
+  }
+  .kuro-link-open__msg {
+    @apply text-sm text-neutral-100;
+  }
+  .kuro-link-open__url {
+    @apply px-2 py-1.5 rounded-lg
+           bg-neutral-900 border border-neutral-700
+           text-xs text-indigo-300 break-all;
+  }
+  .kuro-link-open__footer {
+    @apply flex items-center justify-end gap-2 mt-1;
+  }
+  .kuro-link-open__btn {
+    @apply px-3 py-1.5 rounded-lg
+           text-xs text-neutral-300 bg-neutral-700
+           hover:bg-neutral-600 hover:text-white
+           cursor-pointer select-none transition-colors;
+  }
+  .kuro-link-open__btn--primary {
+    @apply text-white bg-indigo-600 hover:bg-indigo-500;
   }
 
   /* ── Media Dialog ── */
@@ -968,125 +1117,52 @@
      CONTENT TYPOGRAPHY (inside .kuro-content)
      ════════════════════════════════════════════════════════ */
 
+  /* CONTENT TYPOGRAPHY lives in content.css now (single source of truth, shared
+     with the published page → WYSIWYG). Colors:
+     - 通常モード: content.css の theme-neutral な既定値をそのまま使う
+       （公開ページと同一の変数値 = 真の WYSIWYG）。ここでは何も上書きしない。
+     - ダークモード (.kuro-editor--canvas-dark): 従来のダークパレットに上書き。 */
   .kuro-content {
-    @apply text-neutral-100;
+    color: var(--kuro-canvas-text);
+  }
+  .kuro-editor--canvas-dark .kuro-content {
+    --kuro-h1-color: theme('colors.neutral.50');
+    --kuro-h2-color: theme('colors.neutral.100');
+    --kuro-h3-color: theme('colors.neutral.100');
+    --kuro-h4-color: theme('colors.neutral.200');
+    --kuro-h5-color: theme('colors.neutral.300');
+    --kuro-link: theme('colors.indigo.400');
+    --kuro-link-hover: theme('colors.indigo.300');
+    --kuro-quote-text: theme('colors.neutral.300');
+    --kuro-quote-border: theme('colors.indigo.500');
+    --kuro-hr: theme('colors.neutral.600');
+    --kuro-list-color: theme('colors.neutral.200');
+    --kuro-kbd-bg: theme('colors.neutral.800');
+    --kuro-kbd-text: theme('colors.neutral.100');
+    --kuro-kbd-border: theme('colors.neutral.500');
+    --kuro-table-cell-text: theme('colors.neutral.200');
+    --kuro-table-head-text: theme('colors.neutral.100');
+    --kuro-callout-tip-bg: rgba(30, 58, 138, 0.25);
+    --kuro-callout-tip-border: theme('colors.blue.400');
+    --kuro-callout-tip-text: theme('colors.blue.100');
+    --kuro-callout-warn-bg: rgba(120, 53, 15, 0.25);
+    --kuro-callout-warn-border: theme('colors.yellow.400');
+    --kuro-callout-warn-text: theme('colors.yellow.100');
+    --kuro-callout-danger-bg: rgba(127, 29, 29, 0.3);
+    --kuro-callout-danger-border: theme('colors.red.400');
+    --kuro-callout-danger-text: theme('colors.red.100');
+    --kuro-callout-note-bg: rgba(38, 38, 38, 0.65);
+    --kuro-callout-note-border: theme('colors.neutral.400');
+    --kuro-callout-note-text: theme('colors.neutral.200');
   }
 
-  /* Paragraphs */
-  .kuro-content p   { @apply my-1.5 leading-relaxed; }
-  .kuro-content br  { line-height: 1.2; }
+  /* <kbd> and callout (admonition) appearance moved to content.css (single
+     source of truth). Their colors are themed via --kuro-kbd-* / --kuro-callout-*
+     variables set on .kuro-content above. */
 
-  /* Headings */
-  .kuro-content h1  { @apply text-3xl font-bold mt-7 mb-3 text-neutral-50 leading-tight; }
-  .kuro-content h2  { @apply text-2xl font-bold mt-6 mb-2.5 text-neutral-100 leading-tight; }
-  .kuro-content h3  { @apply text-xl  font-semibold mt-5 mb-2 text-neutral-100; }
-  .kuro-content h4  { @apply text-lg  font-semibold mt-4 mb-1.5 text-neutral-200; }
-  .kuro-content h5  { @apply text-base font-semibold mt-3 mb-1 text-neutral-300; }
-
-  /* Blockquote — left vertical accent bar */
-  .kuro-content blockquote {
-    @apply my-4 py-2 px-4
-           border-l-4 border-indigo-500
-           text-neutral-300 italic;
-  }
-  .kuro-content blockquote p { @apply my-1; }
-
-  /* ── Keyboard key (<kbd>) — physical key look ───────────────────────── */
-  .kuro-content kbd {
-    display: inline-block;
-    padding: 0.1em 0.5em;
-    min-width: 1.2em;
-    text-align: center;
-    background: theme('colors.neutral.800');
-    color: theme('colors.neutral.100');
-    border: 1px solid theme('colors.neutral.500');
-    border-bottom-width: 2px;
-    border-radius: 0.3em;
-    font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
-    font-size: 0.85em;
-    line-height: 1.2;
-    vertical-align: baseline;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.3);
-  }
-
-  /* ── Callout / admonition blocks ─────────────────────────────────────── */
-  /* Layout: icon column on the left + content; left vertical accent bar */
-  .kuro-content .kuro-callout {
-    @apply my-4 py-3 pl-12 pr-4 rounded-lg
-           border-l-4 relative;
-  }
-  .kuro-content .kuro-callout::before {
-    position: absolute;
-    left: 0.875rem;
-    top: 0.625rem;
-    font-size: 1.25rem;
-    line-height: 1;
-  }
-  .kuro-content .kuro-callout p { @apply my-1; }
-
-  /* tip: 💡 blue */
-  .kuro-content .kuro-callout--tip {
-    background-color: rgba(30, 58, 138, 0.25);   /* indigo-900 / 25% */
-    border-color: theme('colors.blue.400');
-    color: theme('colors.blue.100');
-  }
-  .kuro-content .kuro-callout--tip::before  { content: '💡'; }
-
-  /* warn: ⚠️ amber */
-  .kuro-content .kuro-callout--warn {
-    background-color: rgba(120, 53, 15, 0.25);   /* amber-900 / 25% */
-    border-color: theme('colors.yellow.400');
-    color: theme('colors.yellow.100');
-  }
-  .kuro-content .kuro-callout--warn::before { content: '⚠️'; }
-
-  /* danger: ❗ red */
-  .kuro-content .kuro-callout--danger {
-    background-color: rgba(127, 29, 29, 0.30);   /* red-900 / 30% */
-    border-color: theme('colors.red.400');
-    color: theme('colors.red.100');
-  }
-  .kuro-content .kuro-callout--danger::before { content: '❗'; }
-
-  /* note: 📌 neutral */
-  .kuro-content .kuro-callout--note {
-    background-color: rgba(38, 38, 38, 0.65);    /* neutral-800 / 65% */
-    border-color: theme('colors.neutral.400');
-    color: theme('colors.neutral.200');
-  }
-  .kuro-content .kuro-callout--note::before { content: '📌'; }
-
-  /* Inline */
-  .kuro-content a      { @apply text-indigo-400 underline hover:text-indigo-300 transition-colors; }
-  .kuro-content strong { @apply font-bold; }
-  .kuro-content em     { @apply italic; }
-  .kuro-content u      { @apply underline; }
-  .kuro-content s      { @apply line-through; }
-
-  /* Lists */
-  .kuro-content ul     { @apply list-disc   ml-6 my-2 space-y-0.5 text-neutral-200; }
-  .kuro-content ol     { @apply list-decimal ml-6 my-2 space-y-0.5 text-neutral-200; }
-  .kuro-content li     { @apply leading-relaxed text-neutral-200; }
-
-  /* Marker color — li::marker inherits the CSS custom property set on the list element */
-  .kuro-content li::marker { color: var(--kuro-marker-color, inherit); }
-
-  /* Justified text — CJK 均等割り
-     text-align:justify alone only affects interior lines; the last (or single)
-     line stays left-aligned unless text-align-last:justify is also set.
-     text-justify:inter-character distributes spacing between every character. */
-  .kuro-content [style*="text-align: justify"],
-  .kuro-content [style*="text-align:justify"] {
-    text-justify: inter-character;
-    text-align-last: justify;
-  }
-
-  /* Horizontal rule */
-  .kuro-content hr,
-  .kuro-hr {
-    @apply border-0 my-5;
-    border-top: 2px solid theme('colors.neutral.600');
-  }
+  /* Inline / lists / list-marker / justified text / horizontal rule typography
+     moved to content.css (single source of truth, shared with the public page).
+     Their colors are themed via the --kuro-* variables set on .kuro-content above. */
 
   /* ── Code block ──
      Structure (textarea-based):
@@ -1277,15 +1353,9 @@
   }
 
   /* ── Table ── */
-  .kuro-table,
-  .kuro-content table {
-    @apply border-collapse w-full my-4 text-sm;
-  }
-
-  /* table-layout:fixed enables reliable column widths via <colgroup> */
-  .kuro-table {
-    table-layout: fixed;
-  }
+  /* Table content appearance (border-collapse, widths, cell borders/padding/
+     colors via --kuro-table-* vars, table-layout:fixed) moved to content.css.
+     Below are EDITING-only affordances. */
 
   /* During column resize: freeze cursor across entire page */
   body.kuro-col-resizing,
@@ -1294,24 +1364,12 @@
     user-select: none !important;
   }
 
-  .kuro-table th,
-  .kuro-table td,
-  .kuro-content th,
-  .kuro-content td {
-    @apply border border-neutral-600 px-3 py-3 text-neutral-200
-           leading-normal outline-none;
-  }
-
-  .kuro-table th,
-  .kuro-content th {
-    @apply bg-neutral-800 font-semibold text-neutral-100 text-left;
-  }
-
   .kuro-table td:focus,
   .kuro-table th:focus,
   .kuro-content td:focus,
   .kuro-content th:focus {
-    @apply bg-indigo-950 outline-none;
+    @apply outline-none;
+    background: var(--kuro-canvas-cellfocus-bg);
     box-shadow: inset 0 0 0 2px theme('colors.indigo.500');
   }
 
@@ -1454,10 +1512,7 @@
     float: none;
   }
 
-  /* Clearfix: paragraph after a floated image shouldn't overlap it */
-  .kuro-content p { clear: none; }
-  .kuro-content .kuro-media-wrap--left  + p,
-  .kuro-content .kuro-media-wrap--right + p { clear: none; }
+  /* Media float clearfix (.kuro-content p / media-wrap + p) moved to content.css. */
 
   /* ── iframe embed (YouTube, Vimeo, …) — responsive 16:9 ── */
   .kuro-media-wrap--iframe {

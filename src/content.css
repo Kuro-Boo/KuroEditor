@@ -27,7 +27,7 @@
   --kuro-table-head-bg: rgba(128, 128, 128, 0.12);
 
   /* Content typography COLORS — light/theme-neutral defaults for the PUBLIC
-     site. editor2.css overrides these to its dark palette so the in-editor
+     site. editor.css overrides these to its dark palette so the in-editor
      appearance is unchanged. Sizes/spacing are NOT themed (shared). */
   --kuro-h1-color: inherit;
   --kuro-h2-color: inherit;
@@ -72,11 +72,12 @@
 /* ════════════════════════════════════════════════════════════════════════
    CONTENT TYPOGRAPHY — SINGLE SOURCE OF TRUTH.
    Both the editor and the published page use these rules, so output is WYSIWYG.
-   Sizes/weights/spacing are shared; COLOR is themed via --kuro-* (editor2.css
+   Sizes/weights/spacing are shared; COLOR is themed via --kuro-* (editor.css
    sets the dark palette). Scoped to authored content: the `.kuro-content`
    wrapper (editor) AND headings carrying KuroEditor's `kuro-h-*` id (public),
    so the host template's own headings are never affected.
-   (Migrated from editor.css; values = the prior @apply Tailwind output.)
+   (Migrated from the pre-v2 monolithic editor.css; values = the prior
+   @apply Tailwind output.)
    ════════════════════════════════════════════════════════════════════════ */
 
 /* Headings — h1=text-3xl … h5=text-base. */
