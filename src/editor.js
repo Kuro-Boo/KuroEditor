@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.11.0'
+export const VERSION = '2.11.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4440,37 +4440,61 @@ export class LinkEditPopup {
     if (sel?.rangeCount) {
       const r = sel.getRangeAt(0)
       if (this.editor.wysiwyg.contains(r.startContainer)) {
-        const rect = r.getBoundingClientRect()
-        if (rect.height) return rect
-        // 要素の境界（親, index）にキャレットがあると、ブラウザは 0 の矩形を返す
-        // （リンクが行末で、直後にテキストノードが無い場合など）。その場合は
-        // 直前の要素＝ふつうはリンク自身の【最後の行の右端】をキャレット位置とみなす。
-        const boundary = this._boundaryCaretRect(r)
-        if (boundary) return boundary
+        const rect = this._rectForRange(r)
+        if (rect) return rect
       }
     }
     if (a?.isConnected) return a.getBoundingClientRect()
     return this.editor.wysiwyg.getBoundingClientRect()
   }
 
-  /** 要素境界のキャレット → 直前ノードの最終行の右端を「キャレットの矩形」として返す。 */
-  _boundaryCaretRect(range) {
-    const node = range.startContainer
-    if (node.nodeType !== Node.ELEMENT_NODE) return null
-    const prev = node.childNodes[range.startOffset - 1]
-    if (prev?.nodeType !== Node.ELEMENT_NODE) return null
-    const rects = prev.getClientRects?.()
-    const last = rects?.length ? rects[rects.length - 1] : prev.getBoundingClientRect()
-    if (!last?.height) return null
-    // 折り返しているリンクでも「最後の行の右端」= キャレットが実際に立つ位置
-    return { top: last.top, bottom: last.bottom, left: last.right, right: last.right, width: 0, height: last.height }
+  /** openNew 用: キャレット矩形（取れなければ本文の矩形）。 */
+  _caretRect(range) {
+    return this._rectForRange(range) ?? this.editor.wysiwyg.getBoundingClientRect()
   }
 
-  /** 折りたたんだ range の矩形は 0x0 になることがある → 本文の矩形へフォールバック。 */
-  _caretRect(range) {
-    const r = range.getBoundingClientRect()
-    if (r.width || r.height || r.top) return r
-    return this.editor.wysiwyg.getBoundingClientRect()
+  /**
+   * range（キャレット）の画面上の矩形。取れなければ null。
+   *
+   * テキストノード内のキャレットはブラウザがそのまま矩形を返すが、
+   * 【要素の境界】(startContainer が要素) にあるキャレットは矩形が 0 になる。
+   *   - 「本文に一度も触れていない」→ 末尾に作るレンジ（selectNodeContents + collapse）
+   *   - リンクが行末にあり、直後にテキストノードが無い場合
+   * この 0 をそのまま使うと画面左上（あるいはフォールバックの本文全体）へ飛ぶので、
+   * 境界の【直前ノードの最終行の右端】＝キャレットが実際に立つ位置を計算して返す。
+   */
+  _rectForRange(range) {
+    const rect = range.getBoundingClientRect?.()
+    if (rect?.height) return rect
+
+    const node = range.startContainer
+    if (node?.nodeType !== Node.ELEMENT_NODE) return null
+
+    // ノード（テキスト / 要素どちらも）の行ごとの矩形リスト
+    const rectsOf = (n) => {
+      if (!n?.parentNode) return null
+      const r = document.createRange()
+      r.selectNode(n)
+      const list = r.getClientRects?.()
+      return list?.length ? list : null
+    }
+
+    const prev = rectsOf(node.childNodes[range.startOffset - 1])
+    if (prev) {
+      const last = prev[prev.length - 1]           // 折り返していれば最後の行
+      return { top: last.top, bottom: last.bottom, left: last.right, right: last.right, width: 0, height: last.height }
+    }
+    const next = rectsOf(node.childNodes[range.startOffset])
+    if (next) {
+      const first = next[0]
+      return { top: first.top, bottom: first.bottom, left: first.left, right: first.left, width: 0, height: first.height }
+    }
+    // 中身が空のブロック（空段落など）→ その要素自身の左上
+    const own = node.getBoundingClientRect?.()
+    if (own?.height) {
+      return { top: own.top, bottom: own.bottom, left: own.left, right: own.left, width: 0, height: own.height }
+    }
+    return null
   }
 
   _positionAtRect(rect) {
