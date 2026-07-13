@@ -700,8 +700,19 @@ describe('KuroEditor', () => {
       expect(e.defaultPrevented).toBe(true)
       expect(editor.linkOpenDialog.isVisible).toBe(true)
       expect(editor.linkOpenDialog._url.textContent).toContain('https://example.com/post')
-      expect(editor.linkOpenDialog._label.textContent).toBe('記事')
       expect(editor.linkEditPopup.isVisible).toBe(false)
+    })
+
+    it('URL カードでもダイアログの表示は URL 1 行だけ（カード内のテキストを連結しない）', () => {
+      editor.setContent('<p>[[https://kuro.boo/|]]</p>')
+      click(editor.tabView)
+      click(editor.wysiwyg.querySelector('.kuro-url-card'))
+
+      const box = editor.linkOpenDialog._box
+      expect(editor.linkOpenDialog._url.textContent).toBe('https://kuro.boo/')
+      // カードのタイトル / ↗ が混ざった行が残っていないこと
+      expect(box.textContent).not.toContain('↗ https')
+      expect(box.textContent).not.toContain('kuro.boohttps')
     })
 
     it('確認ダイアログ: 開く → window.open / キャンセル → 何もしない', () => {
