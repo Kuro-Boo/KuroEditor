@@ -751,6 +751,32 @@ describe('KuroEditor', () => {
       expect(editor.linkEditPopup.isVisible).toBe(false)
     })
 
+    it('要素境界のキャレット（矩形 0）でも、直前ノードの行末を位置の基準にする', () => {
+      // 「本文を一度も触らずにリンクボタンを押した」等では、キャレットが要素の
+      // 境界に立つ。ブラウザはこの range に矩形 0 を返すため、素朴に使うと
+      // ポップアップが本文の下（フォールバック位置）へ飛んでしまっていた。
+      editor.setContent('<p>本文の末尾</p>')
+      const p = editor.wysiwyg.querySelector('p')
+
+      const origRect  = Range.prototype.getBoundingClientRect
+      const origRects = Range.prototype.getClientRects
+      Range.prototype.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 })
+      Range.prototype.getClientRects = () => [{ top: 100, bottom: 120, left: 10, right: 60, width: 50, height: 20 }]
+      try {
+        const range = document.createRange()
+        range.selectNodeContents(p)
+        range.collapse(false)          // <p> の末尾 = 要素境界
+        const rect = editor.linkEditPopup._rectForRange(range)
+        // 直前ノード（テキスト）の最終行の【右端】がキャレット位置
+        expect(rect.left).toBe(60)
+        expect(rect.top).toBe(100)
+        expect(rect.bottom).toBe(120)
+      } finally {
+        Range.prototype.getBoundingClientRect = origRect
+        Range.prototype.getClientRects = origRects
+      }
+    })
+
     it('位置決めはリンク要素ではなくキャレット基準', () => {
       editor.setContent('<p>前 [[https://example.com/x|リンク]] 後</p>')
       const a = editor.wysiwyg.querySelector('a')
