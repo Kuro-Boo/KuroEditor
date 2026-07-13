@@ -708,6 +708,26 @@ describe('KuroEditor', () => {
       expect(editor.linkEditPopup.activeLink).toBe(a)
     })
 
+    it('リンクが 2 件並んでいて間にキャレット → 前のリンクを開く', () => {
+      editor.setContent('<p>[[https://example.com/a|前のリンク]][[https://example.com/b|後のリンク]]</p>')
+      const [first, second] = editor.wysiwyg.querySelectorAll('a')
+
+      // ブラウザは境目のキャレットを「後ろのリンクの内側先頭」に置くことがある
+      caretAt(second.firstChild, 0)
+      expect(editor.linkEditPopup.isVisible).toBe(true)
+      expect(editor.linkEditPopup.activeLink).toBe(first)
+      expect(editor.linkEditPopup._urlInput.value).toBe('https://example.com/a')
+
+      // 要素境界に立った場合も同じく前のリンク
+      const p = first.parentNode
+      caretAt(p, 1)
+      expect(editor.linkEditPopup.activeLink).toBe(first)
+
+      // 後ろのリンクの末尾なら後ろのリンク
+      caretAt(second.firstChild, second.textContent.length)
+      expect(editor.linkEditPopup.activeLink).toBe(second)
+    })
+
     it('リンク内側テキストの先頭（＝見た目はリンクの左）でも開く', () => {
       editor.setContent('<p>[[https://kuro.boo/|黒兎]]</p>')
       const a = editor.wysiwyg.querySelector('a')

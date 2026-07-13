@@ -574,6 +574,47 @@ describe('linkAtCaret', () => {
     expect(linkAtCaret(rangeAt(a.firstChild, 4), root)).toBe(a)   // 見た目は右端
   })
 
+  // リンクが 2 つ隣接している場合は【キャレットの前のリンク】を対象にする
+  describe('隣接する 2 つのリンクの間にキャレット', () => {
+    const two = () => {
+      setup('<a href="/a">AAA</a><a href="/b">BBB</a>')
+      const [a, bb] = root.querySelectorAll('a')
+      return { a, bb }
+    }
+
+    it('要素境界（<a>A</a>|<a>B</a>）→ 前のリンク', () => {
+      const { a } = two()
+      expect(linkAtCaret(rangeAt(root, 1), root)).toBe(a)
+    })
+
+    it('前のリンクの内側末尾 → 前のリンク', () => {
+      const { a } = two()
+      expect(linkAtCaret(rangeAt(a.firstChild, 3), root)).toBe(a)
+    })
+
+    it('後ろのリンクの内側先頭（ブラウザはここに置くことがある）→ 前のリンク', () => {
+      const { a, bb } = two()
+      expect(linkAtCaret(rangeAt(bb.firstChild, 0), root)).toBe(a)
+    })
+
+    it('後ろのリンクの内側末尾 → 後ろのリンク', () => {
+      const { bb } = two()
+      expect(linkAtCaret(rangeAt(bb.firstChild, 3), root)).toBe(bb)
+    })
+
+    it('間に文字があるなら（<a>A</a> |<a>B</a>）後ろのリンクのまま', () => {
+      setup('<a href="/a">AAA</a> <a href="/b">BBB</a>')
+      const [, bb] = root.querySelectorAll('a')
+      expect(linkAtCaret(rangeAt(bb.firstChild, 0), root)).toBe(bb)
+    })
+
+    it('前が編集対象外リンク（カード型）なら、後ろのリンクを返す', () => {
+      setup(renderSpecialLinks('[[[my-card]]]') + '<a href="/b">BBB</a>')
+      const bb = root.querySelector('a:not(.kuro-card-link)')
+      expect(linkAtCaret(rangeAt(bb.firstChild, 0), root)).toBe(bb)
+    })
+  })
+
   it('端の判定は入れ子の装飾タグ越しでも効く', () => {
     setup('before <a href="/x"><b>bold</b> tail</a> after')
     const a = root.querySelector('a')
