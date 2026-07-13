@@ -350,6 +350,23 @@
   .kuro-pane--source .kuro-pane__wysiwyg { @apply hidden; }
   .kuro-pane--source .kuro-pane__source  { @apply block; }
 
+  /* ── View mode (閲覧・編集不可) ─────────────────────────────────────────
+     編集の気配を消す: プレースホルダ・キャレット・リサイズ用ハンドル類を出さず、
+     リンクだけがクリックできる読み物として振る舞わせる */
+  .kuro-pane--view .kuro-pane__wysiwyg {
+    caret-color: transparent;
+  }
+  .kuro-pane--view .kuro-pane__wysiwyg:empty::before { content: none; }
+  /* コードブロックの 🗑 は編集用なので隠す（📋 コピーは閲覧でも使うので残す） */
+  .kuro-pane--view .kuro-code__del { display: none; }
+  .kuro-pane--view a { cursor: pointer; }
+
+  /* 閲覧モード中は編集アクション (挿入系・Undo/Redo) が disabled になる */
+  .kuro-tabs__action:disabled,
+  .kuro-mmenu__btn:disabled {
+    @apply opacity-40 pointer-events-none cursor-default;
+  }
+
   /* ════════════════════════════════════════════════════════
      TABLE OF CONTENTS (right panel)
      ════════════════════════════════════════════════════════ */
@@ -781,6 +798,22 @@
     @apply flex flex-col gap-0.5;
   }
 
+  /* カード表示中は表示テキスト欄を隠す。 .kuro-link-edit__row の display:flex が
+     UA の [hidden]{display:none} に勝ってしまうので、明示的に打ち消す */
+  .kuro-link-edit__row[hidden] {
+    display: none;
+  }
+
+  /* 右上の 🗑 — リンク削除。フィールドに被らないよう小さくコーナーに置く */
+  .kuro-link-edit__delete {
+    @apply absolute flex items-center justify-center
+           w-6 h-6 rounded-md
+           text-neutral-400 hover:text-white hover:bg-red-600/80
+           cursor-pointer transition-colors;
+    top: 0.25rem;
+    right: 0.25rem;
+  }
+
   .kuro-link-edit__label {
     @apply px-0.5 text-neutral-400;
     font-size: 10px;
@@ -992,6 +1025,49 @@
     @apply flex items-center justify-center w-7 h-7 rounded-md
            text-lg cursor-pointer
            hover:bg-neutral-700 transition-colors;
+  }
+
+  /* ── Link Open Dialog (閲覧モードでリンクを踏んだときの確認) ── */
+  .kuro-link-open {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4
+           opacity-0 pointer-events-none;
+    background: rgba(0, 0, 0, .55);
+    visibility: hidden;
+    transition: opacity 120ms;
+  }
+  .kuro-link-open--visible {
+    @apply opacity-100 pointer-events-auto;
+    visibility: visible;
+  }
+  .kuro-link-open__box {
+    @apply flex flex-col gap-2 p-4
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl;
+    width: 24rem;
+    max-width: 100%;
+  }
+  .kuro-link-open__msg {
+    @apply text-sm text-neutral-100;
+  }
+  .kuro-link-open__label {
+    @apply text-sm font-semibold text-neutral-200 truncate;
+  }
+  .kuro-link-open__url {
+    @apply px-2 py-1.5 rounded-lg
+           bg-neutral-900 border border-neutral-700
+           text-xs text-indigo-300 break-all;
+  }
+  .kuro-link-open__footer {
+    @apply flex items-center justify-end gap-2 mt-1;
+  }
+  .kuro-link-open__btn {
+    @apply px-3 py-1.5 rounded-lg
+           text-xs text-neutral-300 bg-neutral-700
+           hover:bg-neutral-600 hover:text-white
+           cursor-pointer select-none transition-colors;
+  }
+  .kuro-link-open__btn--primary {
+    @apply text-white bg-indigo-600 hover:bg-indigo-500;
   }
 
   /* ── Media Dialog ── */

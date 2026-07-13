@@ -257,10 +257,20 @@ const editor = new KuroEditor(mountEl, options)
 
 editor.setContent(html)   // Overwrite the content
 editor.getContent()       // Get the current HTML (converted back to [[...]] syntax)
-editor.setMode('source')  // Switch to 'wysiwyg' | 'source'
+editor.setMode('source')  // Switch to 'wysiwyg' | 'view' | 'source'
 editor.getMode()          // Current mode
 editor.destroy()          // Clean up (remove listeners + restore the original element)
 ```
+
+### Modes
+
+The tab bar has three modes:
+
+| Tab | Mode | Behaviour |
+|-----|------|-----------|
+| ✏️ | `wysiwyg` | Editing. All popups / toolbars active (the default) |
+| 👁 | `view` | Read-only. `contenteditable` is off, code blocks are read-only, insert actions are disabled and no editing popup (format / table / image / link edit) is shown. Clicking a link does not navigate — a dialog asks whether to open it in a new tab |
+| `</>` | `source` | HTML source |
 
 ---
 

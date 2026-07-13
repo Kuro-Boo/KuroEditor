@@ -251,10 +251,20 @@ const editor = new KuroEditor(mountEl, options)
 
 editor.setContent(html)   // 内容を上書き
 editor.getContent()       // 現在の HTML を取得（[[...]] 記法に戻して）
-editor.setMode('source')  // 'wysiwyg' | 'source' へ切替
+editor.setMode('source')  // 'wysiwyg' | 'view' | 'source' へ切替
 editor.getMode()          // 現在のモード
 editor.destroy()          // 後片付け（イベント解除＋元の要素に戻す）
 ```
+
+### モード
+
+タブバーは 3 モード構成です。
+
+| タブ | モード | 挙動 |
+|------|--------|------|
+| ✏️ | `wysiwyg` | 編集。従来どおり各種ポップアップ・ツールバーが有効（既定） |
+| 👁 | `view` | 閲覧（編集不可）。`contenteditable` を切り、コードブロックも読み取り専用。挿入系ボタンは無効化され、編集用ポップアップ（書式・テーブル・画像・リンク編集）は一切出ません。リンクはクリックしても遷移せず、「新しいタブで開くか」をダイアログで確認します |
+| `</>` | `source` | HTML ソース |
 
 ---
 

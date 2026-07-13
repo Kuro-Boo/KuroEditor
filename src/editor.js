@@ -9,7 +9,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.7.0'
+export const VERSION = '2.8.0'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -217,6 +217,19 @@ const ICON = {
     `<rect x="4.8" y="0.8" width="4.4" height="3" rx="0.8"/>` +
     `<line x1="4.8" y1="7.2" x2="9.2" y2="7.2"/>` +
     `<line x1="4.8" y1="10" x2="7.8" y2="10"/>` +
+  `</svg>`,
+  // Pencil — 編集タブ (閲覧タブ = eye と対になる)
+  pencil: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<path d="M11.2 1.8 a1.7 1.7 0 0 1 2.4 2.4 L5 12.8 l-3.2 .9 .9 -3.2 z"/>` +
+    `<line x1="10.2" y1="2.8" x2="12.6" y2="5.2"/>` +
+  `</svg>`,
+  // Trash — lid + can + two slats (リンク削除ボタン)
+  trash: `<svg width="12" height="13" viewBox="0 0 11 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<polyline points="0.5,2.5 10.5,2.5"/>` +
+    `<path d="M3.5,2.5v-1h4v1"/>` +
+    `<path d="M1.5,2.5l.7,8h6.6l.7-8"/>` +
+    `<line x1="4" y1="5" x2="4" y2="8.5"/>` +
+    `<line x1="7" y1="5" x2="7" y2="8.5"/>` +
   `</svg>`,
 }
 
@@ -3900,12 +3913,17 @@ export class TableResizer {
 
   // ── Mouse handlers ───────────────────────────────────────────────────────
 
+  /** 閲覧モード (contenteditable=false) では列幅ドラッグも編集なので効かせない。 */
+  get _enabled() { return this.wysiwyg.getAttribute('contenteditable') === 'true' }
+
   _handleMove(e) {
     if (this._resizing) return
-    this.wysiwyg.style.cursor = this._findBorder(e.clientX, e.clientY) ? 'col-resize' : ''
+    this.wysiwyg.style.cursor =
+      (this._enabled && this._findBorder(e.clientX, e.clientY)) ? 'col-resize' : ''
   }
 
   _handleDown(e) {
+    if (!this._enabled) return
     const hit = this._findBorder(e.clientX, e.clientY)
     if (!hit) return
     e.preventDefault()
@@ -4159,11 +4177,20 @@ export class LinkEditPopup {
   constructor(editor) {
     this.editor = editor
     this.activeLink = null
+    // 削除直後に隣のリンクで自動再オープンしないための抑止期限 (epoch ms)
+    this._reopenBlockedUntil = 0
     this.el = createElement('div', {
       className: 'kuro-link-edit',
       attrs: { role: 'dialog', 'aria-label': 'リンク編集' },
     })
+    this._delBtn    = this._makeDeleteButton()
     this._textInput = this._makeField('表示テキスト')
+    this._textRow   = this._textInput.closest('.kuro-link-edit__row')
+    // 入力中は欄を消さない (_syncCardUi) ので、抜けた時点で実態に合わせ直す
+    this._textInput.addEventListener('blur', () => {
+      const a = this.activeLink
+      if (a?.isConnected) this._syncCardUi(a.classList.contains('kuro-url-card'))
+    })
     this._urlInput  = this._makeField('URL')
     // カード表示を明示するチェックボックス。ON = 表題なし [[URL|]] 記法へ、
     // OFF = 通常のテキストリンクへ切り替える(内部的には writeLinkParts に委譲)。
@@ -4175,6 +4202,67 @@ export class LinkEditPopup {
     }))
     this._jumpBtn   = this._makeJumpButton()
     document.body.appendChild(this.el)
+  }
+
+  /**
+   * 右上の 🗑 — リンクを削除する。リンクだけを消した結果その行 (li / p / 見出し)
+   * が空になるなら行ごと畳む（出典リストのような「1 行 1 リンク」で空行が残らない）。
+   * 文中のリンクを消したときは周囲のテキストを保ったままリンクだけが消える。
+   */
+  _makeDeleteButton() {
+    const btn = createElement('button', {
+      className: 'kuro-link-edit__delete',
+      html: ICON.trash,
+      attrs: { type: 'button', title: 'このリンクを削除', 'aria-label': 'このリンクを削除' },
+    })
+    // mousedown を潰さないと caret が動いて selectionchange → close() が先に走る
+    btn.addEventListener('mousedown', (e) => { e.preventDefault(); this._deleteLink() })
+    this.el.appendChild(btn)
+    return btn
+  }
+
+  _deleteLink() {
+    const a = this.activeLink
+    if (!a?.isConnected) return
+    const wysiwyg = this.editor.wysiwyg
+    if (!wysiwyg.contains(a)) return
+
+    // 行ごと畳んでよいブロック。td/th は「セルごと消す」わけにいかないので対象外
+    const block = a.closest('li, p, h1, h2, h3, h4, h5, h6, blockquote')
+    // リンクが消えた後に caret を置く位置。空テキストノードは HTML には出ない
+    const marker = document.createTextNode('')
+    a.before(marker)
+    a.remove()
+
+    let caret = marker
+    const collapsible = block
+      && wysiwyg.contains(block)
+      && !block.textContent.trim()
+      && !block.querySelector('img, iframe, video, audio, table')
+    if (collapsible) {
+      const list = block.tagName === 'LI' ? block.parentElement : null
+      caret = block.nextElementSibling ?? block.previousElementSibling ?? null
+      block.remove()
+      // 最後の <li> を消してリストが空になったらリスト自体も片付ける
+      if (list && wysiwyg.contains(list) && !list.querySelector('li')) {
+        caret = list.nextElementSibling ?? list.previousElementSibling ?? caret
+        list.remove()
+      }
+    }
+    // 中身が全部消えたら入力できる空段落を 1 つ残す
+    if (!wysiwyg.firstChild) {
+      const p = createElement('p', { html: '<br>' })
+      wysiwyg.appendChild(p)
+      caret = p
+    }
+
+    this.close()
+    // キャレットを置くと selectionchange → 隣のリンクで自動オープン、が走るので
+    // その一瞬だけ止める（時限式にして「戻し忘れ」で開かなくなる事故を防ぐ）
+    this._reopenBlockedUntil = Date.now() + 300
+    wysiwyg.focus()
+    if (caret?.isConnected) window.getSelection()?.setBaseAndExtent(caret, 0, caret, 0)
+    wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
 
   /**
@@ -4233,19 +4321,35 @@ export class LinkEditPopup {
       } else if (!this._textInput.value.trim()) {
         this._textInput.value = this._urlInput.value.trim()  // カード解除 → 既定表示 = URL
       }
+      this._syncCardUi(cb.checked)
       this._apply()
       if (!cb.checked) this._textInput.focus()
+      // 表示テキスト行の出し入れで高さが変わる → mmenu を避けたまま位置を取り直す
+      if (a.isConnected) this._position(a)
     })
     this.el.appendChild(row)
     return cb
   }
 
-  /** URL カードかどうかにチェック状態を合わせる。 */
+  /**
+   * URL カードかどうかに UI を合わせる。カード表示中は表示テキストが記法上
+   * 「空」でなければならないので、入力欄ごと隠して編集できないようにする
+   * （出したままだと打ててしまい、1 文字入力した時点で黙ってテキストリンクに
+   *   戻る＝チェックが入ったままなのにカードでない、という食い違いが起きる）。
+   */
   _syncCardUi(isCard) {
     if (this._cardToggle) this._cardToggle.checked = isCard
+    // 表示テキストを打っている最中に空にした場合（それもカード化する）は、
+    // 打鍵中に欄が消えてフォーカスが飛ぶのを避けて出したままにし、blur で畳む
+    const typing = document.activeElement === this._textInput
+    if (this._textRow)   this._textRow.hidden    = isCard && !typing
+    if (this._textInput) this._textInput.disabled = isCard && !typing
   }
 
   get isVisible() { return this.el.classList.contains('kuro-link-edit--visible') }
+
+  /** 削除直後の自動再オープン抑止中か (KuroEditor._updateLinkEditContext が参照)。 */
+  get isReopenBlocked() { return Date.now() < this._reopenBlockedUntil }
 
   /** Open for (or re-sync to) the given <a>. Never steals focus. */
   open(a) {
@@ -4307,6 +4411,94 @@ export class LinkEditPopup {
   }
 
   destroy() { this.el.remove() }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LINK OPEN DIALOG — 閲覧モードでリンクを踏んだときの確認ダイアログ
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 閲覧モード ('view') 専用。リンククリックを遷移させず「新しいタブで開くか」を
+ * 確認する。編集モードのリンク編集ポップアップと役割が対になっていて、
+ * 閲覧中は編集 UI が一切出ない代わりにこれだけが出る。
+ */
+export class LinkOpenDialog {
+  constructor() {
+    this._href = null
+    this.el = createElement('div', {
+      className: 'kuro-link-open',
+      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'リンクを開く' },
+    })
+    this._box = createElement('div', { className: 'kuro-link-open__box' })
+    this._box.appendChild(createElement('div', {
+      className: 'kuro-link-open__msg',
+      html: 'このリンクを新しいタブで開きますか？',
+    }))
+    this._label = createElement('div', { className: 'kuro-link-open__label' })
+    this._url   = createElement('div', { className: 'kuro-link-open__url' })
+    this._box.appendChild(this._label)
+    this._box.appendChild(this._url)
+
+    const footer = createElement('div', { className: 'kuro-link-open__footer' })
+    this._cancelBtn = createElement('button', {
+      className: 'kuro-link-open__btn',
+      html: 'キャンセル',
+      attrs: { type: 'button' },
+    })
+    this._openBtn = createElement('button', {
+      className: 'kuro-link-open__btn kuro-link-open__btn--primary',
+      html: '↗ 新しいタブで開く',
+      attrs: { type: 'button' },
+    })
+    this._cancelBtn.addEventListener('click', () => this.hide())
+    this._openBtn.addEventListener('click', () => {
+      const href = this._href
+      this.hide()
+      if (href) window.open(href, '_blank', 'noopener')
+    })
+    footer.appendChild(this._cancelBtn)
+    footer.appendChild(this._openBtn)
+    this._box.appendChild(footer)
+    this.el.appendChild(this._box)
+
+    // 背景クリック（ボックス外）で閉じる
+    this.el.addEventListener('mousedown', (e) => {
+      if (!this._box.contains(e.target)) this.hide()
+    })
+    this._onKeydown = (e) => {
+      if (!this.isVisible) return
+      if (e.key === 'Escape') { e.preventDefault(); this.hide() }
+      else if (e.key === 'Enter') { e.preventDefault(); this._openBtn.click() }
+    }
+    document.addEventListener('keydown', this._onKeydown)
+    document.body.appendChild(this.el)
+  }
+
+  get isVisible() { return this.el.classList.contains('kuro-link-open--visible') }
+
+  /**
+   * @param {string} href  - 解決済みの遷移先 (a.href)
+   * @param {string} [label] - リンクの表示テキスト（カードなら空になりうる）
+   */
+  open(href, label = '') {
+    if (!href) return
+    this._href = href
+    this._label.textContent = label
+    this._label.hidden = !label
+    this._url.textContent = href
+    this.el.classList.add('kuro-link-open--visible')
+    this._openBtn.focus()
+  }
+
+  hide() {
+    this._href = null
+    this.el.classList.remove('kuro-link-open--visible')
+  }
+
+  destroy() {
+    document.removeEventListener('keydown', this._onKeydown)
+    this.el.remove()
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4999,10 +5191,16 @@ export class KuroEditor {
       attrs: { title: `KuroEditor v${VERSION}`, 'aria-label': `バージョン ${VERSION}` },
     })
 
+    // 3 タブ: ✏️ 編集 / 👁 閲覧(編集不可) / </> HTML
     this.tabWysiwyg = createElement('button', {
       className: 'kuro-tab kuro-tab--active',
+      html: ICON.pencil,
+      attrs: { type: 'button', 'data-tab': 'wysiwyg', title: '編集', 'aria-label': '編集' },
+    })
+    this.tabView = createElement('button', {
+      className: 'kuro-tab',
       html: ICON.eye,
-      attrs: { type: 'button', 'data-tab': 'wysiwyg', title: 'プレビュー表示', 'aria-label': 'プレビュー表示' },
+      attrs: { type: 'button', 'data-tab': 'view', title: '閲覧（編集不可）', 'aria-label': '閲覧（編集不可）' },
     })
     this.tabSource = createElement('button', {
       className: 'kuro-tab',
@@ -5122,6 +5320,7 @@ export class KuroEditor {
 
     row1Left.appendChild(versionBadge)
     row1Left.appendChild(this.tabWysiwyg)
+    row1Left.appendChild(this.tabView)
     row1Left.appendChild(this.tabSource)
     row1Left.appendChild(this._tabCharCount)
 
@@ -5202,6 +5401,7 @@ export class KuroEditor {
 
     this.linePopupMenu = new LinePopupMenu(this)
     this.linkEditPopup = new LinkEditPopup(this)
+    this.linkOpenDialog = new LinkOpenDialog()   // 閲覧モードのリンク確認
     this.roundboxMenu  = new RoundboxMenu(this)
     this.tableManager  = new TableManager(this)
     this.tableInserter = new TableInserter(this.wysiwyg, {
@@ -5542,6 +5742,7 @@ export class KuroEditor {
   _bindEvents() {
     // Tab switching
     this.tabWysiwyg.addEventListener('click', () => this._setMode('wysiwyg'))
+    this.tabView.addEventListener('click',    () => this._setMode('view'))
     this.tabSource.addEventListener('click',  () => this._setMode('source'))
 
     // Save (manual) — mmenu + tab bar
@@ -5585,6 +5786,7 @@ export class KuroEditor {
     // mousedown: if the figure is already selected, deactivate BEFORE the click
     //   reaches the native media controls (native click may not propagate).
     this.wysiwyg.addEventListener('mousedown', (e) => {
+      if (this._mode !== 'wysiwyg') return   // 閲覧モードではメディアメニューを出さない
       const figure = e.target.closest('.kuro-media-wrap[data-kuro-media]')
       if (figure && this.wysiwyg.contains(figure) && this.imageMenu.activeEl === figure) {
         this.imageMenu.deactivate()
@@ -5596,6 +5798,7 @@ export class KuroEditor {
 
     // click: activate ImageMenu on first click; skip if mousedown already deactivated
     this.wysiwyg.addEventListener('click', (e) => {
+      if (this._mode !== 'wysiwyg') return   // 閲覧モードではメディアメニューを出さない
       // Let the "↗ open link" button navigate naturally — don't open ImageMenu
       if (e.target.closest('.kuro-media-open-link')) return
 
@@ -5680,13 +5883,24 @@ export class KuroEditor {
       // gutter sync. Nothing to do at the wysiwyg level.
     })
 
-    // URL カード ([[URL|]]) は contenteditable=false なので、クリックが
-    // ブラウザのリンク遷移になってしまう。編集中は遷移させず、リンク編集
-    // ポップアップを開く（遷移はポップアップの「ジャンプ」ボタンで可能）。
+    // リンククリックの扱いはモードで分かれる。
+    //  - 閲覧 ('view'): どのリンクも遷移させず、「新しいタブで開くか」を確認する
+    //    （閲覧中に踏み外して記事から飛ばされるのを防ぐ）
+    //  - 編集 ('wysiwyg'): URL カード ([[URL|]]) は contenteditable=false なので
+    //    素のままだとブラウザのリンク遷移になってしまう。遷移させずリンク編集
+    //    ポップアップを開く（遷移はポップアップの「ジャンプ」ボタンで可能）。
     // 公開ページでは JS が介在しないため通常のリンクとして遷移する。
     this.wysiwyg.addEventListener('click', (e) => {
-      const card = e.target.closest?.('.kuro-url-card')
-      if (card && this.wysiwyg.contains(card)) {
+      const a = e.target.closest?.('a')
+      if (!a || !this.wysiwyg.contains(a)) return
+      if (this._mode === 'view') {
+        e.preventDefault()
+        this.linkOpenDialog.open(a.href, a.textContent.trim())
+        return
+      }
+      if (this._mode !== 'wysiwyg') return
+      const card = a.closest('.kuro-url-card')
+      if (card) {
         e.preventDefault()
         this.linkEditPopup.open(card)
       }
@@ -5753,6 +5967,7 @@ export class KuroEditor {
     // ── Drag-and-drop media files ─────────────────────────────────────────
     // Without these handlers the browser opens the dropped file in a new tab.
     this.wysiwyg.addEventListener('dragover', (e) => {
+      if (this._mode !== 'wysiwyg') return   // 閲覧モードは受け付けない
       if (!e.dataTransfer.types.includes('Files')) return
       e.preventDefault()
       e.dataTransfer.dropEffect = 'copy'
@@ -5767,6 +5982,8 @@ export class KuroEditor {
     })
 
     this.wysiwyg.addEventListener('drop', (e) => {
+      // 閲覧モード: 既定動作 (ブラウザがファイルを開く) だけ止めて、挿入はしない
+      if (this._mode !== 'wysiwyg') { e.preventDefault(); return }
       e.preventDefault()
       this.wysiwyg.classList.remove('kuro-drag-over')
 
@@ -5789,6 +6006,9 @@ export class KuroEditor {
 
     // ── Paste image from clipboard (Ctrl+V) ───────────────────────────────
     this.wysiwyg.addEventListener('paste', (e) => {
+      // 閲覧モード: contenteditable=false でもここは呼ばれる。画像ペーストは
+      // 自前で挿入しているので明示的に止める（テキストはブラウザが弾く）
+      if (this._mode !== 'wysiwyg') { e.preventDefault(); return }
       // ① 画像ペースト
       const items = [...(e.clipboardData?.items ?? [])]
         .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
@@ -5941,6 +6161,8 @@ export class KuroEditor {
   }
 
   _onSelectionChange() {
+    // 閲覧モードでは選択できても書式ポップアップは出さない（コピーの邪魔をしない）
+    if (this._mode !== 'wysiwyg') { this.popm.hide(); return }
     hasSelection() ? this.popm.show() : this.popm.hide()
   }
 
@@ -5972,6 +6194,11 @@ export class KuroEditor {
     if (this._mode !== 'wysiwyg') return
     // Typing in the popup fields moves focus out of the wysiwyg — keep it open
     if (this.linkEditPopup.el.contains(document.activeElement)) return
+    // 🗑 でリンクを消した直後は、キャレットが隣の行の先頭 = 別のリンクの真横に
+    // 着地する（出典リストなど）。そのまま開くと「同じ位置にポップアップが出た
+    // まま中身だけ次のリンクに入れ替わる」ことになり、🗑 の連打で意図しない
+    // リンクまで消してしまう。削除直後の一瞬だけ自動オープンを止める。
+    if (this.linkEditPopup.isReopenBlocked) { this.linkEditPopup.close(); return }
     const sel = window.getSelection()
     const a = sel?.rangeCount && sel.isCollapsed
       ? linkAtCaret(sel.getRangeAt(0), this.wysiwyg)
@@ -6137,6 +6364,9 @@ export class KuroEditor {
   }
 
   _onKeydown(e) {
+    // 閲覧モード: contenteditable=false でも Ctrl+B などのショートカットは
+    // ここまで届く（そのまま通すと DOM 直操作の書式適用が走ってしまう）
+    if (this._mode === 'view') return
     // Dismiss image menu on any meaningful key — before input fires
     // (catches Delete / Backspace / Enter / printable chars; ignores pure modifiers)
     if (this.imageMenu.isVisible && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -6246,8 +6476,18 @@ export class KuroEditor {
   // MODE SWITCHING
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /**
+   * モードは 3 つ:
+   *   'wysiwyg' — 編集 (✏️)。従来どおり
+   *   'view'    — 閲覧 (👁)。contenteditable を切り、編集用ポップアップも
+   *               ツールバーのアクションも出さない。リンクは遷移させず
+   *               「新しいタブで開くか」を LinkOpenDialog で確認する
+   *   'source'  — HTML (</>)
+   * @param {'wysiwyg'|'view'|'source'} mode
+   */
   _setMode(mode) {
     if (this._mode === mode) return
+    const from = this._mode
 
     if (mode === 'source') {
       // WYSIWYG → Source: serialize code-block textareas, then reverse-render
@@ -6255,31 +6495,61 @@ export class KuroEditor {
       this._serializeCodeBlocksToHtml(clone)
       this.sourceArea.value = prettifyHTML(unrenderSpecialLinks(clone.innerHTML))
       this.pane.classList.add('kuro-pane--source')
-      this.tabWysiwyg.classList.remove('kuro-tab--active')
-      this.tabSource.classList.add('kuro-tab--active')
       this.tocPanelEl.classList.add('kuro-toc--hidden')
     } else {
-      // Source → WYSIWYG: render special links
-      // (書き換え・コードブロック再配線は編集ではないので dirty 検知は止める。
-      //  ソースモードで実際に編集していれば sourceArea の input で dirty 済み)
-      this._suspendDirty(() => {
-        this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver)
-        this._initAllCodeBlocks()
-      })
-      this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
-      this.pane.classList.remove('kuro-pane--source')
-      this.tabSource.classList.remove('kuro-tab--active')
-      this.tabWysiwyg.classList.add('kuro-tab--active')
+      // Source から戻るときだけ sourceArea を本文へ流し込む。
+      // wysiwyg ⇔ view は同じ DOM を見ているので再レンダリングしてはいけない
+      // （生きている本文を古い sourceArea の内容で上書きしてしまう）
+      if (from === 'source') {
+        // (書き換え・コードブロック再配線は編集ではないので dirty 検知は止める。
+        //  ソースモードで実際に編集していれば sourceArea の input で dirty 済み)
+        this._suspendDirty(() => {
+          this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver)
+          this._initAllCodeBlocks()
+        })
+        this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
+        this.pane.classList.remove('kuro-pane--source')
+      }
       this.tocPanelEl.classList.remove('kuro-toc--hidden')
       this.toc._doUpdate()
     }
 
     this._mode = mode
+    this._applyViewMode(mode === 'view')
+    for (const [tab, el] of [['wysiwyg', this.tabWysiwyg], ['view', this.tabView], ['source', this.tabSource]]) {
+      el.classList.toggle('kuro-tab--active', tab === mode)
+    }
+
     this.popm.hide()
     this.tableManager.deactivate()
     this.imageMenu.deactivate()
     this.roundboxMenu.deactivate()
     this.linkEditPopup.close()
+    this.linkOpenDialog.hide()
+  }
+
+  /**
+   * 閲覧モードの ON/OFF を DOM に反映する。
+   * contenteditable を落とすだけでは不十分な穴を 2 つ塞ぐ:
+   *   ① コードブロックは <textarea> なので親の contenteditable=false では止まらない
+   *      → readOnly にする
+   *   ② ツールバー/mmenu の挿入系ボタンは DOM を直接触るので、押せると
+   *      閲覧中なのに本文が変わってしまう → disabled にする
+   * （ポップアップ類は各ハンドラが _mode === 'wysiwyg' を見ているので出ない）
+   */
+  _applyViewMode(on) {
+    this.wysiwyg.setAttribute('contenteditable', on ? 'false' : 'true')
+    this.root.classList.toggle('kuro-editor--view', on)
+    this.pane.classList.toggle('kuro-pane--view', on)
+
+    for (const ta of this.wysiwyg.querySelectorAll('.kuro-code__area')) ta.readOnly = on
+
+    const chrome = [
+      this._tabUndoBtn, this._tabRedoBtn, this._mmenuUndoBtn, this._mmenuRedoBtn,
+      ...Object.values(this._tabActionBtns ?? {}),
+      ...Object.values(this._mmenuBtns ?? {}),
+    ]
+    for (const btn of chrome) if (btn) btn.disabled = on
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -7349,6 +7619,9 @@ export class KuroEditor {
   }
 
   _handleMMenu(id, anchorEl = null) {
+    // 閲覧 / ソースモードでは本文への挿入系を一切走らせない
+    // (ボタンは disabled にしてあるが、API 経由の呼び出しもここで止める)
+    if (this._mode !== 'wysiwyg') return
     switch (id) {
       case 'emoji':
         this._saveRange()
@@ -7419,6 +7692,9 @@ export class KuroEditor {
     const ta = wrap.querySelector('.kuro-code__area')
     if (!ta || ta._kuroWired) return
     ta._kuroWired = true
+    // 閲覧モード中に setContent 等で張り直された場合も編集できないようにする
+    // （<textarea> は親の contenteditable=false では止まらない）
+    ta.readOnly = this._mode === 'view'
 
     const sync = () => {
       ta.style.height = '0'
@@ -8070,6 +8346,7 @@ export class KuroEditor {
     this.tableResizer.destroy()
     this.linePopupMenu.destroy()
     this.linkEditPopup.destroy()
+    this.linkOpenDialog.destroy()
     this.emojiPanel.destroy()
     this.mediaDialog.destroy()
     this.imageMenu.destroy()
