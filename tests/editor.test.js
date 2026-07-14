@@ -393,6 +393,16 @@ describe('KuroEditor', () => {
       expect(ed.root.contains(ed.tabCanvasDarkCheck)).toBe(true)
     })
 
+    it('default: version badge is shown in the tab bar', () => {
+      expect(editor.root.querySelector('.kuro-tabs__version')).not.toBeNull()
+    })
+
+    it('versionUi: false hides the version badge', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { versionUi: false })
+      expect(ed.root.querySelector('.kuro-tabs__version')).toBeNull()
+    })
+
     it('toggle hidden → setCanvasDark still switches the canvas', () => {
       document.body.innerHTML = ''
       const ed = new KuroEditor(makeMount(), { canvasDark: false })

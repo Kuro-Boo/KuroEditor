@@ -50,10 +50,11 @@ recover it from tag v1.0.8 / git history if ever needed. The current
 - 🎨 **Rich formatting** — Headings H1–H4, blockquotes, callouts (4 colors), lists, text color, font size, line height, alignment, code blocks. Code blocks support line numbers, copy, delete, and drag-to-reorder
 - 📊 **Full-featured tables** — Cell merge/split, per-border style, drag-to-resize columns, cell background color, vertical alignment, table delete
 - 🖼 **Media support** — Image / video / audio / YouTube & Vimeo embeds, drag & drop, clipboard paste
-- 🔗 **Special link syntax** — WiKi-style links via `[[slug]]` / `[[[slug]]]` / `[[slug|label]]`
+- 🔗 **Special link syntax** — WiKi-style links via `[[slug]]` / `[[[slug]]]` / `[[slug|label]]`, plus **URL cards** via `[[url|]]` (Dropbox Paper style). Links are edited/created in place through the in-editor link edit popup and the 🔗 toolbar button
+- ↩️ **Undo / Redo** — custom snapshot history (up to 200 steps) that also reverts **direct-DOM operations** (table edits, link deletion, formatting); IME-safe (a conversion-commit Enter never misfires)
 - 🌓 **Light/Dark canvas** — The editing canvas matches your site's look by default, and can be switched to dark (`canvasDark` option / `setCanvasDark()`; the tab-bar toggle checkbox is opt-in via `canvasDarkUi: true`)
 - 💾 **Auto-save** — `onSave` callback at any interval
-- 📝 **Source editing** — Toggle between WYSIWYG and HTML source via tabs
+- 📝 **3 modes** — ✏️ edit / 👁 read-only view / `</>` HTML source, switched via tabs
 - 🪄 **Auto table of contents** — Builds an outline automatically from headings
 
 ---
@@ -202,8 +203,10 @@ Main options you can pass to `new KuroEditor(mountEl, options)`:
 | `modalToolbar` | `HTMLElement` | Specify to mount the modal menu (mmenu) into an arbitrary DOM slot |
 | `modalMenu` | `boolean` | Default `true`. Set `false` to not mount the modal menu (mmenu) at all — the tab bar's inline buttons mirror every mmenu action. Takes precedence over `modalToolbar` |
 | `saveUi` | `boolean` | Default `true`. Set `false` to hide the save UI (auto-save checkbox + Save button, both tab bar and mmenu) and disable the built-in auto-save timer — for hosts that fully manage saving via `onDirty` + `getContent()` |
+| `onDirty()` | `function` | Called the moment an unsaved change appears (false→true transitions only; saving clears it, the next edit re-fires). Decoration-only DOM operations (text color, cell backgrounds, table ops) do **not** fire `input`, so hosts with their own save UI must subscribe to this instead of watching `input`. Call `clearDirty()` when your save completes |
 | `canvasDark` | `boolean` | Optional. Force the initial canvas dark mode from the host. When set, it overrides the localStorage preference and toggling no longer writes to localStorage. When omitted, the persisted preference is restored as before (default light) |
 | `canvasDarkUi` | `boolean` | Default `false` (hidden). Set `true` to show the "dark" toggle checkbox in the tab bar. Even when hidden, `canvasDark` / `setCanvasDark()` still switch the canvas |
+| `versionUi` | `boolean` | Default `true` (shown). Set `false` to hide the version badge (`vX.Y.Z`) at the top-left of the tab bar. The version stays readable via the `data-kuro-editor` attribute and `window.KUROEDITOR_VERSION` |
 | `canvasColors` | `object` | Optional. Match the light-mode canvas palette to your site's real colors: `{ bg, text, caret, placeholder, cellFocusBg, dragOverBg }` (each a CSS color; all keys optional). Omitted keys keep the stylesheet defaults (white / slate-900). Change at runtime with `setCanvasColors()` |
 | `canvasDarkColors` | `object` | Optional. Dark-mode canvas palette, same shape as `canvasColors`; applied only while the canvas is dark. Omitted keys keep the dark defaults (`#171717` / `#f5f5f5`). Change at runtime with `setCanvasDarkColors()` |
 | `clipControl` | `boolean` | Default `false` (hidden). Set `true` to add copy / cut / paste buttons at the end of the text-selection popup — for hosts (e.g. WebView embeds) that mediate clipboard access themselves |
@@ -211,6 +214,7 @@ Main options you can pass to `new KuroEditor(mountEl, options)`:
 | `onClipCut({text, html})` | `function` | Called when the cut button is tapped, with the selection payload; the editor then deletes the selected range. Falls back to `navigator.clipboard.writeText(text)` when omitted |
 | `onClipPaste()` | `function` | Called when the paste button is tapped. Return a `string` (or a `Promise<string>`) to have it inserted as plain text at the selection; return nothing to handle insertion on the host side. Falls back to `navigator.clipboard.readText()` when omitted |
 | `onFetchUrlMeta(slug)` | `async function` | Optional. Fetches rich metadata for URL cards (`[[slug\|]]`). Return `{ title?, description?, favicon?, image? }` (or `null`). **Two-step display**: the card renders immediately from the URL alone (never blocks the screen), then, once this resolves, that one card is upgraded in place with the title/description/favicon/thumbnail. Omitted / `null` / failure keeps the simple display |
+| `blockIds` | `boolean` | Default `false`. Set `true` to assign and maintain a stable `data-bid` (UUID) on every top-level block — the foundation for block-level 3-way merge in an external sync layer (see the `mergeBlocks()` named export). Persist with `getContent()` (keeps ids); publish with `getBuildImage()` (strips them) |
 
 ### onSave example
 
@@ -256,9 +260,14 @@ new KuroEditor(mount, {
 const editor = new KuroEditor(mountEl, options)
 
 editor.setContent(html)   // Overwrite the content
-editor.getContent()       // Get the current HTML (converted back to [[...]] syntax)
+editor.getContent()       // Current HTML (converted back to [[...]] syntax; keeps data-bid when blockIds is on)
+editor.getBuildImage()    // Publish-ready HTML — getContent() minus the editing-only data-bid metadata
 editor.setMode('source')  // Switch to 'wysiwyg' | 'view' | 'source'
 editor.getMode()          // Current mode
+editor.setCanvasDark(true)     // Switch the editing canvas light/dark (read with isCanvasDark())
+editor.setCanvasColors({...})  // Override the light canvas palette at runtime (setCanvasDarkColors for dark)
+editor.isDirty()          // Any unsaved changes? (pairs with the onDirty callback)
+editor.clearDirty()       // Tell the editor the host finished saving
 editor.destroy()          // Clean up (remove listeners + restore the original element)
 ```
 

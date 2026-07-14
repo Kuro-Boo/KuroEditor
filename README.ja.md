@@ -43,10 +43,11 @@ v2 で表示崩れ等が起きた場合の戻し方：
 - 🎨 **豊富な装飾** — 見出し H1〜H4、引用、コールアウト（4色）、リスト、文字色、フォントサイズ、行間、整列、コードブロック。コードブロックは行番号・コピー・削除・ドラッグ並び替えに対応
 - 📊 **本格的なテーブル** — セル結合・分割、罫線スタイル個別指定、列幅ドラッグリサイズ、セル背景色、縦方向配置、テーブル削除
 - 🖼 **メディア対応** — 画像／動画／音声／YouTube・Vimeo 埋め込み、ドラッグ＆ドロップ、クリップボード貼り付け
-- 🔗 **特殊リンク記法** — `[[slug]]` / `[[[slug]]]` / `[[slug|表示]]` で WiKi 風リンク
+- 🔗 **特殊リンク記法** — `[[slug]]` / `[[[slug]]]` / `[[slug|表示]]` で WiKi 風リンク。`[[url|]]` で **URL カード**（Dropbox Paper 風）。リンクはエディタ内の**リンク編集ポップアップ**とツールバーの 🔗 挿入ボタンでその場で編集・作成
+- ↩️ **Undo / Redo** — 自前のスナップショット履歴（最大 200 手）。テーブル操作・リンク削除・書式適用など **DOM 直接操作もすべて取り消せます**。日本語入力（IME）の変換確定 Enter も誤爆しません
 - 🌓 **編集画面のライト/ダーク切替** — 既定は公開ページに合わせたライト表示。ダークにも切替できます（`canvasDark` オプション / `setCanvasDark()`。タブバーのトグル表示は `canvasDarkUi: true` でオプトイン）
 - 💾 **自動保存** — 任意の間隔で `onSave` コールバック
-- 📝 **ソース編集** — WYSIWYG / HTML ソースをタブ切り替え
+- 📝 **3 モード** — ✏️ 編集 / 👁 閲覧（読み取り専用） / `</>` HTML ソースをタブで切り替え
 - 🪄 **目次自動生成** — 見出しからアウトラインを自動で構築
 
 ---
@@ -195,8 +196,10 @@ KuroEditor が出力する HTML は、クラスベースのブロック（角丸
 | `modalToolbar` | `HTMLElement` | モーダルメニュー（mmenu）を任意の DOM スロットに差し込む場合に指定 |
 | `modalMenu` | `boolean` | 既定 `true`。`false` でモーダルメニュー（mmenu）を表示しない（タブバーのインラインボタンが全アクションをミラーするため機能は失われません）。`modalToolbar` より優先 |
 | `saveUi` | `boolean` | 既定 `true`。`false` で保存 UI（自動保存チェック＋保存ボタン。タブバー・mmenu 両方）を非表示にし、内蔵の自動保存も無効化。保存をホスト側が `onDirty` + `getContent()` で完全管理する場合に |
+| `onDirty()` | `function` | 未保存の変更が生じた瞬間に呼ばれる（false→true 遷移のみ。保存で消灯し、次の編集で再発火）。文字色やセル背景などの装飾系 DOM 操作は `input` イベントを発火しないため、保存 UI を自前で持つホストは input 監視ではなく必ずこれを購読してください。保存完了時は `clearDirty()` を呼びます |
 | `canvasDark` | `boolean` | 任意。編集キャンバスの初期ダークモードをホストが強制。指定時は localStorage の保存値より優先され、トグルしても localStorage に書き込みません。未指定なら従来どおり localStorage 復元（既定ライト） |
 | `canvasDarkUi` | `boolean` | 既定 `false`（非表示）。`true` でタブバーに「ダーク」トグルチェックを表示。非表示でも `canvasDark` / `setCanvasDark()` による切替は有効です |
+| `versionUi` | `boolean` | 既定 `true`（表示）。`false` でタブバー左上のバージョンバッジ（`vX.Y.Z`）を非表示にします。非表示でも `data-kuro-editor` 属性や `window.KUROEDITOR_VERSION` でバージョン確認は可能 |
 | `canvasColors` | `object` | 任意。ライト（通常）モードのキャンバス配色をホストサイトの実際の色に合わせます。`{ bg, text, caret, placeholder, cellFocusBg, dragOverBg }`（各値 CSS color、部分指定可）。省略キーは既定（白地/slate-900 系）のまま。実行時変更は `setCanvasColors()` |
 | `canvasDarkColors` | `object` | 任意。ダークモードのキャンバス配色。shape は `canvasColors` と同じで、ダーク表示中のみ適用。省略キーはダーク既定（`#171717`/`#f5f5f5` 系）のまま。実行時変更は `setCanvasDarkColors()` |
 | `clipControl` | `boolean` | 既定 `false`（非表示）。`true` で文字選択ポップアップの末尾にコピー / 切り取り / 貼り付けの 3 ボタンを表示。WebView 埋め込み等、ホストがクリップボードを仲介する環境向け |
@@ -204,6 +207,7 @@ KuroEditor が出力する HTML は、クラスベースのブロック（角丸
 | `onClipCut({text, html})` | `function` | 切り取りボタンのタップ時に選択内容とともに呼ばれる。呼び出し後、エディタ側で選択範囲を削除。未指定時は `navigator.clipboard.writeText(text)` にフォールバック |
 | `onClipPaste()` | `function` | 貼り付けボタンのタップ時に呼ばれる。`string`（または `string` を resolve する `Promise`）を返すと選択位置にプレーンテキストとして挿入。何も返さなければ挿入はホスト側に委ねる。未指定時は `navigator.clipboard.readText()` にフォールバック |
 | `onFetchUrlMeta(slug)` | `async function` | 任意。URL カード（`[[slug\|]]`）の豪華表示用メタ取得。`{ title?, description?, favicon?, image? }`（または `null`）を返す。**2 段階表示**：カードはまず URL 由来の簡易表示で即描画され（画面はブロックしない）、この関数が解決したらそのカードだけをタイトル/説明/favicon/サムネイルに差し替える。未指定・`null`・失敗時は簡易表示のまま |
+| `blockIds` | `boolean` | 既定 `false`。`true` で各トップレベルブロックに安定した `data-bid`（UUID）を付与・維持。外部同期レイヤーでのブロック単位 3-way マージ（named export の `mergeBlocks()`）の土台。保存には id 入りの `getContent()`、公開 HTML には id を除去した `getBuildImage()` を使います |
 
 ### onSave の例
 
@@ -249,9 +253,14 @@ new KuroEditor(mount, {
 const editor = new KuroEditor(mountEl, options)
 
 editor.setContent(html)   // 内容を上書き
-editor.getContent()       // 現在の HTML を取得（[[...]] 記法に戻して）
+editor.getContent()       // 現在の HTML を取得（[[...]] 記法に戻して。blockIds 有効時は data-bid 込み）
+editor.getBuildImage()    // 公開/ビルド用 HTML（getContent() から編集専用メタ data-bid を除去）
 editor.setMode('source')  // 'wysiwyg' | 'view' | 'source' へ切替
 editor.getMode()          // 現在のモード
+editor.setCanvasDark(true)     // 編集キャンバスのライト/ダーク切替（取得は isCanvasDark()）
+editor.setCanvasColors({...})  // ライトのキャンバス配色を実行時変更（ダークは setCanvasDarkColors()）
+editor.isDirty()          // 未保存の変更があるか（onDirty コールバックと対）
+editor.clearDirty()       // ホスト側の保存が完了したことをエディタへ通知
 editor.destroy()          // 後片付け（イベント解除＋元の要素に戻す）
 ```
 

@@ -901,6 +901,9 @@
            rounded-xl shadow-xl
            opacity-0 pointer-events-none
            transition-opacity duration-100;
+    /* スマホ等でボタン列が画面幅に入らないときは折り返す(はみ出して
+       ボタンが押せなくなるのを防ぐ)。折返しは __main の flex-wrap が担う */
+    max-width: calc(100vw - 8px);
   }
 
   .kuro-table-menu--visible {
@@ -908,7 +911,7 @@
   }
 
   .kuro-table-menu__main {
-    @apply flex items-center gap-0.5;
+    @apply flex items-center gap-0.5 flex-wrap;
   }
 
   .kuro-table-menu__btn {
@@ -1322,6 +1325,9 @@
     font-size: 0.75rem;
     white-space: nowrap;
     user-select: none;
+    /* スマホ等で画面幅に入らないときはコントロール列を折り返す */
+    flex-wrap: wrap;
+    max-width: calc(100vw - 8px);
   }
   .kuro-roundbox-menu__label {
     @apply text-xs font-semibold text-neutral-400 pr-1;
@@ -1388,6 +1394,8 @@
            rounded-xl shadow-xl
            opacity-0 pointer-events-none
            transition-opacity duration-100;
+    /* スマホ等で画面幅に入らないときは各行(__row の flex-wrap)が折り返す */
+    max-width: calc(100vw - 8px);
   }
 
   .kuro-image-menu--visible {
@@ -1395,7 +1403,7 @@
   }
 
   .kuro-image-menu__row {
-    @apply flex items-center gap-0.5;
+    @apply flex items-center gap-0.5 flex-wrap;
   }
 
   .kuro-image-menu__btn {

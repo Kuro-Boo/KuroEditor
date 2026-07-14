@@ -5175,6 +5175,9 @@ export class KuroEditor {
    *   canvasDarkUi?: boolean,      // true でタブバーに「ダーク」トグルチェックを表示（既定
    *                                // false = 非表示）。非表示でも setCanvasDark() や
    *                                // canvasDark オプションによる切替は従来どおり有効。
+   *   versionUi?: boolean,         // false でタブバー左上のバージョンバッジ (vX.Y.Z) を
+   *                                // 非表示（既定 true = 表示）。ホスト UI に組み込む際、
+   *                                // 内部バージョンをユーザーに見せたくない画面向け。
    *   blockIds?: boolean,          // opt-in: maintain a stable data-bid on each top-level block
    *   canvasColors?: {             // 通常モードのキャンバス配色をホストの実サイト色に合わせる。
    *     bg?: string,               // 各値は CSS color。省略・空はスタイルシート既定
@@ -5233,6 +5236,7 @@ export class KuroEditor {
       saveUi: true,
       canvasDark: null,
       canvasDarkUi: false,
+      versionUi: true,
       blockIds: false,
       canvasColors: null,
       canvasDarkColors: null,
@@ -5389,8 +5393,9 @@ export class KuroEditor {
   _buildTabs() {
     this.tabBar = createElement('div', { className: 'kuro-tabs' })
 
-    // Version badge — always visible top-left for build verification.
-    // Updated by `npm run bup` (scripts/bump.js) after every fix.
+    // Version badge — top-left, for build verification (which bundle is live).
+    // Updated by `npm run bup` (build-scripts/bump.js) after every fix.
+    // versionUi: false で非表示にできる（既定 true = 表示。要素は生成済み）。
     const versionBadge = createElement('span', {
       className: 'kuro-tabs__version',
       html: `v${VERSION}`,
@@ -5525,7 +5530,8 @@ export class KuroEditor {
     const row1Left  = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--left' })
     const row1Right = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--right' })
 
-    row1Left.appendChild(versionBadge)
+    // versionUi: false → バージョンバッジを載せない（他の *Ui オプションと同じ流儀）
+    if (this.options.versionUi) row1Left.appendChild(versionBadge)
     row1Left.appendChild(this.tabWysiwyg)
     row1Left.appendChild(this.tabView)
     row1Left.appendChild(this.tabSource)
