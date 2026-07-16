@@ -207,6 +207,7 @@ KuroEditor が出力する HTML は、クラスベースのブロック（角丸
 | `onClipCut({text, html})` | `function` | 切り取りボタンのタップ時に選択内容とともに呼ばれる。呼び出し後、エディタ側で選択範囲を削除。未指定時は `navigator.clipboard.writeText(text)` にフォールバック |
 | `onClipPaste()` | `function` | 貼り付けボタンのタップ時に呼ばれる。`string`（または `string` を resolve する `Promise`）を返すと選択位置にプレーンテキストとして挿入。何も返さなければ挿入はホスト側に委ねる。未指定時は `navigator.clipboard.readText()` にフォールバック |
 | `onFetchUrlMeta(slug)` | `async function` | 任意。URL カード（`[[slug\|]]`）の豪華表示用メタ取得。`{ title?, description?, favicon?, image? }`（または `null`）を返す。**2 段階表示**：カードはまず URL 由来の簡易表示で即描画され（画面はブロックしない）、この関数が解決したらそのカードだけをタイトル/説明/favicon/サムネイルに差し替える。未指定・`null`・失敗時は簡易表示のまま |
+| `mediaAccept` | `string` | 既定 `'image/*,video/*,audio/*'`。メディアダイアログ「ファイル選択」の `<input type="file">` の accept。ホストが受け付ける種別に合わせて絞れます(例 `'image/*'`)。**iOS(WKWebView/Safari)は、写真ライブラリが提供できない種別(audio 等)が accept に混ざると Files ピッカーだけに落ちる**ため、画像のみのホストは `'image/*'` に絞ると「フォトライブラリ / 写真を撮る」の標準シートが出ます |
 | `blockIds` | `boolean` | 既定 `false`。`true` で各トップレベルブロックに安定した `data-bid`（UUID）を付与・維持。外部同期レイヤーでのブロック単位 3-way マージ（named export の `mergeBlocks()`）の土台。保存には id 入りの `getContent()`、公開 HTML には id を除去した `getBuildImage()` を使います |
 
 ### onSave の例

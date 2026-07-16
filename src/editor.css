@@ -754,6 +754,63 @@
   }
   .kuro-table-border-btn:hover { transform: scale(1.1); }
 
+  /* Move (drag-to-reorder) handles — hand icon, same footprint as the
+     delete button but neutral colour so it doesn't read as destructive. */
+  .kuro-table-move-btn {
+    position: absolute;
+    pointer-events: auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    @apply bg-neutral-700 hover:bg-indigo-500 text-neutral-300 hover:text-white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    border: none;
+    padding: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    transition: transform 0.12s, background-color 0.12s;
+    user-select: none;
+  }
+  .kuro-table-move-btn:hover  { transform: scale(1.25); }
+  .kuro-table-move-btn:active { cursor: grabbing; }
+  .kuro-table-move-btn svg    { display: block; }
+
+  /* Dragged row/column cells: bold inset outline = "grabbed" feedback.
+     outline (not border) so cell box size / table layout never shifts. */
+  .kuro-table-row--grabbed > td,
+  .kuro-table-row--grabbed > th,
+  td.kuro-table-col--grabbed,
+  th.kuro-table-col--grabbed {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid theme('colors.indigo.400');
+    outline-offset: -2px;
+    background-color: rgba(99, 102, 241, 0.08);
+  }
+
+  /* Drop-position indicator bars, shown while dragging a row (horizontal)
+     or a column (vertical). No transition — instant tracking reads smoother
+     than an animated chase. */
+  .kuro-table-row-indicator,
+  .kuro-table-col-indicator {
+    position: fixed;
+    background: theme('colors.indigo.400');
+    border-radius: 1.5px;
+    pointer-events: none;
+    z-index: 56;
+  }
+  .kuro-table-row-indicator { height: 3px; }
+  .kuro-table-col-indicator { width: 3px; }
+
+  /* During row/col drag: freeze the grab cursor across the entire page */
+  body.kuro-row-dragging, body.kuro-row-dragging *,
+  body.kuro-col-dragging, body.kuro-col-dragging * {
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+
   /* ════════════════════════════════════════════════════════
      LINK EDIT POPUP — caret on / next to a link
      ════════════════════════════════════════════════════════ */

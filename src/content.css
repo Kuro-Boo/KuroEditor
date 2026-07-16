@@ -128,6 +128,25 @@ h5[id^='kuro-h-'] {
   line-height: 1.2;
 }
 
+/* RTL / bidi text — each block auto-detects its own paragraph direction from
+   its first strong character (Arabic/Hebrew paragraphs align right; a
+   document mixing LTR and RTL paragraphs gets correct alignment and caret
+   behavior per block) without a manual direction toggle. text-align's
+   initial value is 'start', which already resolves per-block once the
+   block's own direction is known — so no text-align override is needed here. */
+.kuro-content h1,
+.kuro-content h2,
+.kuro-content h3,
+.kuro-content h4,
+.kuro-content h5,
+.kuro-content p,
+.kuro-content li,
+.kuro-content blockquote,
+.kuro-content td,
+.kuro-content th {
+  unicode-bidi: plaintext;
+}
+
 /* Inline */
 .kuro-content a {
   color: var(--kuro-link);
@@ -458,7 +477,7 @@ h5[id^='kuro-h-'] {
 .kuro-content th {
   background: var(--kuro-table-head-bg);
   font-weight: 600;
-  text-align: left;
+  text-align: start;   /* not 'left' — so RTL table headers align right */
   color: var(--kuro-table-head-text);
 }
 

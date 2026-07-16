@@ -11,7 +11,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.14.0'
+export const VERSION = '2.15.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -408,6 +408,20 @@ export function popupBottomLimit(mmenuEl, margin = 4) {
     if (r.height > 0) return Math.min(vpBottom, r.top - 6)
   }
   return vpBottom
+}
+
+/**
+ * OS のテキスト選択ツールバーが「選択範囲の上」に占有する帯の高さ(px)。
+ * Android の floating toolbar(コピー/貼り付け/翻訳…)は選択のすぐ上に描画される
+ * ため、選択の上に出すポップアップ(popm)はこの分さらに上へ逃がす必要がある。
+ * iOS は編集メニューが選択の「下」に出るので 0(下方向は flip 時のみ使われ、
+ * その場合 OS メニューはユーザー操作で消えるのが通例)。
+ * 高さは 48dp のツールバー + マージンの実測近似。
+ * @param {string} [ua=navigator.userAgent]
+ * @returns {number}
+ */
+export function nativeSelectionBarClearance(ua = navigator.userAgent) {
+  return /Android/i.test(ua) ? 64 : 0
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2587,8 +2601,10 @@ export class PopupMenu {
 
     // ── Vertical: half-char (~10px) above the selection top ────────────────
     // Gap of 18px gives a comfortable ~1.5 line clearance above the caret line.
+    // Android では OS のテキスト選択ツールバー(コピー/貼り付け…)も「選択のすぐ上」に
+    // 浮くため、その帯ぶんさらに上へ逃がす(nativeSelectionBarClearance)。
     const GAP = 18
-    let top = rect.top - popH - GAP
+    let top = rect.top - popH - GAP - nativeSelectionBarClearance()
     if (top < 4) top = rect.bottom + 6   // flip below when too close to viewport top
     // mmenu（下部バー）に食い込まないよう下限をクランプ
     const bLimit = popupBottomLimit(this._editor?.mmenu)
@@ -2620,6 +2636,12 @@ export class PopupMenu {
     this.el.style.left = `${left}px`
     this.el.classList.add('kuro-popm--visible')
     this._updateActiveStates()
+
+    // popm は幅制約で 2 行以上に折り返すことがあり、再配置のたびに高さが変わり得る。
+    // 位置が確定した「後」に、テーブルメニューへ実測 rect ベースの再配置を促す
+    // (テーブルメニューは表示時に 1 回避けるだけだと、その後の popm の行数変化に
+    // 追従できず重なる)。テーブルメニューは popm を動かさないので循環しない。
+    this._editor?.tableManager?.reposition()
   }
 
   /** Hide popup and all sub-panels. */
@@ -2911,6 +2933,13 @@ export class TableManager {
     })
     this._build()
     document.body.appendChild(this.el)
+
+    // Track scroll of the window OR any inner scrollable ancestor (capture —
+    // scroll doesn't bubble) so the floating toolbar doesn't drift away from
+    // the table underneath it. Called directly (no rAF hop) — the toolbar's
+    // own re-measure is cheap and this keeps it glued to the caret/table
+    // instead of trailing a frame behind during fast/momentum scroll.
+    this._onScroll = () => { if (this.activeTable) this._place() }
   }
 
   _build() {
@@ -3074,8 +3103,33 @@ export class TableManager {
 
   /** Show toolbar anchored above (or below) the cursor position. */
   activate(table) {
+    const wasActive = this.activeTable !== null
     this.activeTable = table
     requestAnimationFrame(() => {
+      this._place()
+      this.el.classList.add('kuro-table-menu--visible')
+      this._updateSplitBtns()
+      this._updateValignBtns()
+    })
+    if (!wasActive) document.addEventListener('scroll', this._onScroll, { capture: true, passive: true })
+  }
+
+  /**
+   * popm(選択ポップアップ)の再配置・折返しに追従して置き直す。
+   * popm は幅制約で 2 行以上になることがあり高さが動的に変わるため、
+   * 表示時に 1 回避けるだけでは足りない。_place は毎回 **実測の** 自身の高さと
+   * popm の getBoundingClientRect で避けるので、行数が何行に増えても重ならない。
+   */
+  reposition() {
+    if (!this.activeTable) return
+    requestAnimationFrame(() => {
+      if (this.activeTable) this._place()
+    })
+  }
+
+  /** 実測 rect ベースの位置決め本体(何度呼び直しても安全)。 */
+  _place() {
+    {
       const menuH = this.el.offsetHeight || 36
       const menuW = this.el.offsetWidth  || 200
       const GAP   = 6
@@ -3090,8 +3144,11 @@ export class TableManager {
       // カーソル行の直上ではなく約3行分上に離して表示する。
       // 1行分の高さは caret 矩形から取り、取れない場合は 20px とみなす。
       const lineH = (caretRect && caretRect.height > 0) ? caretRect.height : 20
+      // 選択の「下」に置くときの余白。Android は選択ハンドル(雫型)が選択の下に
+      // ぶら下がって OS が描くため、その分(約 28px)も空けてボタンが隠れないようにする。
+      const belowClear = 6 + (nativeSelectionBarClearance() ? 28 : 0)
       let top = refRect.top - menuH - lineH * 3
-      if (top < 4) top = refRect.bottom + 6
+      if (top < 4) top = refRect.bottom + belowClear
 
       const overlaps = (t, r) => r && t < r.bottom + GAP && t + menuH > r.top - GAP
 
@@ -3102,7 +3159,9 @@ export class TableManager {
         ? popmEl.getBoundingClientRect() : null
       if (popmRect && overlaps(top, popmRect)) {
         const above = popmRect.top - menuH - GAP
-        top = above >= 4 ? above : Math.max(refRect.bottom + 6, popmRect.bottom + GAP)
+        top = above >= 4
+          ? above
+          : Math.max(refRect.bottom + belowClear, popmRect.bottom + GAP)
       }
 
       // Avoid roundboxMenu — position below it if overlapping
@@ -3128,16 +3187,15 @@ export class TableManager {
 
       this.el.style.top  = `${top}px`
       this.el.style.left = `${left}px`
-      this.el.classList.add('kuro-table-menu--visible')
-      this._updateSplitBtns()
-      this._updateValignBtns()
-    })
+    }
   }
 
   deactivate() {
+    if (!this.activeTable) return
     this.activeTable = null
     this.el.classList.remove('kuro-table-menu--visible')
     this._hideColorPanel()
+    document.removeEventListener('scroll', this._onScroll, { capture: true })
   }
 
   // ── Selection helpers ────────────────────────────────────────────────────
@@ -3257,6 +3315,14 @@ export class TableInserter {
     this.rowDelBtn = this._makeDelBtn('行を削除', () => this._deleteRow())
     this.colDelBtn = this._makeDelBtn('列を削除', () => this._deleteCol())
 
+    // Move (drag-to-reorder) handles — hand icon. Row handle sits beside the
+    // row-delete button (right edge, drag vertically); column handle mirrors
+    // the column-delete button to the table's top edge (drag horizontally).
+    this._rowDrag = null
+    this._colDrag = null
+    this.rowMoveBtn = this._makeMoveBtn('つかんで行を並べ替え', 'row', (e) => this._startRowDrag(e))
+    this.colMoveBtn = this._makeMoveBtn('つかんで列を並べ替え', 'col', (e) => this._startColDrag(e))
+
     // Border buttons — right (row border) / bottom (col border)
     // Clicking these opens the LinePopupMenu via the provided callbacks.
     this.rowBorderBtn = this._makeBorderBtn('行の罫線', () => {
@@ -3282,21 +3348,20 @@ export class TableInserter {
     this.container.appendChild(this.colDelBtn)
     this.container.appendChild(this.rowBorderBtn)
     this.container.appendChild(this.colBorderBtn)
+    this.container.appendChild(this.rowMoveBtn)
+    this.container.appendChild(this.colMoveBtn)
     document.body.appendChild(this.container)
 
     this._onMouseMove = (e) => this._handleMouseMove(e)
 
     // Scroll of window OR any inner container (capture — scroll doesn't bubble):
     // buttons live in a viewport-fixed layer, so they must be re-anchored to the
-    // table's live rect or they get left behind. rAF-throttled.
-    this._scrollRaf = null
-    this._onScroll = () => {
-      if (this._scrollRaf !== null) return
-      this._scrollRaf = requestAnimationFrame(() => {
-        this._scrollRaf = null
-        this._syncScroll()
-      })
-    }
+    // table's live rect or they get left behind. Called directly (no rAF hop) —
+    // deferring to the next frame is exactly what made the buttons visibly trail
+    // a frame behind during fast/momentum scroll; _syncScroll's own work (a
+    // handful of getBoundingClientRect reads + style writes) is cheap enough to
+    // just do inline as each scroll event arrives.
+    this._onScroll = () => this._syncScroll()
   }
 
   activate(table) {
@@ -3320,10 +3385,6 @@ export class TableInserter {
     this._currentCell = null
     document.removeEventListener('mousemove', this._onMouseMove)
     document.removeEventListener('scroll', this._onScroll, { capture: true })
-    if (this._scrollRaf !== null) {
-      cancelAnimationFrame(this._scrollRaf)
-      this._scrollRaf = null
-    }
     this._hide()
   }
 
@@ -3397,6 +3458,26 @@ export class TableInserter {
     return btn
   }
 
+  /** Build a drag-to-reorder handle (hand icon). `axis` drives the CSS cursor/modifier class. */
+  _makeMoveBtn(title, axis, onMouseDown) {
+    const icon =
+      `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" ` +
+        `stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+        `<path d="M18 12.5V8a1.5 1.5 0 0 0-3 0v3.5"/>` +
+        `<path d="M15 11V6a1.5 1.5 0 0 0-3 0v5.5"/>` +
+        `<path d="M12 11.5V7a1.5 1.5 0 0 0-3 0v7.5"/>` +
+        `<path d="M9 14.5l-1.8-2.1a1.4 1.4 0 0 0-2.1 1.9L8 18.3c1.2 1.7 3 2.7 5.6 2.7 4 0 6.4-2.6 6.4-6.5v-3"/>` +
+      `</svg>`
+    const btn = createElement('button', {
+      className: `kuro-table-move-btn kuro-table-move-btn--${axis}`,
+      html: icon,
+      attrs: { type: 'button', title },
+    })
+    btn.style.display = 'none'
+    btn.addEventListener('mousedown', onMouseDown)
+    return btn
+  }
+
   /**
    * Build a border button. Clicking opens the LinePopupMenu via callback.
    * Icon = square with a single inner dashed line (matches the supplied design).
@@ -3416,18 +3497,22 @@ export class TableInserter {
     return btn
   }
 
-  /** Position delete buttons based on the cursor's current row / column. */
+  /** Position delete / move buttons based on the cursor's current row / column. */
   _updateDelBtns() {
     if (!this.activeTable || !this._currentCell) {
-      this.rowDelBtn.style.display = 'none'
-      this.colDelBtn.style.display = 'none'
+      this.rowDelBtn.style.display  = 'none'
+      this.colDelBtn.style.display  = 'none'
+      this.rowMoveBtn.style.display = 'none'
+      this.colMoveBtn.style.display = 'none'
       return
     }
-    const tableRect = this.activeTable.getBoundingClientRect()
+    const table     = this.activeTable
+    const tableRect = table.getBoundingClientRect()
     const rowRect   = this._currentCell.closest('tr')?.getBoundingClientRect()
     const cellRect  = this._currentCell.getBoundingClientRect()
-    const BTN = 9
-    const GAP = 5
+    const BTN  = 9
+    const GAP  = 5
+    const MGAP = 6   // gap between a delete button and its stacked move handle
 
     if (rowRect) {
       this.rowDelBtn.style.display = 'flex'
@@ -3438,6 +3523,29 @@ export class TableInserter {
     this.colDelBtn.style.display = 'flex'
     this.colDelBtn.style.left = `${Math.round(cellRect.left + cellRect.width / 2 - BTN)}px`
     this.colDelBtn.style.top  = `${Math.round(tableRect.bottom + GAP)}px`
+
+    // Move handles are hidden when there's nothing to reorder against, or
+    // when the table has merged cells — a whole-row/column move can't
+    // safely account for rowspan/colspan without corrupting the grid.
+    const rowCount  = table.querySelectorAll('tr').length
+    const colCount  = table.querySelector('tr')?.cells.length ?? 0
+    const hasMerged = !!table.querySelector('[rowspan],[colspan]')
+
+    if (rowRect && rowCount > 1 && !hasMerged && !this._colDrag) {
+      this.rowMoveBtn.style.display = 'flex'
+      this.rowMoveBtn.style.left = `${Math.round(tableRect.right + GAP)}px`
+      this.rowMoveBtn.style.top  = `${Math.round(rowRect.top + rowRect.height / 2 - BTN - (BTN * 2 + MGAP))}px`
+    } else {
+      this.rowMoveBtn.style.display = 'none'
+    }
+
+    if (colCount > 1 && !hasMerged && !this._rowDrag) {
+      this.colMoveBtn.style.display = 'flex'
+      this.colMoveBtn.style.left = `${Math.round(cellRect.left + cellRect.width / 2 - BTN)}px`
+      this.colMoveBtn.style.top  = `${Math.round(tableRect.top - GAP - BTN * 2)}px`
+    } else {
+      this.colMoveBtn.style.display = 'none'
+    }
   }
 
   /**
@@ -3538,6 +3646,170 @@ export class TableInserter {
     }
     this._currentCell = null
     this._updateDelBtns()
+  }
+
+  // ── Row / column reordering (drag via the hand-icon move handles) ─────────
+  //
+  // Pattern mirrors _bindCodeBlockDrag(): a thin indicator shows the drop
+  // position live as the mouse moves (cheap DOM reads, no per-frame layout
+  // animation), the actual DOM move happens once on mouseup, and the target
+  // row/column gets a bold inset outline (not border, so cell box size never
+  // shifts) as "grabbed" feedback. Disabled whenever the table has merged
+  // cells (rowspan/colspan) — moving a whole <tr> or column slice can't
+  // safely account for spans without corrupting the grid.
+
+  /** 閲覧モードでは列幅ドラッグ等と同じく無効化する。 */
+  get _dragEnabled() { return this.wysiwyg.getAttribute('contenteditable') === 'true' }
+
+  _startRowDrag(e) {
+    if (e.button !== 0 || !this._dragEnabled) return
+    const table = this.activeTable
+    const row   = this._currentCell?.closest('tr')
+    if (!table || !row) return
+    const rows = Array.from(table.querySelectorAll('tr'))
+    if (rows.length <= 1) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    this._rowDrag = true
+    row.classList.add('kuro-table-row--grabbed')
+    document.body.classList.add('kuro-row-dragging')
+    this._updateDelBtns()   // hide the column move handle while a row drag is in progress
+
+    const indicator = createElement('div', { className: 'kuro-table-row-indicator' })
+    let dropTarget = null   // { el: <tr>, before: boolean }
+
+    const getDropTarget = (clientY) => {
+      for (const r of rows) {
+        if (r === row) continue
+        const rect = r.getBoundingClientRect()
+        if (clientY <= rect.top + rect.height / 2) return { el: r, before: true }
+      }
+      const others = rows.filter(r => r !== row)
+      const last = others[others.length - 1]
+      return last ? { el: last, before: false } : null
+    }
+
+    const onMove = (ev) => {
+      dropTarget = getDropTarget(ev.clientY)
+      if (!dropTarget) { indicator.remove(); return }
+      const r = dropTarget.el.getBoundingClientRect()
+      const t = table.getBoundingClientRect()
+      indicator.style.left  = `${Math.round(t.left)}px`
+      indicator.style.width = `${Math.round(t.width)}px`
+      indicator.style.top   = `${Math.round(dropTarget.before ? r.top : r.bottom) - 1}px`
+      if (!indicator.isConnected) document.body.appendChild(indicator)
+    }
+
+    const onUp = () => {
+      row.classList.remove('kuro-table-row--grabbed')
+      document.body.classList.remove('kuro-row-dragging')
+      indicator.remove()
+      if (dropTarget) {
+        dropTarget.before ? dropTarget.el.before(row) : dropTarget.el.after(row)
+      }
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      this._rowDrag = false
+      this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      this._updateDelBtns()
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  _startColDrag(e) {
+    if (e.button !== 0 || !this._dragEnabled) return
+    const table = this.activeTable
+    const cell  = this._currentCell
+    if (!table || !cell) return
+    const colIdx = cell.cellIndex
+    if (colIdx < 0) return
+    const firstRow = table.querySelector('tr')
+    const colCount = firstRow?.cells.length ?? 0
+    if (colCount <= 1) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    this._colDrag = true
+    const colCells = Array.from(table.querySelectorAll('tr')).map(r => r.cells[colIdx]).filter(Boolean)
+    colCells.forEach(c => c.classList.add('kuro-table-col--grabbed'))
+    document.body.classList.add('kuro-col-dragging')
+    this._updateDelBtns()   // hide the row move handle while a column drag is in progress
+
+    const indicator = createElement('div', { className: 'kuro-table-col-indicator' })
+    let dropIdx = null   // insert-before index, computed against the pre-move column order
+
+    const getDropIndex = (clientX) => {
+      const cells = Array.from(firstRow.cells)
+      for (let i = 0; i < cells.length; i++) {
+        if (i === colIdx) continue
+        const r = cells[i].getBoundingClientRect()
+        if (clientX <= r.left + r.width / 2) return i
+      }
+      return cells.length
+    }
+
+    const onMove = (ev) => {
+      dropIdx = getDropIndex(ev.clientX)
+      const cells = Array.from(firstRow.cells)
+      const t = table.getBoundingClientRect()
+      const x = dropIdx >= cells.length
+        ? cells[cells.length - 1].getBoundingClientRect().right
+        : cells[dropIdx].getBoundingClientRect().left
+      indicator.style.left   = `${Math.round(x) - 1}px`
+      indicator.style.top    = `${Math.round(t.top)}px`
+      indicator.style.height = `${Math.round(t.height)}px`
+      if (!indicator.isConnected) document.body.appendChild(indicator)
+    }
+
+    const onUp = () => {
+      colCells.forEach(c => c.classList.remove('kuro-table-col--grabbed'))
+      document.body.classList.remove('kuro-col-dragging')
+      indicator.remove()
+      if (dropIdx !== null && dropIdx !== colIdx && dropIdx !== colIdx + 1) {
+        this._moveColumn(table, colIdx, dropIdx)
+      }
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      this._colDrag = false
+      this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+      this._updateDelBtns()
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  /**
+   * Move column `fromIdx` to sit before the cell that was originally at
+   * `toIdx` (both indices refer to the pre-move column order). Reorders
+   * every row's cell and, if present, the matching <colgroup><col> so
+   * per-column widths keep following their column.
+   */
+  _moveColumn(table, fromIdx, toIdx) {
+    for (const row of table.querySelectorAll('tr')) {
+      const cells = Array.from(row.cells)
+      const cell  = cells[fromIdx]
+      if (!cell) continue
+      const ref = cells[toIdx]
+      cell.remove()
+      if (ref && ref !== cell) row.insertBefore(cell, ref)
+      else row.appendChild(cell)
+    }
+    const cg   = table.querySelector('colgroup')
+    const colN = table.querySelector('tr')?.cells.length ?? 0
+    if (cg && cg.children.length === colN) {
+      const cols = Array.from(cg.children)
+      const col  = cols[fromIdx]
+      const ref  = cols[toIdx]
+      if (col) {
+        col.remove()
+        if (ref && ref !== col) cg.insertBefore(col, ref)
+        else cg.appendChild(col)
+      }
+    }
   }
 
   _handleMouseMove(e) {
@@ -3642,6 +3914,8 @@ export class TableInserter {
     this.colDelBtn.style.display    = 'none'
     this.rowBorderBtn.style.display = 'none'
     this.colBorderBtn.style.display = 'none'
+    this.rowMoveBtn.style.display   = 'none'
+    this.colMoveBtn.style.display   = 'none'
     this._pendingRowIdx = null
     this._pendingColIdx = null
     this._pendingRowBorderIdx = null
@@ -4700,13 +4974,21 @@ export class MediaDialog {
    *   onURL:         (url: string) => void,
    *   onFile:        (file: File)  => void,
    *   hasFileUpload: boolean,
+   *   accept?:       string,       // <input type="file"> の accept(options.mediaAccept)
    *   editor?:       KuroEditor,   // mmenu 回避の位置決めに使う（省略可）
    * }} opts
    */
-  constructor({ onURL, onFile, hasFileUpload = false, editor = null }) {
+  constructor({
+    onURL,
+    onFile,
+    hasFileUpload = false,
+    accept = 'image/*,video/*,audio/*',
+    editor = null,
+  }) {
     this.onURL         = onURL
     this.onFile        = onFile
     this.hasFileUpload = hasFileUpload
+    this.accept        = accept
     this._editor       = editor
     this.el = createElement('div', {
       className: 'kuro-media-dialog',
@@ -4740,7 +5022,7 @@ export class MediaDialog {
       html: '📁 ファイル選択',
     })
     this._fileInput = createElement('input', {
-      attrs: { type: 'file', accept: 'image/*,video/*,audio/*' },
+      attrs: { type: 'file', accept: this.accept },
     })
     this._fileInput.style.cssText = 'position:absolute;opacity:0;pointer-events:none;'
     this._fileLabel.appendChild(this._fileInput)
@@ -5245,6 +5527,11 @@ export class KuroEditor {
       onClipCut: null,
       onClipPaste: null,
       onFetchUrlMeta: null,
+      // メディアダイアログ「ファイル選択」の accept。ホストが受け付ける種別に合わせて
+      // 絞れる(例: 'image/*')。iOS WKWebView は accept に写真ライブラリが提供できない
+      // 種別(audio 等)が混ざると Files ピッカーだけに落ちるため、画像しか受け付けない
+      // ホストは 'image/*' に絞ることで「フォトライブラリ / 写真を撮る」のシートが出る。
+      mediaAccept: 'image/*,video/*,audio/*',
       ...options,
     }
     this._mode          = 'wysiwyg'
@@ -5856,6 +6143,7 @@ export class KuroEditor {
   _buildMediaDialog() {
     this.mediaDialog = new MediaDialog({
       hasFileUpload: !!this.options.onMediaUpload,
+      accept: this.options.mediaAccept,
       onURL:  (url)  => this._insertMediaURL(url),
       onFile: (file) => this._insertMediaFile(file),
       editor: this,
@@ -6302,9 +6590,56 @@ export class KuroEditor {
     }
 
     normalizePastedLinks(body, this.options.urlResolver)
+    this._normalizePastedTables(body)
 
     const clean = body.innerHTML
     if (clean) execFormat('insertHTML', clean)
+  }
+
+  /**
+   * Pasted <table> markup (Excel / Sheets / Notion / other pages) carries
+   * source-specific presentational cruft that fights the app's own
+   * `.kuro-table` CSS. Most visibly: spreadsheet exports often give inner
+   * cells per-side borders but leave the table's own outer edge (most
+   * commonly the last row's bottom) with no explicit border — so the bottom
+   * rule never renders even though `.kuro-content td` sets a border on every
+   * side. Stripping border/size cruft and re-adopting the canonical
+   * `kuro-table` class (same markup `_generateTableHTML` produces) lets the
+   * app's CSS own the border/width uniformly, and also makes the pasted
+   * table eligible for column-resize, row/col insert-delete-move, etc. —
+   * those already scope themselves to `.kuro-table` / cell contenteditable.
+   */
+  _normalizePastedTables(root) {
+    const LEGACY_ATTRS = ['border', 'cellpadding', 'cellspacing', 'width', 'height', 'align', 'valign', 'bgcolor']
+    const SIZE_BORDER_PROPS = [
+      'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+      'border-width', 'border-style', 'border-color',
+      'border-collapse', 'border-spacing', 'width', 'height',
+    ]
+
+    for (const table of root.querySelectorAll('table')) {
+      table.className = 'kuro-table'
+      table.removeAttribute('style')
+      for (const a of LEGACY_ATTRS) table.removeAttribute(a)
+      // Source column widths (often fixed px) fight table-layout:fixed's
+      // even split; drop them and let TableResizer build one lazily on drag.
+      table.querySelector('colgroup')?.remove()
+
+      for (const row of table.querySelectorAll('tr')) {
+        row.removeAttribute('style')
+        for (const a of LEGACY_ATTRS) row.removeAttribute(a)
+      }
+
+      for (const cell of table.querySelectorAll('td, th')) {
+        cell.setAttribute('contenteditable', 'true')
+        for (const a of LEGACY_ATTRS) cell.removeAttribute(a)
+        if (cell.hasAttribute('style')) {
+          for (const p of SIZE_BORDER_PROPS) cell.style.removeProperty(p)
+          if (cell.getAttribute('style') === '') cell.removeAttribute('style')
+        }
+        if (!cell.innerHTML.trim()) cell.innerHTML = '<br>'
+      }
+    }
   }
 
   /**
