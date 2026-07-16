@@ -1524,6 +1524,25 @@ describe('KuroEditor', () => {
       expect(editor.tableManager._mergeDownBtn.disabled).toBe(true)
       expect(editor.tableManager._mergeRightBtn.disabled).toBe(true)
     })
+
+    it('列幅リサイズの colgroup は 1 行目に colspan があっても論理列数で作られる', () => {
+      // 回帰対象: _initColWidths が firstRow.cells.length を列数として使っていた
+      // ため、1 行目に結合セルがあると <col> が論理列より少なく作られ、結合
+      // セル以降の全列で幅指定がズレていた。
+      editor.wysiwyg.innerHTML =
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td colspan="2">Merged AB</td><td>C</td></tr>' +
+          '<tr><td>D</td><td>E</td><td>F</td></tr>' +
+        '</tbody></table>'
+      const table = editor.wysiwyg.querySelector('table')
+      editor.tableResizer._table = table
+      const widths = editor.tableResizer._initColWidths()
+
+      const cg = table.querySelector('colgroup')
+      expect(cg).not.toBeNull()
+      expect(cg.children.length).toBe(3)   // 論理列は 3(physical first row は 2 セル)
+      expect(widths.length).toBe(3)
+    })
   })
 
   // ── メディアダイアログの accept (mediaAccept) ────────────────────────────────
