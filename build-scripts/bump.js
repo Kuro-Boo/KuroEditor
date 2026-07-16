@@ -101,10 +101,13 @@ console.log(`  public/index   hero.badge v${next}`)
 const label = bump === 'sync' ? `sync version to ${next}` : `bump version ${prev} → ${next}`
 try {
   // Stage the version-sync files PLUS the active editor source (editor.js +
-  // the stylesheets editor.css / content.css) PLUS the READMEs, so a normal
-  // "edit → npm run bup" flow commits the editor/doc work together with the
-  // bump in one release commit.
-  execSync('git add VERSION package.json src/editor.js src/editor.css src/content.css public/sample/index.html public/index.html README.md README.ja.md', { cwd: root, stdio: 'inherit' })
+  // the stylesheets editor.css / content.css) PLUS the READMEs PLUS tests/,
+  // so a normal "edit code+tests → npm run bup" flow commits the whole change
+  // together with the bump in one release commit. tests/ is a directory add
+  // (new test files ride along too) — 以前はリスト外で、リリース時に毎回
+  // 「deploy 前ガードで中断 → 手で別コミット → 再実行(版がもう1つ進む)」に
+  // なっていた。
+  execSync('git add VERSION package.json src/editor.js src/editor.css src/content.css public/sample/index.html public/index.html README.md README.ja.md tests', { cwd: root, stdio: 'inherit' })
   execSync(`git commit -m "chore: ${label}"`, { cwd: root, stdio: 'inherit' })
   console.log('✓ Committed')
 } catch (e) {
