@@ -1,7 +1,7 @@
 /**
  * Integration tests — KuroEditor class (DOM interaction via happy-dom)
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { KuroEditor, createTableHtml, linkAtCaret } from '../src/editor.js'
 
 function makeMount() {
@@ -20,6 +20,18 @@ describe('KuroEditor', () => {
     vi.clearAllMocks()  // reset execCommand spy between tests
     mount  = makeMount()
     editor = new KuroEditor(mount, { initialContent: '<p>Hello</p>' })
+  })
+
+  // 未destroyのeditorはdirty検知のsetTimeout(_histTimer, 400ms)を残したまま
+  // 次のテスト/ファイル終了後まで生き延びることがあり、happy-domのteardown後に
+  // 発火して `document is not defined` の未処理例外になる(テスト自体はpassしてい
+  // てもCIが落ちる)。afterEachで確実に片付ける。
+  // 一部のテストは本文中で document.body.innerHTML = '' して独立した ed を作るため、
+  // その時点で editor.root は既に親を失っている — destroy() 内の
+  // clearTimeout/_dirtyObserver.disconnect() は先頭で済むので効果はあるが、末尾の
+  // root.replaceWith() は親なしだと投げる。ここは後始末目的で結果を問わないので握り潰す。
+  afterEach(() => {
+    try { editor?.destroy() } catch {}
   })
 
   // ── Construction ────────────────────────────────────────────────────────────
@@ -1420,6 +1432,88 @@ describe('KuroEditor', () => {
     })
   })
 
+  // ── テーブルの結合/分割 (rowspan/colspan を跨いだ論理列マッピング) ──────────────
+  // 回帰対象: 既にどこかに rowspan/colspan があるテーブルで ↓結合 を押すと、
+  // cellIndex ベースの実装は「隣の行の物理的に同じインデックスのセル」という
+  // 無関係なセルを結合してしまい、テーブル全体がズレて壊れていた。
+
+  describe('table merge/split (rowspan/colspan-aware)', () => {
+    const putCaretIn = (cell) => {
+      window.getSelection().setBaseAndExtent(cell, 0, cell, 0)
+    }
+
+    it('↓結合: 既に rowspan があると隣の行は無関係なセルを巻き込んでいた — 正しい行まで正しく結合する', () => {
+      editor.wysiwyg.innerHTML =
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td>1</td><td>Model A</td><td rowspan="2">Anthropic</td><td>クローズド</td><td>80%</td></tr>' +
+          '<tr><td>2</td><td>Model B</td><td>クローズド</td><td>77%</td></tr>' +
+        '</tbody></table>'
+      const row0 = editor.wysiwyg.querySelectorAll('tr')[0]
+      putCaretIn(row0.cells[3])   // row0's "クローズド" (physically index 3, logical col 3)
+      editor.tableManager._mergeDown()
+
+      const rows = editor.wysiwyg.querySelectorAll('tr')
+      // row0's クローズド absorbs row1's own クローズド (same logical column) —
+      // NOT row1's score cell, which the old cellIndex-based code would have hit.
+      expect(Array.from(rows[0].cells).map(c => c.textContent)).toEqual(['1', 'Model A', 'Anthropic', 'クローズドクローズド', '80%'])
+      expect(rows[0].cells[3].getAttribute('rowspan')).toBe('2')
+      // row1 keeps its own untouched cells — no column got shifted or eaten.
+      expect(Array.from(rows[1].cells).map(c => c.textContent)).toEqual(['2', 'Model B', '77%'])
+    })
+
+    it('↓結合: 結合先が無い(表の下端)場合は何もしない', () => {
+      editor.wysiwyg.innerHTML =
+        '<table class="kuro-table"><tbody><tr><td>A</td></tr></tbody></table>'
+      const cell = editor.wysiwyg.querySelector('td')
+      putCaretIn(cell)
+      editor.tableManager._mergeDown()
+      expect(cell.getAttribute('rowspan')).toBeNull()
+      expect(cell.textContent).toBe('A')
+    })
+
+    it('結合→: 同じ行内の隣接セルを結合する', () => {
+      editor.wysiwyg.innerHTML =
+        '<table class="kuro-table"><tbody><tr><td>A</td><td>B</td><td>C</td></tr></tbody></table>'
+      const cells = editor.wysiwyg.querySelectorAll('td')
+      putCaretIn(cells[0])
+      editor.tableManager._mergeRight()
+      const row = editor.wysiwyg.querySelector('tr')
+      expect(Array.from(row.cells).map(c => c.textContent)).toEqual(['AB', 'C'])
+      expect(row.cells[0].getAttribute('colspan')).toBe('2')
+    })
+
+    it('↓結合 → ↓分割 は元のセル数に戻る（分割で挿入するセルは正しい論理列に入る）', () => {
+      editor.wysiwyg.innerHTML =
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td>A</td><td>B</td><td>C</td></tr>' +
+          '<tr><td>D</td><td>E</td><td>F</td></tr>' +
+        '</tbody></table>'
+      const rows = editor.wysiwyg.querySelectorAll('tr')
+      putCaretIn(rows[0].cells[1])   // "B"
+      editor.tableManager._mergeDown()
+      expect(rows[0].cells[1].textContent).toBe('BE')
+      expect(Array.from(rows[1].cells).map(c => c.textContent)).toEqual(['D', 'F'])
+
+      putCaretIn(rows[0].cells[1])
+      editor.tableManager._splitDown()
+      expect(rows[0].cells[1].getAttribute('rowspan')).toBeNull()
+      expect(Array.from(rows[1].cells).map(c => c.textContent)).toEqual(['D', '', 'F'])
+    })
+
+    it('マージボタンは矩形にならない相手には無効化される（表の右下角セル）', () => {
+      editor.wysiwyg.innerHTML =
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td>A</td><td>B</td></tr>' +
+          '<tr><td>C</td><td>D</td></tr>' +
+        '</tbody></table>'
+      const cells = editor.wysiwyg.querySelectorAll('td')
+      putCaretIn(cells[3])   // "D" — bottom-right corner, nothing below/right
+      editor.tableManager._updateMergeSplitBtns()
+      expect(editor.tableManager._mergeDownBtn.disabled).toBe(true)
+      expect(editor.tableManager._mergeRightBtn.disabled).toBe(true)
+    })
+  })
+
   // ── メディアダイアログの accept (mediaAccept) ────────────────────────────────
 
   describe('mediaAccept', () => {
@@ -1518,6 +1612,47 @@ describe('KuroEditor', () => {
       expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('')
       ed.setCanvasDark(false)
       expect(ed.root.style.getPropertyValue('--kuro-canvas-bg')).toBe('#fafaf0')
+    })
+  })
+
+  // ── 文字数カウンター(オドメーター) ──────────────────────────────────────────
+
+  describe('char counter (odometer)', () => {
+    const reels = (ed) => [...ed.charCount.querySelectorAll('.kuro-charcount__reel')]
+    const shownDigits = (ed) =>
+      reels(ed).map((r) => {
+        const m = /translateY\((-?\d+)em\)/.exec(r.style.transform)
+        return m ? -Number(m[1]) : 0
+      }).join('')
+
+    it('counter lives in the pane, digits only, dir=ltr', () => {
+      expect(editor.charCount.parentElement).toBe(editor.pane)
+      expect(editor.charCount.getAttribute('dir')).toBe('ltr')
+      expect(editor.charCount.textContent).not.toContain('文字数')
+    })
+
+    it('setContent rolls reels to the character count', () => {
+      editor.setContent('<p>abcde</p>')
+      expect(shownDigits(editor)).toBe('5')
+    })
+
+    it('thousands use a separator column and one reel per digit', () => {
+      editor.setContent(`<p>${'あ'.repeat(1234)}</p>`)
+      expect(shownDigits(editor)).toBe('1234')
+      expect(editor.charCount.querySelector('.kuro-charcount__sep').textContent).toBe(',')
+    })
+
+    it('same digit shape reuses columns (reels roll in place)', () => {
+      editor.setContent('<p>abcde</p>')
+      const before = reels(editor)
+      editor.setContent('<p>abcdefgh</p>')   // 5 → 8: 1 桁のまま
+      expect(reels(editor)).toEqual(before)
+      expect(shownDigits(editor)).toBe('8')
+    })
+
+    it('toolbar no longer shows a text char-count label', () => {
+      expect(document.querySelector('.kuro-tabs__char-count')).toBeNull()
+      expect(document.querySelector('.kuro-mmenu__char-count')).toBeNull()
     })
   })
 })

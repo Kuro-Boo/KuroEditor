@@ -10,6 +10,7 @@ import {
   createTableHtml,
   contrastTextColor,
   findCell,
+  buildTableGrid,
   parseMediaParams,
   resolveEmbedUrl,
   VERSION,
@@ -425,6 +426,68 @@ describe('findCell', () => {
     const text = document.createTextNode('hi')
     td.appendChild(text)
     expect(findCell(text)).toBe(td)
+  })
+})
+
+// ─── buildTableGrid ───────────────────────────────────────────────────────────
+
+describe('buildTableGrid', () => {
+  const makeTable = (html) => {
+    const div = document.createElement('div')
+    div.innerHTML = html
+    return div.querySelector('table')
+  }
+
+  it('plain grid: cellIndex matches logical column for every row', () => {
+    const table = makeTable(
+      '<table><tbody>' +
+        '<tr><td>A</td><td>B</td><td>C</td></tr>' +
+        '<tr><td>D</td><td>E</td><td>F</td></tr>' +
+      '</tbody></table>'
+    )
+    const { grid, pos } = buildTableGrid(table)
+    expect(grid[0].map(c => c.textContent)).toEqual(['A', 'B', 'C'])
+    expect(grid[1].map(c => c.textContent)).toEqual(['D', 'E', 'F'])
+    const e = table.querySelectorAll('td')[4]
+    expect(pos.get(e)).toEqual({ row: 1, col: 1 })
+  })
+
+  it('a rowspan cell shifts every later column of the covered rows out of DOM order', () => {
+    // This is exactly the shape from the reported bug: col 2 (開発元) spans
+    // rows 0-1, so row 1's own <td> list is missing that slot — cellIndex 2
+    // in row 1 is physically "タイプ", not "開発元".
+    const table = makeTable(
+      '<table><tbody>' +
+        '<tr><td>1</td><td>Model A</td><td rowspan="2">Anthropic</td><td>クローズド</td><td>80%</td></tr>' +
+        '<tr><td>2</td><td>Model B</td><td>クローズド</td><td>77%</td></tr>' +
+      '</tbody></table>'
+    )
+    const { grid, pos } = buildTableGrid(table)
+    // Logical grid: row 1 col 2 is STILL "Anthropic" (covered by the rowspan),
+    // even though no physical <td> sits there in row 1's own DOM.
+    expect(grid[1].map(c => c.textContent)).toEqual(['2', 'Model B', 'Anthropic', 'クローズド', '77%'])
+    // The physically-second <td> in row 1 ("クローズド") is logical col 3, NOT
+    // col 2 — this is precisely what row.cells[cellIndex]-based code got wrong.
+    const row1ClosedCell = table.querySelectorAll('tr')[1].cells[2]
+    expect(row1ClosedCell.textContent).toBe('クローズド')
+    expect(pos.get(row1ClosedCell)).toEqual({ row: 1, col: 3 })
+  })
+
+  it('colspan and rowspan both fill every covered grid slot with the same cell', () => {
+    const table = makeTable(
+      '<table><tbody>' +
+        '<tr><td rowspan="2" colspan="2">X</td><td>C</td></tr>' +
+        '<tr><td>F</td></tr>' +
+      '</tbody></table>'
+    )
+    const { grid } = buildTableGrid(table)
+    const x = table.querySelector('td')
+    expect(grid[0][0]).toBe(x)
+    expect(grid[0][1]).toBe(x)
+    expect(grid[1][0]).toBe(x)
+    expect(grid[1][1]).toBe(x)
+    expect(grid[0][2].textContent).toBe('C')
+    expect(grid[1][2].textContent).toBe('F')
   })
 })
 
