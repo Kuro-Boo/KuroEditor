@@ -11,7 +11,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.0'
+export const VERSION = '2.18.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -8827,20 +8827,26 @@ export class KuroEditor {
   }
 
   /**
-   * カウンターの定位置 = 「見えている本文エリア」の右下。
-   * 縦: mmenu に食い込まない下限(popupBottomLimit)のすぐ上。
+   * カウンターの定位置 = エディタ枠(pane)のすぐ下・右寄せ。
+   * 縦: pane の実際の下端 + 隙間(GAP)。popupBottomLimit/mmenu 基準にすると
+   *   mmenu が画面下部に固定されている分だけ枠から切り離されて浮いて見える
+   *   ため使わない — 常に枠そのものを追従させる。mmenu と重なりそうな
+   *   ときだけ、その上端でクランプする。
    * 横: pane の右端(ToC パネルが開いていればその左)に内側 12px。
-   * fixed なのでスクロール自体では動かないが、pane の幅・mmenu の有無が
-   * 変わる場面(リサイズ・ToC 開閉)は resize/ResizeObserver 経由でここに来る。
+   * fixed なのでスクロール自体では動かないが、pane の位置・幅・mmenu の
+   * 有無が変わる場面(リサイズ・ToC 開閉)は resize/ResizeObserver 経由で
+   * ここに来る。
    */
   _positionCharCount() {
     const el = this.charCount
     if (!el || !this.pane.isConnected) return
     const paneRect = this.pane.getBoundingClientRect()
     if (paneRect.width === 0) return
+    const GAP   = 8
     const limit = popupBottomLimit(this.mmenu)
-    el.style.right = `${Math.max(4, window.innerWidth - paneRect.right + 12)}px`
-    el.style.bottom = `${Math.max(8, window.innerHeight - limit + 8)}px`
+    el.style.right  = `${Math.max(4, window.innerWidth - paneRect.right + 12)}px`
+    el.style.bottom = 'auto'
+    el.style.top    = `${Math.max(4, Math.min(paneRect.bottom + GAP, limit - 20))}px`
   }
 
   _insertHR() {

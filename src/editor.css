@@ -331,9 +331,13 @@
   .kuro-pane--source .kuro-pane__source  { @apply block; }
 
   /* ── 文字数カウンター(オドメーター) ─────────────────────────────
-     本文右下の定位置に「数字だけ」を浮かせる(v2.15〜)。ラベル文言を
+     エディタ枠のすぐ下・右寄せに「数字だけ」を浮かせる(v2.15〜)。ラベル文言を
      持たない代わりに、桁がリールのように回る動きで「数えている」ことを
-     伝える。位置(right/bottom)は JS(_positionCharCount)が入れる。 */
+     伝える。位置(top/right)は JS(_positionCharCount)がキャンバス(pane)の
+     実際の下端に合わせて入れる。
+     枠の外(ホストページ側の背景)に出る前提の要素なので、キャンバス配色
+     (--kuro-canvas-*)には依存しない — ツールバー等の chrome と同じ固定ダーク
+     配色にして、ホストのページ背景が何色でも視認性を保つ。 */
   .kuro-charcount {
     position: fixed;
     z-index: 30;                     /* popm/mmenu(z-50) より下 */
@@ -342,9 +346,10 @@
     padding: 0.3em 0.6em;
     border-radius: 9999px;
     font-variant-numeric: tabular-nums;
-    color: var(--kuro-canvas-placeholder);
-    /* 本文の上に重なるので、キャンバス色の半透明で文字を薄く裏打ちする */
-    background: color-mix(in srgb, var(--kuro-canvas-bg) 78%, transparent);
+    color: theme('colors.neutral.300');
+    background: theme('colors.neutral.800');
+    border: 1px solid theme('colors.neutral.600');
+    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
     user-select: none;
     pointer-events: none;            /* 本文のタップ/キャレット操作を奪わない */
     white-space: nowrap;
