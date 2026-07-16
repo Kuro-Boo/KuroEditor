@@ -118,17 +118,6 @@
     @apply w-px h-4 bg-neutral-600 mx-1 flex-shrink-0;
   }
 
-  /* 文字数 (mmenu) — actions と divider の間に控えめに表示 */
-  .kuro-mmenu__char-count {
-    @apply text-xs text-neutral-400 px-2 select-none whitespace-nowrap;
-    font-variant-numeric: tabular-nums;
-  }
-  /* タブバー版 — actions の末尾、 やや小さめ */
-  .kuro-tabs__char-count {
-    @apply text-xs text-neutral-500 ml-2 select-none whitespace-nowrap;
-    font-variant-numeric: tabular-nums;
-  }
-
   .kuro-mmenu__btn {
     @apply flex items-center gap-1.5 px-3 py-1.5 rounded-lg
            text-sm text-neutral-200
@@ -340,6 +329,48 @@
   /* Source mode: swap panels */
   .kuro-pane--source .kuro-pane__wysiwyg { @apply hidden; }
   .kuro-pane--source .kuro-pane__source  { @apply block; }
+
+  /* ── 文字数カウンター(オドメーター) ─────────────────────────────
+     本文右下の定位置に「数字だけ」を浮かせる(v2.15〜)。ラベル文言を
+     持たない代わりに、桁がリールのように回る動きで「数えている」ことを
+     伝える。位置(right/bottom)は JS(_positionCharCount)が入れる。 */
+  .kuro-charcount {
+    position: fixed;
+    z-index: 30;                     /* popm/mmenu(z-50) より下 */
+    font-size: 12px;
+    line-height: 1;
+    padding: 0.3em 0.6em;
+    border-radius: 9999px;
+    font-variant-numeric: tabular-nums;
+    color: var(--kuro-canvas-placeholder);
+    /* 本文の上に重なるので、キャンバス色の半透明で文字を薄く裏打ちする */
+    background: color-mix(in srgb, var(--kuro-canvas-bg) 78%, transparent);
+    user-select: none;
+    pointer-events: none;            /* 本文のタップ/キャレット操作を奪わない */
+    white-space: nowrap;
+  }
+  /* source モードは生 HTML 編集中でカウントが本文入力と連動しないので隠す */
+  .kuro-pane--source .kuro-charcount { display: none; }
+
+  .kuro-charcount__col {
+    display: inline-block;
+    height: 1em;
+    overflow: hidden;
+    vertical-align: top;
+  }
+  .kuro-charcount__reel {
+    display: block;
+    transition: transform 0.35s cubic-bezier(0.25, 0.6, 0.3, 1);
+  }
+  .kuro-charcount__reel > span {
+    display: block;
+    height: 1em;
+    text-align: center;
+  }
+  .kuro-charcount__sep { vertical-align: top; }
+  @media (prefers-reduced-motion: reduce) {
+    .kuro-charcount__reel { transition: none; }
+  }
 
   /* ── View mode (閲覧・編集不可) ─────────────────────────────────────────
      編集の気配を消す: プレースホルダ・キャレット・リサイズ用ハンドル類を出さず、

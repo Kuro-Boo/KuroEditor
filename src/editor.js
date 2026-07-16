@@ -11,7 +11,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.16.0'
+export const VERSION = '2.17.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -1399,6 +1399,48 @@ export function findCell(node) {
     el = el.parentElement
   }
   return null
+}
+
+/**
+ * Build a logical row/column map of a <table>, resolving rowspan/colspan.
+ *
+ * A cell's DOM position (`cellIndex`, `nextElementSibling`) only matches its
+ * *visual* column when no earlier column in that row is covered by a
+ * rowspan from an earlier row — once any rowspan exists anywhere to the
+ * left, every row after it has fewer physical <td> than visual columns, so
+ * `cellIndex`/`row.cells[n]` silently point at the wrong cell. This walks
+ * the table once and returns the grid needed to reason in *logical*
+ * (row, col) coordinates instead.
+ *
+ * @param {HTMLTableElement} table
+ * @returns {{
+ *   rows: HTMLTableRowElement[],
+ *   grid: (HTMLTableCellElement|undefined)[][],  // grid[row][col] — same
+ *     cell repeated across every slot its rowspan/colspan covers
+ *   pos: Map<HTMLTableCellElement, {row: number, col: number}>  // each
+ *     cell's own top-left logical position
+ * }}
+ */
+export function buildTableGrid(table) {
+  const rows = Array.from(table.querySelectorAll('tr'))
+  const grid = rows.map(() => [])
+  const pos  = new Map()
+  for (let r = 0; r < rows.length; r++) {
+    let c = 0
+    for (const cell of Array.from(rows[r].cells)) {
+      while (grid[r][c]) c++   // skip slots already covered by a rowspan from above
+      const rs = parseInt(cell.getAttribute('rowspan') || '1', 10)
+      const cs = parseInt(cell.getAttribute('colspan') || '1', 10)
+      pos.set(cell, { row: r, col: c })
+      for (let dr = 0; dr < rs; dr++) {
+        for (let dc = 0; dc < cs; dc++) {
+          if (grid[r + dr]) grid[r + dr][c + dc] = cell
+        }
+      }
+      c += cs
+    }
+  }
+  return { rows, grid, pos }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2967,20 +3009,23 @@ export class TableManager {
 
     this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
 
-    // Merge buttons
-    const mergeDefs = [
-      { label: '↓結合', fn: () => { this._mergeDown();  this._updateSplitBtns() } },
-      { label: '結合→', fn: () => { this._mergeRight(); this._updateSplitBtns() } },
-    ]
-    for (const def of mergeDefs) {
-      const btn = createElement('button', {
-        className: 'kuro-table-menu__btn',
-        html: def.label,
-        attrs: { type: 'button' },
-      })
-      btn.addEventListener('mousedown', (e) => { e.preventDefault(); def.fn() })
-      this._mainRow.appendChild(btn)
-    }
+    // Merge buttons (disabled when there's no valid same-width/height
+    // neighbor to merge with — see _updateMergeSplitBtns)
+    this._mergeDownBtn = createElement('button', {
+      className: 'kuro-table-menu__btn',
+      html: '↓結合',
+      attrs: { type: 'button' },
+    })
+    this._mergeDownBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._mergeDown(); this._updateMergeSplitBtns() })
+    this._mainRow.appendChild(this._mergeDownBtn)
+
+    this._mergeRightBtn = createElement('button', {
+      className: 'kuro-table-menu__btn',
+      html: '結合→',
+      attrs: { type: 'button' },
+    })
+    this._mergeRightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._mergeRight(); this._updateMergeSplitBtns() })
+    this._mainRow.appendChild(this._mergeRightBtn)
 
     this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
 
@@ -2990,7 +3035,7 @@ export class TableManager {
       html: '↓分割',
       attrs: { type: 'button', disabled: '' },
     })
-    this._splitDownBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitDown(); this._updateSplitBtns() })
+    this._splitDownBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitDown(); this._updateMergeSplitBtns() })
     this._mainRow.appendChild(this._splitDownBtn)
 
     this._splitRightBtn = createElement('button', {
@@ -2998,7 +3043,7 @@ export class TableManager {
       html: '分割→',
       attrs: { type: 'button', disabled: '' },
     })
-    this._splitRightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitRight(); this._updateSplitBtns() })
+    this._splitRightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitRight(); this._updateMergeSplitBtns() })
     this._mainRow.appendChild(this._splitRightBtn)
 
     this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
@@ -3083,13 +3128,43 @@ export class TableManager {
       ? this._hideColorPanel() : this._showColorPanel()
   }
 
-  /** Enable/disable split buttons based on the focused cell's colspan/rowspan. */
-  _updateSplitBtns() {
+  /**
+   * Enable/disable merge/split buttons for the focused cell.
+   * Split just needs colspan/rowspan > 1. Merge needs an actual same-width
+   * (for ↓結合) or same-height (for 結合→) neighbor at the target logical
+   * position — otherwise the merge would produce a non-rectangular cell and
+   * corrupt the grid, so disable rather than let it no-op or corrupt.
+   */
+  _updateMergeSplitBtns() {
     const cell    = this._cell()
     const colspan = parseInt(cell?.getAttribute('colspan') || '1')
     const rowspan = parseInt(cell?.getAttribute('rowspan') || '1')
     this._splitRightBtn.disabled = colspan <= 1
     this._splitDownBtn.disabled  = rowspan <= 1
+
+    const table = cell?.closest('table')
+    if (!cell || !table) {
+      this._mergeDownBtn.disabled  = true
+      this._mergeRightBtn.disabled = true
+      return
+    }
+    const { grid, pos } = buildTableGrid(table)
+    const p = pos.get(cell)
+    if (!p) {
+      this._mergeDownBtn.disabled  = true
+      this._mergeRightBtn.disabled = true
+      return
+    }
+    const below = grid[p.row + rowspan]?.[p.col]
+    this._mergeDownBtn.disabled = !(
+      below && pos.get(below)?.col === p.col &&
+      parseInt(below.getAttribute('colspan') || '1') === colspan
+    )
+    const right = grid[p.row]?.[p.col + colspan]
+    this._mergeRightBtn.disabled = !(
+      right && pos.get(right)?.row === p.row &&
+      parseInt(right.getAttribute('rowspan') || '1') === rowspan
+    )
   }
 
   /** Highlight the active vertical-align button for the focused cell. */
@@ -3108,7 +3183,7 @@ export class TableManager {
     requestAnimationFrame(() => {
       this._place()
       this.el.classList.add('kuro-table-menu--visible')
-      this._updateSplitBtns()
+      this._updateMergeSplitBtns()
       this._updateValignBtns()
     })
     if (!wasActive) document.addEventListener('scroll', this._onScroll, { capture: true, passive: true })
@@ -3129,6 +3204,10 @@ export class TableManager {
 
   /** 実測 rect ベースの位置決め本体(何度呼び直しても安全)。 */
   _place() {
+    // activeTable が差し替え後の DOM から detach されている(例: ホストが setContent()
+    // で別ノートを読み込んだのに畳み忘れた古い参照)と、以降の getBoundingClientRect() は
+    // 全て 0 を返し、位置計算が画面左上に集まってしまう。ここで確実に畳む。
+    if (!this.activeTable?.isConnected) { this.deactivate(); return }
     {
       const menuH = this.el.offsetHeight || 36
       const menuW = this.el.offsetWidth  || 200
@@ -3139,7 +3218,7 @@ export class TableManager {
       const cell = sel?.rangeCount ? findCell(sel.getRangeAt(0).startContainer) : null
       const refRect = (caretRect && caretRect.height > 0)
         ? caretRect
-        : (cell?.getBoundingClientRect() ?? table.getBoundingClientRect())
+        : (cell?.getBoundingClientRect() ?? this.activeTable.getBoundingClientRect())
 
       // カーソル行の直上ではなく約3行分上に離して表示する。
       // 1行分の高さは caret 矩形から取り、取れない場合は 20px とみなす。
@@ -3206,58 +3285,114 @@ export class TableManager {
   }
 
   // ── Merge operations ─────────────────────────────────────────────────────
+  //
+  // Both use buildTableGrid() to reason in logical (row, col) coordinates
+  // instead of DOM position (cellIndex / nextElementSibling / row.cells[n]).
+  // Once ANY rowspan exists in the table, a later row's physical <td> list
+  // skips whatever columns are covered from above — so a purely DOM-based
+  // lookup silently grabs the wrong cell (or the wrong row's cell) and
+  // corrupts the grid instead of merging the intended neighbor. Only merge
+  // when the neighbor is a real rectangular match (same start + same
+  // opposite-axis span); otherwise no-op rather than produce a jagged cell.
 
   _mergeRight() {
-    const cell = this._cell()
-    const next = cell?.nextElementSibling
-    if (!cell || !next) return
-    const span = parseInt(cell.getAttribute('colspan') || '1') + parseInt(next.getAttribute('colspan') || '1')
-    cell.setAttribute('colspan', String(span))
-    cell.innerHTML += next.innerHTML
-    next.remove()
+    const cell  = this._cell()
+    const table = cell?.closest('table')
+    if (!cell || !table) return
+    const { grid, pos } = buildTableGrid(table)
+    const p = pos.get(cell)
+    if (!p) return
+    const colspan = parseInt(cell.getAttribute('colspan') || '1', 10)
+    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
+
+    const target = grid[p.row]?.[p.col + colspan]
+    if (!target) return
+    const tPos = pos.get(target)
+    if (!tPos || tPos.row !== p.row || parseInt(target.getAttribute('rowspan') || '1', 10) !== rowspan) return
+
+    const targetColspan = parseInt(target.getAttribute('colspan') || '1', 10)
+    cell.setAttribute('colspan', String(colspan + targetColspan))
+    cell.innerHTML += target.innerHTML
+    target.remove()
   }
 
   _mergeDown() {
-    const cell    = this._cell()
-    const colIdx  = cell?.cellIndex ?? -1
-    const nextRow = cell?.closest('tr')?.nextElementSibling
-    if (!cell || colIdx < 0 || !nextRow) return
-    const nextCell = nextRow.cells[colIdx]
-    if (!nextCell) return
-    const span = parseInt(cell.getAttribute('rowspan') || '1') + parseInt(nextCell.getAttribute('rowspan') || '1')
-    cell.setAttribute('rowspan', String(span))
-    cell.innerHTML += nextCell.innerHTML
-    nextCell.remove()
-    if (nextRow.cells.length === 0) nextRow.remove()
+    const cell  = this._cell()
+    const table = cell?.closest('table')
+    if (!cell || !table) return
+    const { rows, grid, pos } = buildTableGrid(table)
+    const p = pos.get(cell)
+    if (!p) return
+    const colspan = parseInt(cell.getAttribute('colspan') || '1', 10)
+    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
+
+    const target = grid[p.row + rowspan]?.[p.col]
+    if (!target) return
+    const tPos = pos.get(target)
+    if (!tPos || tPos.col !== p.col || parseInt(target.getAttribute('colspan') || '1', 10) !== colspan) return
+
+    const targetRowspan = parseInt(target.getAttribute('rowspan') || '1', 10)
+    cell.setAttribute('rowspan', String(rowspan + targetRowspan))
+    cell.innerHTML += target.innerHTML
+    const targetRow = rows[tPos.row]
+    target.remove()
+    if (targetRow.cells.length === 0) targetRow.remove()
   }
 
+  /**
+   * Split colspan apart. Purely within the cell's own row (insertAdjacentElement
+   * after the cell), so — unlike _splitDown — DOM order already matches logical
+   * order here regardless of rowspans elsewhere: no grid needed. Preserves the
+   * cell's own rowspan on the new cells so a cell merged in both directions
+   * doesn't lose its row-height when only its column-merge is undone.
+   */
   _splitRight() {
     const cell    = this._cell()
-    const colspan = parseInt(cell?.getAttribute('colspan') || '1')
+    const colspan = parseInt(cell?.getAttribute('colspan') || '1', 10)
     if (!cell || colspan <= 1) return
+    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
     cell.removeAttribute('colspan')
     for (let i = 1; i < colspan; i++) {
       const c = document.createElement(cell.tagName)
       c.setAttribute('contenteditable', 'true')
       c.innerHTML = '<br>'
+      if (rowspan > 1) c.setAttribute('rowspan', String(rowspan))
       cell.insertAdjacentElement('afterend', c)
     }
   }
 
+  /**
+   * Split rowspan apart. Uses buildTableGrid() (computed BEFORE touching the
+   * DOM, so it still reflects the cell's full original span) to find, in each
+   * row being split off, the correct physical insertion point — row.cells[n]
+   * would use the wrong index whenever some other rowspan in the table
+   * shifts that row's physical cell count. Preserves the cell's own colspan
+   * on the new cells for the same reason _splitRight preserves rowspan.
+   */
   _splitDown() {
-    const cell    = this._cell()
-    const colIdx  = cell?.cellIndex ?? -1
-    const rowspan = parseInt(cell?.getAttribute('rowspan') || '1')
-    if (!cell || colIdx < 0 || rowspan <= 1) return
+    const cell  = this._cell()
+    const table = cell?.closest('table')
+    if (!cell || !table) return
+    const { rows, grid, pos } = buildTableGrid(table)
+    const p = pos.get(cell)
+    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
+    if (!p || rowspan <= 1) return
+    const colspan = parseInt(cell.getAttribute('colspan') || '1', 10)
+
     cell.removeAttribute('rowspan')
-    let row = cell.closest('tr')?.nextElementSibling
-    for (let i = 1; i < rowspan && row; i++) {
-      const c = document.createElement('td')
-      c.setAttribute('contenteditable', 'true')
-      c.innerHTML = '<br>'
-      const ref = row.cells[colIdx]
-      ref ? row.insertBefore(c, ref) : row.appendChild(c)
-      row = row.nextElementSibling
+    for (let dr = 1; dr < rowspan; dr++) {
+      const row = rows[p.row + dr]
+      if (!row) break
+      let ref = null
+      for (let c = p.col + 1; c < grid[p.row + dr].length; c++) {
+        const candidate = grid[p.row + dr][c]
+        if (candidate && candidate !== cell) { ref = candidate; break }
+      }
+      const newCell = document.createElement('td')
+      newCell.setAttribute('contenteditable', 'true')
+      newCell.innerHTML = '<br>'
+      if (colspan > 1) newCell.setAttribute('colspan', String(colspan))
+      ref ? row.insertBefore(newCell, ref) : row.appendChild(newCell)
     }
   }
 
@@ -3391,7 +3526,10 @@ export class TableInserter {
   /** Re-anchor all visible buttons to the table's current rect after a scroll. */
   _syncScroll() {
     const table = this.activeTable
-    if (!table?.isConnected) return
+    // detach された古いテーブルを指したまま(例: ホストが setContent() で別ノートを
+    // 読み込んだのに畳み忘れた)だと、放置ではボタンが最後の位置に固まって残る。
+    // 確実に畳んでおく。
+    if (!table?.isConnected) { this.deactivate(); return }
     const tableRect = table.getBoundingClientRect()
     const rows  = Array.from(table.querySelectorAll('tr'))
     const cells = rows.length ? Array.from(rows[0].cells) : []
@@ -3504,6 +3642,13 @@ export class TableInserter {
       this.colDelBtn.style.display  = 'none'
       this.rowMoveBtn.style.display = 'none'
       this.colMoveBtn.style.display = 'none'
+      return
+    }
+    // activeTable / _currentCell が detach された旧 DOM を指していると、
+    // getBoundingClientRect() は全て 0 を返し、ボタンが画面左上に集まって見える
+    // (ホストが setContent() で別ノートを読み込んだのに畳み忘れた場合など)。
+    if (!this.activeTable.isConnected || !this._currentCell.isConnected) {
+      this.deactivate()
       return
     }
     const table     = this.activeTable
@@ -5636,13 +5781,6 @@ export class KuroEditor {
       this._mmenuBtns[id] = btn
     }
 
-    // ── 文字数表示 ────────────────────────────────────────────────────
-    this._mmenuCharCount = createElement('span', {
-      className: 'kuro-mmenu__char-count',
-      html: '文字数 0',
-      attrs: { title: '本文の文字数' },
-    })
-
     this.saveBtn = createElement('button', {
       className: 'kuro-mmenu__save',
       html: '保存',
@@ -5653,7 +5791,6 @@ export class KuroEditor {
     const divider = createElement('div', { className: 'kuro-mmenu__divider' })
 
     this.mmenu.appendChild(this.mmenuActions)
-    this.mmenu.appendChild(this._mmenuCharCount)
     // saveUi: false → 保存ボタン（と手前の仕切り）を載せない。
     // 要素は生成済みのままにして this.saveBtn 参照の互換性を保つ。
     if (this.options.saveUi) {
@@ -5746,13 +5883,6 @@ export class KuroEditor {
       this._tabActionBtns[id] = btn
     }
 
-    // 文字数表示 — HTML 表示アイコンの右側 (row1Left 末尾) に配置
-    this._tabCharCount = createElement('span', {
-      className: 'kuro-tabs__char-count',
-      html: '文字数 0',
-      attrs: { title: '本文の文字数' },
-    })
-
     // Autosave checkbox (synced with mmenu's checkbox)
     const tabAutoId = `kuro-tab-autosave-${Math.random().toString(36).slice(2, 7)}`
     this.tabAutoSaveCheck = createElement('input', {
@@ -5810,7 +5940,7 @@ export class KuroEditor {
 
     // ── 2 段構造 ──────────────────────────────────────────────────────────
     //   row1 (上): バージョン + タブ ┃ 自動保存 + 保存 + ToC
-    //   row2 (下): アクション (Undo/Redo/絵文字/テーブル/メディア/コード/HR) + 文字数
+    //   row2 (下): アクション (Undo/Redo/絵文字/テーブル/メディア/コード/HR)
     //
     // スマホでも上段は常に 1 行 (justify-between)、 下段は flex-wrap で
     // 必要に応じて折返し。 結果として「最悪 3 行 → 2 段 + α」になる。
@@ -5822,7 +5952,6 @@ export class KuroEditor {
     row1Left.appendChild(this.tabWysiwyg)
     row1Left.appendChild(this.tabView)
     row1Left.appendChild(this.tabSource)
-    row1Left.appendChild(this._tabCharCount)
 
     // canvasDarkUi: true のときだけ「ダーク」トグルを載せる（既定は非表示）。
     // 要素は生成済みなので this.tabCanvasDarkCheck 参照と setCanvasDark() の
@@ -5876,6 +6005,31 @@ export class KuroEditor {
 
     this.pane.appendChild(this.wysiwyg)
     this.pane.appendChild(this.sourceArea)
+
+    // ── 文字数カウンター(オドメーター) ────────────────────────────────
+    // ラベル文言を持たない数字だけの表示。特定言語の単語を出さないため、
+    // 「本文右下の定位置」と「桁がオドメーターのように回る動き」で
+    // 文字数だと伝える(ツールバー内の「文字数 n」表示は v2.15 で廃止)。
+    // 数字列は RTL ロケールのページに埋め込まれても並びが崩れないよう dir=ltr。
+    // 位置は fixed で、縦は popupBottomLimit()(=mmenu に食い込まない)、
+    // 横は pane の右端に合わせる(ToC パネルの開閉・幅変更にも追従)。
+    this.charCount = createElement('div', {
+      className: 'kuro-charcount',
+      attrs: {
+        dir: 'ltr',
+        title: '本文の文字数',
+        'aria-label': '本文の文字数',
+      },
+    })
+    this._charCountValue = null   // 前回描画した値(同値スキップ用)
+    this._charCountShape = null   // 桁構成 '#,###' — 変わったら列を作り直す
+    this.pane.appendChild(this.charCount)
+    this._onCharCountReposition = () => this._positionCharCount()
+    window.addEventListener('resize', this._onCharCountReposition)
+    if (typeof ResizeObserver !== 'undefined') {
+      this._charCountRo = new ResizeObserver(this._onCharCountReposition)
+      this._charCountRo.observe(this.pane)
+    }
 
     // --- ToC panel ---
     this.tocPanelEl = createElement('nav', { className: 'kuro-toc' })
@@ -8620,9 +8774,73 @@ export class KuroEditor {
     // Array.from で書記素クラスタを 1 文字として扱う（絵文字なども 1 字）
     const text = (this.wysiwyg.textContent || '').replace(/\s+/g, ' ').trim()
     const n = Array.from(text).length
-    const label = `文字数 ${n.toLocaleString('ja-JP')}`
-    if (this._mmenuCharCount) this._mmenuCharCount.textContent = label
-    if (this._tabCharCount)   this._tabCharCount.textContent   = label
+    this._renderCharCount(n)
+    this._positionCharCount()
+  }
+
+  /**
+   * 文字数をオドメーター(桁ごとの数字リール)として描画する。
+   * 桁構成(桁数と区切り位置)が前回と同じなら各リールの transform を
+   * 差し替えるだけ。構成が変わったら列を作り直し、新しい列は 0 に置いて
+   * 1 フレーム後に目標の数字へ回す — ノートを開いた直後は全桁がこの経路を
+   * 通るので、0 から現在値まで巻き上がる「カウントアップ」として見える。
+   */
+  _renderCharCount(n) {
+    if (!this.charCount || n === this._charCountValue) return
+    this._charCountValue = n
+    const str = n.toLocaleString('en-US')   // 3 桁区切り(1,234)
+    const digits = Array.from(str).filter((c) => c >= '0' && c <= '9')
+    const shape = str.replace(/[0-9]/g, '#')
+
+    if (shape === this._charCountShape) {
+      const reels = this.charCount.querySelectorAll('.kuro-charcount__reel')
+      reels.forEach((reel, i) => {
+        reel.style.transform = `translateY(${-Number(digits[i])}em)`
+      })
+      return
+    }
+
+    this._charCountShape = shape
+    this.charCount.textContent = ''
+    const reels = []
+    for (const ch of str) {
+      if (ch >= '0' && ch <= '9') {
+        const reel = createElement('span', {
+          className: 'kuro-charcount__reel',
+          html: '<span>0</span><span>1</span><span>2</span><span>3</span><span>4</span>' +
+                '<span>5</span><span>6</span><span>7</span><span>8</span><span>9</span>',
+        })
+        const col = createElement('span', { className: 'kuro-charcount__col' })
+        col.appendChild(reel)
+        this.charCount.appendChild(col)
+        reels.push([reel, Number(ch)])
+      } else {
+        this.charCount.appendChild(
+          createElement('span', { className: 'kuro-charcount__sep', html: ch }),
+        )
+      }
+    }
+    // 0 の位置で一度レイアウトを確定させてから目標へ回す
+    // (生成と同じフレームで transform を入れると transition が走らない)
+    void this.charCount.offsetWidth
+    for (const [reel, d] of reels) reel.style.transform = `translateY(${-d}em)`
+  }
+
+  /**
+   * カウンターの定位置 = 「見えている本文エリア」の右下。
+   * 縦: mmenu に食い込まない下限(popupBottomLimit)のすぐ上。
+   * 横: pane の右端(ToC パネルが開いていればその左)に内側 12px。
+   * fixed なのでスクロール自体では動かないが、pane の幅・mmenu の有無が
+   * 変わる場面(リサイズ・ToC 開閉)は resize/ResizeObserver 経由でここに来る。
+   */
+  _positionCharCount() {
+    const el = this.charCount
+    if (!el || !this.pane.isConnected) return
+    const paneRect = this.pane.getBoundingClientRect()
+    if (paneRect.width === 0) return
+    const limit = popupBottomLimit(this.mmenu)
+    el.style.right = `${Math.max(4, window.innerWidth - paneRect.right + 12)}px`
+    el.style.bottom = `${Math.max(8, window.innerHeight - limit + 8)}px`
   }
 
   _insertHR() {
@@ -8749,6 +8967,16 @@ export class KuroEditor {
       this._updateCharCount()
       if (this.options.blockIds) this._refreshBlockIds()
     })
+    // 差し替え前の DOM を指していたフローター類を畳む（_restoreSnapshot と同じ理由:
+    // ホストがノート切替などで同じエディタインスタンスに setContent() を呼ぶと、
+    // それまで開いていたテーブルツールバー等は detach された旧テーブルを指したまま
+    // 居座り、次の再配置（スクロール等）で rect が全 0 → 左上に集まって見える)
+    this.popm.hide()
+    this.tableManager.deactivate()
+    this.tableInserter.deactivate()
+    this.imageMenu.deactivate()
+    this.roundboxMenu.deactivate()
+    this.linkEditPopup.close()
     this._clearDirty()  // プログラムからの差し替えは「未保存の変更」ではない
     this._resetHistory()     // 新しい文書 — それ以前の手には undo で戻さない
     this._enhanceUrlCards()  // URL カードの豪華表示を後追いで取得（非ブロッキング）
@@ -9079,6 +9307,10 @@ export class KuroEditor {
     document.removeEventListener('selectionchange', this._onDocSelChange)
     document.removeEventListener('mousedown',       this._onDocMousedown)
     document.removeEventListener('mouseup',         this._onDocMouseup)
+
+    // 文字数カウンターの再配置フック(要素自体は root ごと外れる)
+    window.removeEventListener('resize', this._onCharCountReposition)
+    this._charCountRo?.disconnect()
 
     this.toc.destroy()
     this.roundboxMenu.destroy()
