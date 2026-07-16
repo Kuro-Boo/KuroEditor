@@ -11,7 +11,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.1'
+export const VERSION = '2.18.2'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5973,6 +5973,29 @@ export class KuroEditor {
     const row2 = createElement('div', { className: 'kuro-tabs__row kuro-tabs__row--bottom' })
     row2.appendChild(tabActions)
 
+    // ── 文字数カウンター(オドメーター) ────────────────────────────────
+    // ラベル文言を持たない数字だけの表示。特定言語の単語を出さないため、
+    // 桁が回る動きで「数えている」ことを伝える(ツールバー内の「文字数 n」
+    // 表示は v2.15 で廃止 → v2.18 でオドメーター演出ごと本文上のフロート
+    // 表示にしたが、本文が縦に長い/横に長いテーブル等だと本文の実際の下端が
+    // 画面外に出て mmenu 際まで押し出され、可視中の本文に重なって読みにくく
+    // なる欠陥があったため撤回。ツールバー2段目の右端 = 常に本文と重ならない
+    // 予約領域に置き、位置追従の JS(resize/ResizeObserver)は不要になった。
+    // 数字列は RTL ロケールのページに埋め込まれても並びが崩れないよう dir=ltr。
+    this.charCount = createElement('div', {
+      className: 'kuro-charcount',
+      attrs: {
+        dir: 'ltr',
+        title: '本文の文字数',
+        'aria-label': '本文の文字数',
+      },
+    })
+    this._charCountValue = null   // 前回描画した値(同値スキップ用)
+    this._charCountShape = null   // 桁構成 '#,###' — 変わったら列を作り直す
+    const row2Right = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--right' })
+    row2Right.appendChild(this.charCount)
+    row2.appendChild(row2Right)
+
     this.tabBar.appendChild(row1)
     this.tabBar.appendChild(row2)
     this.root.appendChild(this.tabBar)
@@ -6005,31 +6028,6 @@ export class KuroEditor {
 
     this.pane.appendChild(this.wysiwyg)
     this.pane.appendChild(this.sourceArea)
-
-    // ── 文字数カウンター(オドメーター) ────────────────────────────────
-    // ラベル文言を持たない数字だけの表示。特定言語の単語を出さないため、
-    // 「本文右下の定位置」と「桁がオドメーターのように回る動き」で
-    // 文字数だと伝える(ツールバー内の「文字数 n」表示は v2.15 で廃止)。
-    // 数字列は RTL ロケールのページに埋め込まれても並びが崩れないよう dir=ltr。
-    // 位置は fixed で、縦は popupBottomLimit()(=mmenu に食い込まない)、
-    // 横は pane の右端に合わせる(ToC パネルの開閉・幅変更にも追従)。
-    this.charCount = createElement('div', {
-      className: 'kuro-charcount',
-      attrs: {
-        dir: 'ltr',
-        title: '本文の文字数',
-        'aria-label': '本文の文字数',
-      },
-    })
-    this._charCountValue = null   // 前回描画した値(同値スキップ用)
-    this._charCountShape = null   // 桁構成 '#,###' — 変わったら列を作り直す
-    this.pane.appendChild(this.charCount)
-    this._onCharCountReposition = () => this._positionCharCount()
-    window.addEventListener('resize', this._onCharCountReposition)
-    if (typeof ResizeObserver !== 'undefined') {
-      this._charCountRo = new ResizeObserver(this._onCharCountReposition)
-      this._charCountRo.observe(this.pane)
-    }
 
     // --- ToC panel ---
     this.tocPanelEl = createElement('nav', { className: 'kuro-toc' })
@@ -7211,6 +7209,7 @@ export class KuroEditor {
       this.sourceArea.value = prettifyHTML(unrenderSpecialLinks(clone.innerHTML))
       this.pane.classList.add('kuro-pane--source')
       this.tocPanelEl.classList.add('kuro-toc--hidden')
+      this.charCount.classList.add('kuro-charcount--hidden')
     } else {
       // Source から戻るときだけ sourceArea を本文へ流し込む。
       // wysiwyg ⇔ view は同じ DOM を見ているので再レンダリングしてはいけない
@@ -7224,6 +7223,7 @@ export class KuroEditor {
         })
         this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
         this.pane.classList.remove('kuro-pane--source')
+        this.charCount.classList.remove('kuro-charcount--hidden')
       }
       this.tocPanelEl.classList.remove('kuro-toc--hidden')
       this.toc._doUpdate()
@@ -8775,7 +8775,6 @@ export class KuroEditor {
     const text = (this.wysiwyg.textContent || '').replace(/\s+/g, ' ').trim()
     const n = Array.from(text).length
     this._renderCharCount(n)
-    this._positionCharCount()
   }
 
   /**
@@ -8824,29 +8823,6 @@ export class KuroEditor {
     // (生成と同じフレームで transform を入れると transition が走らない)
     void this.charCount.offsetWidth
     for (const [reel, d] of reels) reel.style.transform = `translateY(${-d}em)`
-  }
-
-  /**
-   * カウンターの定位置 = エディタ枠(pane)のすぐ下・右寄せ。
-   * 縦: pane の実際の下端 + 隙間(GAP)。popupBottomLimit/mmenu 基準にすると
-   *   mmenu が画面下部に固定されている分だけ枠から切り離されて浮いて見える
-   *   ため使わない — 常に枠そのものを追従させる。mmenu と重なりそうな
-   *   ときだけ、その上端でクランプする。
-   * 横: pane の右端(ToC パネルが開いていればその左)に内側 12px。
-   * fixed なのでスクロール自体では動かないが、pane の位置・幅・mmenu の
-   * 有無が変わる場面(リサイズ・ToC 開閉)は resize/ResizeObserver 経由で
-   * ここに来る。
-   */
-  _positionCharCount() {
-    const el = this.charCount
-    if (!el || !this.pane.isConnected) return
-    const paneRect = this.pane.getBoundingClientRect()
-    if (paneRect.width === 0) return
-    const GAP   = 8
-    const limit = popupBottomLimit(this.mmenu)
-    el.style.right  = `${Math.max(4, window.innerWidth - paneRect.right + 12)}px`
-    el.style.bottom = 'auto'
-    el.style.top    = `${Math.max(4, Math.min(paneRect.bottom + GAP, limit - 20))}px`
   }
 
   _insertHR() {
@@ -9313,10 +9289,6 @@ export class KuroEditor {
     document.removeEventListener('selectionchange', this._onDocSelChange)
     document.removeEventListener('mousedown',       this._onDocMousedown)
     document.removeEventListener('mouseup',         this._onDocMouseup)
-
-    // 文字数カウンターの再配置フック(要素自体は root ごと外れる)
-    window.removeEventListener('resize', this._onCharCountReposition)
-    this._charCountRo?.disconnect()
 
     this.toc.destroy()
     this.roundboxMenu.destroy()

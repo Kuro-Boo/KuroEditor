@@ -331,31 +331,31 @@
   .kuro-pane--source .kuro-pane__source  { @apply block; }
 
   /* ── 文字数カウンター(オドメーター) ─────────────────────────────
-     エディタ枠のすぐ下・右寄せに「数字だけ」を浮かせる(v2.15〜)。ラベル文言を
-     持たない代わりに、桁がリールのように回る動きで「数えている」ことを
-     伝える。位置(top/right)は JS(_positionCharCount)がキャンバス(pane)の
-     実際の下端に合わせて入れる。
-     枠の外(ホストページ側の背景)に出る前提の要素なので、キャンバス配色
-     (--kuro-canvas-*)には依存しない — ツールバー等の chrome と同じ固定ダーク
-     配色にして、ホストのページ背景が何色でも視認性を保つ。 */
+     ツールバー2段目(kuro-tabs__row--bottom)の右端に常設(v2.18〜)。
+     ラベル文言を持たない代わりに、桁がリールのように回る動きで
+     「数えている」ことを伝える。
+     v2.15〜v2.18 は本文の上に position:fixed で浮かせていたが、本文が
+     縦に長い(スクロールが要る)ときは本文の実際の下端が画面外に出て
+     mmenu 際まで押し出され、可視中の本文と重なって読みにくくなる欠陥が
+     あったため撤回。ツールバーという常に本文と重ならない予約領域に置く
+     ことで、位置追従の JS が丸ごと不要になった。 */
   .kuro-charcount {
-    position: fixed;
-    z-index: 30;                     /* popm/mmenu(z-50) より下 */
+    display: inline-flex;
+    align-items: center;
+    margin: 0.25rem 0.5rem;
     font-size: 12px;
     line-height: 1;
     padding: 0.3em 0.6em;
     border-radius: 9999px;
     font-variant-numeric: tabular-nums;
     color: theme('colors.neutral.300');
-    background: theme('colors.neutral.800');
+    background: theme('colors.neutral.900');
     border: 1px solid theme('colors.neutral.600');
-    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
     user-select: none;
-    pointer-events: none;            /* 本文のタップ/キャレット操作を奪わない */
     white-space: nowrap;
   }
   /* source モードは生 HTML 編集中でカウントが本文入力と連動しないので隠す */
-  .kuro-pane--source .kuro-charcount { display: none; }
+  .kuro-charcount--hidden { display: none; }
 
   .kuro-charcount__col {
     display: inline-block;
