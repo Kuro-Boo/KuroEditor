@@ -2,13 +2,27 @@
  * Integration tests — KuroEditor class (DOM interaction via happy-dom)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { KuroEditor, createTableHtml, linkAtCaret } from '../src/editor.js'
+import { KuroEditor as RealKuroEditor, createTableHtml, linkAtCaret } from '../src/editor.js'
 
 function makeMount() {
   const el = document.createElement('div')
   el.id = 'editor-mount'
   document.body.appendChild(el)
   return el
+}
+
+// 未destroyのeditorはdirty検知のsetTimeout(_histTimer, 400ms)を残したまま次の
+// テスト/ファイル終了後まで生き延びることがあり、happy-domのteardown後に発火
+// して `document is not defined` の未処理例外になる(テスト自体はpassしていても
+// CI が落ちる、たまにしか起きないflaky挙動)。この最下層のクラス差し替えで
+// `new KuroEditor(...)` を書いている全箇所(この共有 editor も、個別の it() 内で
+// 作る ed も)を自動追跡し、テストごとに afterEach で確実に destroy() する。
+const _createdEditors = []
+class KuroEditor extends RealKuroEditor {
+  constructor(...args) {
+    super(...args)
+    _createdEditors.push(this)
+  }
 }
 
 describe('KuroEditor', () => {
@@ -22,16 +36,14 @@ describe('KuroEditor', () => {
     editor = new KuroEditor(mount, { initialContent: '<p>Hello</p>' })
   })
 
-  // 未destroyのeditorはdirty検知のsetTimeout(_histTimer, 400ms)を残したまま
-  // 次のテスト/ファイル終了後まで生き延びることがあり、happy-domのteardown後に
-  // 発火して `document is not defined` の未処理例外になる(テスト自体はpassしてい
-  // てもCIが落ちる)。afterEachで確実に片付ける。
   // 一部のテストは本文中で document.body.innerHTML = '' して独立した ed を作るため、
-  // その時点で editor.root は既に親を失っている — destroy() 内の
+  // その時点で root は既に親を失っている — destroy() 内の
   // clearTimeout/_dirtyObserver.disconnect() は先頭で済むので効果はあるが、末尾の
   // root.replaceWith() は親なしだと投げる。ここは後始末目的で結果を問わないので握り潰す。
   afterEach(() => {
-    try { editor?.destroy() } catch {}
+    while (_createdEditors.length) {
+      try { _createdEditors.pop().destroy() } catch {}
+    }
   })
 
   // ── Construction ────────────────────────────────────────────────────────────
@@ -1625,8 +1637,9 @@ describe('KuroEditor', () => {
         return m ? -Number(m[1]) : 0
       }).join('')
 
-    it('counter lives in the pane, digits only, dir=ltr', () => {
-      expect(editor.charCount.parentElement).toBe(editor.pane)
+    it('counter lives in the tab bar\'s bottom row (right-aligned), digits only, dir=ltr', () => {
+      expect(editor.charCount.closest('.kuro-tabs__row--bottom')).not.toBeNull()
+      expect(editor.charCount.parentElement.classList.contains('kuro-tabs__group--right')).toBe(true)
       expect(editor.charCount.getAttribute('dir')).toBe('ltr')
       expect(editor.charCount.textContent).not.toContain('文字数')
     })
