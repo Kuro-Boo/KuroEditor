@@ -11,7 +11,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.3'
+export const VERSION = '2.18.4'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4364,20 +4364,35 @@ export class TableResizer {
    * Scan all .kuro-table elements in the wysiwyg.
    * Returns { table, colIdx } when the mouse is within THR px of a vertical
    * column border, or null when no border is nearby.
+   *
+   * Column positions come from buildTableGrid(), NOT from the first row's
+   * physical cells — a colspan cell in row 1 covers one or more boundaries,
+   * making them undetectable from that row alone (the drag "stops working"
+   * as soon as the user merges header cells). For each logical boundary we
+   * take the right edge of any cell that actually ends there, whatever row
+   * it lives in; only a boundary spanned by EVERY row (no visible edge at
+   * all) stays undraggable, which is also the visually correct behavior.
    */
   _findBorder(mx, my) {
     for (const table of this.wysiwyg.querySelectorAll('.kuro-table')) {
       const tRect = table.getBoundingClientRect()
       if (my < tRect.top || my > tRect.bottom) continue
+      if (mx < tRect.left - this._THR || mx > tRect.right + this._THR) continue
 
-      // Use the first row (unmerged cells) to locate column positions
-      const firstRow = table.querySelector('tr')
-      if (!firstRow) continue
-      const cells = Array.from(firstRow.cells)
+      const { grid, pos } = buildTableGrid(table)
+      const colCount = grid[0]?.length ?? 0
 
-      for (let i = 0; i < cells.length - 1; i++) {
-        const r = cells[i].getBoundingClientRect()
-        if (Math.abs(mx - r.right) <= this._THR) {
+      // borderX[i] = x of the boundary between logical col i and i+1
+      const borderX = new Map()
+      for (const [cell, p] of pos) {
+        const cs  = parseInt(cell.getAttribute('colspan') || '1', 10)
+        const end = p.col + cs - 1   // last logical column this cell covers
+        if (!borderX.has(end)) borderX.set(end, cell.getBoundingClientRect().right)
+      }
+
+      for (let i = 0; i < colCount - 1; i++) {
+        const x = borderX.get(i)
+        if (x !== undefined && Math.abs(mx - x) <= this._THR) {
           return { table, colIdx: i }
         }
       }
@@ -4446,14 +4461,19 @@ export class TableResizer {
   // ── colgroup management ──────────────────────────────────────────────────
 
   /**
-   * Ensure the table has a <colgroup> with one <col> per column.
+   * Ensure the table has a <colgroup> with one <col> per LOGICAL column.
    * If it doesn't exist yet, build one with equal percentage widths.
    * Returns the current widths as an array of numbers (%).
+   *
+   * The column count comes from buildTableGrid(), not firstRow.cells.length —
+   * a colspan cell in row 1 makes the physical cell count smaller than the
+   * logical column count, which would build a colgroup that misaligns every
+   * <col> after the merged one.
    */
   _initColWidths() {
-    const firstRow = this._table.querySelector('tr')
-    if (!firstRow) return []
-    const n = firstRow.cells.length
+    const { grid } = buildTableGrid(this._table)
+    const n = grid[0]?.length ?? 0
+    if (!n) return []
 
     let cg = this._table.querySelector('colgroup')
     if (!cg || cg.children.length !== n) {
