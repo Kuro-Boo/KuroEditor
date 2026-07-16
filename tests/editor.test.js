@@ -1420,6 +1420,29 @@ describe('KuroEditor', () => {
     })
   })
 
+  // ── メディアダイアログの accept (mediaAccept) ────────────────────────────────
+
+  describe('mediaAccept', () => {
+    it('既定は image/video/audio(従来互換)', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), { onMediaUpload: async () => '' })
+      const input = ed.mediaDialog.el.querySelector('input[type="file"]')
+      expect(input.getAttribute('accept')).toBe('image/*,video/*,audio/*')
+    })
+
+    it("mediaAccept: 'image/*' でファイル選択の accept が絞られる", () => {
+      // 画像しか受け付けないホスト(KuroNote 等)向け。iOS WKWebView は accept に
+      // audio 等が混ざると Files ピッカーだけになるため、絞ると写真ライブラリ/撮影が出る。
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), {
+        onMediaUpload: async () => '',
+        mediaAccept: 'image/*',
+      })
+      const input = ed.mediaDialog.el.querySelector('input[type="file"]')
+      expect(input.getAttribute('accept')).toBe('image/*')
+    })
+  })
+
   // ── キャンバス配色 (canvasColors / canvasDarkColors) ────────────────────────
 
   describe('canvas colors', () => {

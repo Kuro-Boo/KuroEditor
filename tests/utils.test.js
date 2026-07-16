@@ -18,6 +18,7 @@ import {
   writeLinkParts,
   linkAtCaret,
   normalizePastedLinks,
+  nativeSelectionBarClearance,
   popupBottomLimit,
   isImeComposing,
 } from '../src/editor.js'
@@ -731,6 +732,31 @@ describe('normalizePastedLinks', () => {
     const div = container('<a href="https://example.com">x</a>')
     normalizePastedLinks(div, (slug) => slug + '?resolved')
     expect(div.querySelector('a').getAttribute('href')).toBe('https://example.com?resolved')
+  })
+})
+
+// ─── nativeSelectionBarClearance ──────────────────────────────────────────────
+
+describe('nativeSelectionBarClearance', () => {
+  it('Android では OS 選択ツールバーの帯(64px)を返す', () => {
+    expect(
+      nativeSelectionBarClearance(
+        'Mozilla/5.0 (Linux; Android 16; Pixel 9) AppleWebKit/537.36',
+      ),
+    ).toBe(64)
+  })
+
+  it('iOS / デスクトップでは 0(OS メニューは選択の上に重ならない)', () => {
+    expect(
+      nativeSelectionBarClearance(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15',
+      ),
+    ).toBe(0)
+    expect(
+      nativeSelectionBarClearance(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      ),
+    ).toBe(0)
   })
 })
 
