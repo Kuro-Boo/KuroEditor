@@ -713,13 +713,17 @@
      TABLE INSERTER — "+" buttons on row / column borders
      ════════════════════════════════════════════════════════ */
 
-  /* Transparent fixed wrapper — only acts as a DOM ancestor for hit-testing */
+  /* Transparent fixed wrapper — only acts as a DOM ancestor for hit-testing.
+     z-index はキャンバス装飾として【全フローターより下】に置く: ✋/−/＋ は
+     テーブル本体に付く飾りであって、TBL設定メニュー (z-40) やカラーピッカー・
+     mmenu・各ポップアップ (z-50) の上に乗ってはならない (旧値 55 は全部の
+     上に描画され、カラーピッカーに ✋/− が重なるバグの原因だった)。 */
   .kuro-table-inserter {
     position: fixed;
     top: 0;
     left: 0;
     pointer-events: none;
-    z-index: 55;
+    z-index: 30;
   }
 
   .kuro-table-insert-btn {

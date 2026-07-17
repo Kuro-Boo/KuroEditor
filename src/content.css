@@ -472,6 +472,12 @@ h5[id^='kuro-h-'] {
   padding: 0.75rem;
   line-height: 1.5;
   color: var(--kuro-table-cell-text);
+  /* 既定は middle で明示宣言する。エディタは UA 既定 (middle) で表示するが、
+     公開側はテンプレートの Tailwind typography が .prose :where(tbody td)
+     { vertical-align: baseline } / thead th { bottom } を注入するため、宣言が
+     無いと rowspan セル等が上付きにズレる。ユーザーが縦揃えボタンで選んだ値は
+     インライン style として保存され、常にこの既定より優先される。 */
+  vertical-align: middle;
 }
 .kuro-table th,
 .kuro-content th {
