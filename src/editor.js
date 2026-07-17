@@ -11,7 +11,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.5'
+export const VERSION = '2.18.6'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4361,9 +4361,17 @@ export class TableResizer {
   // ── Border detection ─────────────────────────────────────────────────────
 
   /**
-   * Scan all .kuro-table elements in the wysiwyg.
+   * Scan all tables in the wysiwyg — ANY <table>, not just .kuro-table.
    * Returns { table, colIdx } when the mouse is within THR px of a vertical
    * column border, or null when no border is nearby.
+   *
+   * ⚠ Class-scoping this to '.kuro-table' broke resize on real content: old
+   * saved notes hold tables pasted before paste-normalization existed, so
+   * they carry no class — yet content.css styles bare tables identically
+   * ('.kuro-content table') and every OTHER table tool (merge, delete,
+   * row/col move — all via closest('table')) works on them. The user sees a
+   * perfectly normal table where only resize is dead. Match the rest of the
+   * tooling and accept any table.
    *
    * Column positions come from buildTableGrid(), NOT from the first row's
    * physical cells — a colspan cell in row 1 covers one or more boundaries,
@@ -4374,7 +4382,7 @@ export class TableResizer {
    * all) stays undraggable, which is also the visually correct behavior.
    */
   _findBorder(mx, my) {
-    for (const table of this.wysiwyg.querySelectorAll('.kuro-table')) {
+    for (const table of this.wysiwyg.querySelectorAll('table')) {
       const tRect = table.getBoundingClientRect()
       if (my < tRect.top || my > tRect.bottom) continue
       if (mx < tRect.left - this._THR || mx > tRect.right + this._THR) continue
@@ -4421,7 +4429,16 @@ export class TableResizer {
     this._table    = hit.table
     this._colIdx   = hit.colIdx
     this._startX   = e.clientX
+    // 順序が重要: 先に【現在の描画幅】を実測して colgroup を作り(=fixed 化しても
+    // 幅が変わらない初期値を確定)、その後で kuro-table クラスを付与する。
     this._widths   = this._initColWidths()
+
+    // 正規クラスへ収斂: kuro-table が無いと table-layout:fixed が効かず、
+    // auto レイアウトでは colgroup の % 幅が確実に反映されない(ドラッグしても
+    // 内容幅に引っ張られて戻る)。見た目は .kuro-content table と同一ルール
+    // なので付与しても変化しない。列幅リサイズはユーザーの明示的な編集なので、
+    // ここでのクラス付与が dirty / undo 履歴に載るのも正しい挙動。
+    hit.table.classList.add('kuro-table')
 
     document.addEventListener('mousemove', this._onDrag)
     document.addEventListener('mouseup',   this._onUp)
@@ -4462,7 +4479,11 @@ export class TableResizer {
 
   /**
    * Ensure the table has a <colgroup> with one <col> per LOGICAL column.
-   * If it doesn't exist yet, build one with equal percentage widths.
+   * If it doesn't exist yet, build one from the columns' CURRENT rendered
+   * widths (equal split only as a fallback) — so a table whose columns were
+   * laid out by content (auto layout / no colgroup yet) keeps its exact
+   * shape at grab-start instead of visibly snapping to an equal split the
+   * moment table-layout:fixed kicks in.
    * Returns the current widths as an array of numbers (%).
    *
    * The column count comes from buildTableGrid(), not firstRow.cells.length —
@@ -4471,24 +4492,47 @@ export class TableResizer {
    * <col> after the merged one.
    */
   _initColWidths() {
-    const { grid } = buildTableGrid(this._table)
+    const { grid, pos } = buildTableGrid(this._table)
     const n = grid[0]?.length ?? 0
     if (!n) return []
 
     let cg = this._table.querySelector('colgroup')
     if (!cg || cg.children.length !== n) {
       cg?.remove()
+      const widths = this._measureColWidths(n, pos)
       cg = document.createElement('colgroup')
-      const w = +(100 / n).toFixed(4)
       for (let i = 0; i < n; i++) {
         const col = document.createElement('col')
-        col.style.width = `${w}%`
+        col.style.width = `${(widths ? widths[i] : 100 / n).toFixed(4)}%`
         cg.appendChild(col)
       }
       this._table.insertBefore(cg, this._table.firstChild)
     }
 
     return Array.from(cg.children).map(col => parseFloat(col.style.width) || (100 / n))
+  }
+
+  /**
+   * Measure the rendered width (%) of each of the n logical columns from
+   * cell rects: boundary x = right edge of any cell ending at that logical
+   * column. Returns null when a boundary is spanned in every row (no
+   * measurable edge) — caller falls back to an equal split.
+   */
+  _measureColWidths(n, pos) {
+    const tRect = this._table.getBoundingClientRect()
+    if (!tRect.width) return null
+    const edges = new Array(n + 1).fill(null)
+    edges[0] = tRect.left
+    edges[n] = tRect.right
+    for (const [cell, p] of pos) {
+      const cs  = parseInt(cell.getAttribute('colspan') || '1', 10)
+      const end = p.col + cs
+      if (end < n && edges[end] === null) edges[end] = cell.getBoundingClientRect().right
+    }
+    if (edges.some((x) => x === null)) return null
+    const widths = []
+    for (let i = 0; i < n; i++) widths.push((edges[i + 1] - edges[i]) / tRect.width * 100)
+    return widths
   }
 
   destroy() {

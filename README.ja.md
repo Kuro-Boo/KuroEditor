@@ -23,7 +23,7 @@
 **コンテンツの見た目を「単一の正」に集約しました。** 編集中とサイト公開時の表示を構造的に一致（WYSIWYG）させ、将来の乖離を防ぎます。
 
 - **`src/content.css`** … 編集されるコンテンツの見た目（見出し・本文・引用・リスト・リンク・hr など）を**プレーンCSSで一元管理**。公開ページはこのファイルを読みます。色は `--kuro-*` 変数（既定はテーマ非依存／`inherit`）。
-- **`src/editor.css`** … **エディタUI（ツールバー・メニュー等の枠）専用**。`@import "tailwindcss"` ＋ `@import "./content.css"` ＋ `.kuro-content { --kuro-*: <ダーク値> }` のみ。**コンテンツの見た目ルールは持ちません**。
+- **`src/editor.css`** … **エディタUI（ツールバー・メニュー等の枠）専用**。`@import "tailwindcss"` ＋ `@import "./content.css"` ＋ chrome スタイル。**コンテンツの見た目ルールは持ちません**。編集キャンバスは**既定でライト**（content.css のテーマ非依存な既定値＝公開ページと同じ値のまま）で、ダーク用の `--kuro-*` パレットは `.kuro-editor--canvas-dark` 修飾子の配下にスコープされているため、ライト表示や公開ページへ漏れません。
 - `src/main.js` は `editor.css` を読み込みます。
 
 **重要（公開側）**：見出し等はテンプレートの Tailwind preflight で素タグが小さくなるため、content.css は `.kuro-content` 配下に加え、**KuroEditor が見出しに付与する `id="kuro-h-*"`** にもスコープして公開ページで効くようにしています。
@@ -87,19 +87,20 @@ v2 で表示崩れ等が起きた場合の戻し方：
 
 ### 1. ファイルの入手
 
-ビルド済みの 2 ファイルをサーバーに置きます:
+ビルド済みファイルをサーバーに置きます（エディターを載せるページに必要なのは上の 2 つ）:
 
 | ファイル | 内容 |
 |---|---|
 | `dist/kuro-editor.js` | エディター本体（Vanilla JS、依存なし） |
 | `dist/kuro-editor.css` | スタイル（Tailwind コンパイル済み、スコープ済み） |
+| `dist/kuro-content.css` | **エディターを読み込まない公開ページ**用の本文スタイル（[保存コンテンツの表示](#-保存コンテンツの表示公開ページ)参照） |
 
 ローカルでビルドする場合:
 
 ```bash
 npm install
 npm run build
-# → dist/kuro-editor.js, dist/kuro-editor.css が生成
+# → dist/kuro-editor.js, dist/kuro-editor.css, dist/kuro-content.css が生成
 ```
 
 ### 2. HTML への組み込み
@@ -304,7 +305,7 @@ editor.destroy()          // 後片付け（イベント解除＋元の要素に
 
 ```bash
 npm install
-npm run dev      # 開発サーバー (http://localhost:5177)
+npm run dev      # 開発サーバー → http://localhost:5177/src/index.html を開く
 npm test         # 単体テスト（Vitest）
 npm run build    # dist/ にビルド
 ```
@@ -317,9 +318,11 @@ src/
   editor.css    # エディタ UI (chrome) のスタイル。content.css を import
   content.css   # 本文のスタイル（公開ページと共有）
   main.js       # デモページのエントリ
-  index.html    # 開発用デモ
+  index.html    # 開発用デモ（開発サーバーでは /src/index.html で配信）
 tests/          # Vitest テスト
-dist/           # ビルド成果物 (kuro-editor.js / .css)
+build-scripts/  # ビルド/リリース用ツール (bump.js / emit-version.js / landing CSS 入力)
+public/         # 紹介/デモサイトの静的ファイル (vite build の対象)
+dist/           # ビルド成果物 (kuro-editor.js / kuro-editor.css / kuro-content.css)
 ```
 
 ---

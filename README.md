@@ -27,7 +27,11 @@ published page render identically (no drift on future editor changes).
   links, hr, …) as plain CSS. The published page loads this file. Colors use
   `--kuro-*` variables (theme-neutral / `inherit` by default).
 - **`src/editor.css`** — editor **UI (chrome) only**:
-  `@import "tailwindcss"` + `@import "./content.css"` + `.kuro-content { --kuro-*: <dark values> }`.
+  `@import "tailwindcss"` + `@import "./content.css"` + toolbar/menu styles.
+  The editing canvas is **light by default** (content.css keeps its theme-neutral
+  defaults — the same values the public page uses), and the dark `--kuro-*`
+  palette is scoped under the `.kuro-editor--canvas-dark` modifier so it never
+  leaks into the light canvas or the published page.
 - `src/main.js` imports `editor.css`.
 
 Public scope: content.css targets both the `.kuro-content` wrapper (editor) and
@@ -94,19 +98,20 @@ That's all it takes to launch.
 
 ### 1. Get the files
 
-Place the two pre-built files on your server:
+Place the pre-built files on your server (pages that host the editor only need the first two):
 
 | File | Contents |
 |---|---|
 | `dist/kuro-editor.js` | The editor itself (Vanilla JS, no dependencies) |
 | `dist/kuro-editor.css` | Styles (Tailwind compiled, scoped) |
+| `dist/kuro-content.css` | Content-only styles for **public pages that don't load the editor** (see [Rendering saved content](#-rendering-saved-content-public-pages)) |
 
 To build locally:
 
 ```bash
 npm install
 npm run build
-# → generates dist/kuro-editor.js, dist/kuro-editor.css
+# → generates dist/kuro-editor.js, dist/kuro-editor.css, dist/kuro-content.css
 ```
 
 ### 2. Add it to your HTML
@@ -311,7 +316,7 @@ A `slug` starting with `http` is treated as an external link.
 
 ```bash
 npm install
-npm run dev      # Dev server (http://localhost:5177)
+npm run dev      # Dev server → open http://localhost:5177/src/index.html
 npm test         # Unit tests (Vitest)
 npm run build    # Build to dist/
 ```
@@ -324,9 +329,11 @@ src/
   editor.css    # Editor UI (chrome) styles — imports content.css
   content.css   # Content styles (shared with the published page)
   main.js       # Demo page entry point
-  index.html    # Development demo
+  index.html    # Development demo (dev server serves it at /src/index.html)
 tests/          # Vitest tests
-dist/           # Build artifacts (kuro-editor.js / .css)
+build-scripts/  # Build/release tooling (bump.js / emit-version.js / landing CSS input)
+public/         # Static files for the showcase/demo site (vite build input)
+dist/           # Build artifacts (kuro-editor.js / kuro-editor.css / kuro-content.css)
 ```
 
 ---
