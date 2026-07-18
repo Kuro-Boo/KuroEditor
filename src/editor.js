@@ -11,7 +11,7 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.7'
+export const VERSION = '2.18.8'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -925,6 +925,19 @@ export function stripBlockIds(html) {
   div.innerHTML = html
   div.querySelectorAll('[data-bid]').forEach(el => el.removeAttribute('data-bid'))
   return div.innerHTML
+}
+
+/**
+ * A block id is safe when it is a short token of [A-Za-z0-9_-] (covers UUIDs
+ * from crypto.randomUUID and simple ids like "keep-1"). Anything else — quotes,
+ * brackets, whitespace, over-long — is rejected so it can be re-minted at the
+ * tagging boundary; such an id would otherwise break a `[data-bid="…"]` selector
+ * and the sync wire format when external/pasted/MCP content supplies it (F0-5).
+ * @param {unknown} id
+ * @returns {boolean}
+ */
+export function isValidBid(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -8668,7 +8681,12 @@ export class KuroEditor {
       const code = pre.querySelector('code')
       const tmp = document.createElement('div')
       tmp.innerHTML = this._buildCodeBlockHtml(code ? code.textContent : '')
-      pre.replaceWith(tmp.firstChild)
+      const wrap = tmp.firstChild
+      // Carry block identity onto the wrap so the save→load→save round-trip keeps
+      // the same data-bid (the mirror of the serialize side; F0-1).
+      const bid = pre.getAttribute('data-bid')
+      if (bid) wrap.setAttribute('data-bid', bid)
+      pre.replaceWith(wrap)
     }
     // ② Wire all wraps
     for (const wrap of this.wysiwyg.querySelectorAll('.kuro-code-wrap')) {
@@ -8688,6 +8706,11 @@ export class KuroEditor {
       const value = live[i]?.querySelector('.kuro-code__area')?.value ?? ''
       const pre  = document.createElement('pre')
       pre.className = 'kuro-code'
+      // Preserve block identity across serialize: without this the code block
+      // gets a fresh data-bid on every save/reload, so a per-block 3-way merge
+      // sees it as delete+insert and can spuriously duplicate it (F0-1).
+      const bid = wrap.getAttribute('data-bid')
+      if (bid) pre.setAttribute('data-bid', bid)
       const code = document.createElement('code')
       code.textContent = value
       pre.appendChild(code)
@@ -9096,8 +9119,16 @@ export class KuroEditor {
   _tagBlock(el, isNew = false) {
     if (!el || el.nodeType !== Node.ELEMENT_NODE) return
     const id = el.getAttribute('data-bid')
-    if (!id) { el.setAttribute('data-bid', this._uuid()); return }
-    const same = this.wysiwyg.querySelectorAll(`[data-bid="${id}"]`)
+    // Missing OR malformed id → mint a fresh, safe one. External / pasted / MCP
+    // content can carry a data-bid with quotes or brackets that would break a
+    // selector and the sync wire format; canonicalize at this trusted tagging
+    // boundary rather than trusting the incoming string (F0-5).
+    if (!isValidBid(id)) { el.setAttribute('data-bid', this._uuid()); return }
+    // No string interpolation into a selector: enumerate tagged blocks and
+    // compare the attribute in JS (id is validated, but this also avoids the
+    // O(selector-parse) cost and any future non-UUID id class).
+    const same = [...this.wysiwyg.querySelectorAll('[data-bid]')]
+      .filter((e) => e.getAttribute('data-bid') === id)
     if (same.length <= 1) return
     if (isNew) {
       // Paste/split: the just-added node is the duplicate → re-issue it.
