@@ -18,6 +18,8 @@ import {
   mergeBlocks,
   resolveConflictsAsDuplicates,
   reconcileOrder,
+  diffBlocks,
+  applyBlockOps,
   defaultBidFactory,
 } from './blocks.js'
 
@@ -32,6 +34,8 @@ export {
   mergeBlocks,
   resolveConflictsAsDuplicates,
   reconcileOrder,
+  diffBlocks,
+  applyBlockOps,
   defaultBidFactory,
 }
 
@@ -39,7 +43,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.9'
+export const VERSION = '2.18.10'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5516,6 +5520,7 @@ export class KuroEditor {
       initialContent: '',
       onSave: null,
       onDirty: null,
+      onBlockChange: null,   // (batch) => void — W2: block 単位の変更を OpBatch で通知（blockIds 必須）
       urlResolver: defaultResolver,
       modalToolbar: null,
       modalMenu: true,
@@ -6269,7 +6274,7 @@ export class KuroEditor {
     })
 
     // ソースモードの編集は wysiwyg の MutationObserver では拾えない
-    this.sourceArea.addEventListener('input', () => this._markDirty())
+    this.sourceArea.addEventListener('input', () => { this._markDirty(); this._scheduleBlockEmit() })
 
     // Auto-save toggle — tab bar is the single source of truth. The choice is
     // persisted (localStorage) so it survives reloads / re-mounts.
@@ -8328,6 +8333,7 @@ export class KuroEditor {
     ta.addEventListener('input', () => {
       this._markDirty()
       this._scheduleSnapshot()
+      this._scheduleBlockEmit()   // W2: コードブロック編集も getContent() 経由で diff に載る
     })
 
     // ── Delete button ──────────────────────────────────────────────────────
@@ -8830,6 +8836,7 @@ export class KuroEditor {
     this.linkEditPopup.close()
     this._clearDirty()  // プログラムからの差し替えは「未保存の変更」ではない
     this._resetHistory()     // 新しい文書 — それ以前の手には undo で戻さない
+    this._resyncBlockShadow() // W2: 新しい文書を shadow の基準に（load は onBlockChange を出さない）
     this._enhanceUrlCards()  // URL カードの豪華表示を後追いで取得（非ブロッキング）
   }
 
@@ -8988,7 +8995,12 @@ export class KuroEditor {
     if (saved && saved.sc.isConnected && saved.ec.isConnected) {
       try { sel.setBaseAndExtent(saved.sc, saved.so, saved.ec, saved.eo) } catch { /* selection gone */ }
     }
-    if (origin === 'local') this._markDirty()
+    if (origin === 'local') {
+      this._markDirty()
+      this._scheduleBlockEmit()          // ユーザー編集相当 → onBlockChange に載せる
+    } else {
+      this._resyncBlockShadow()          // remote/program/history はプログラム由来 → 通知せず shadow だけ更新
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -9218,6 +9230,7 @@ export class KuroEditor {
       if (!records.some((r) => this._isContentMutation(r))) return
       this._markDirty()         // 既に dirty なら no-op
       this._scheduleSnapshot()
+      this._scheduleBlockEmit() // W2: block 変更を onBlockChange へ（設定時のみ）
     })
     this._observeDirty()
   }
@@ -9283,6 +9296,50 @@ export class KuroEditor {
   /** 未保存の変更があるか(slotted モードでホスト側の保存 UI からも使える)。 */
   isDirty() { return !!this._dirty }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLOCK EVENTS (W2) — onBlockChange。dirty 検知と同じ MutationObserver + input
+  // 経路にぶら下がる「事後リコンサイラ」: shadow(bid→html) と現在の getBlocks() を
+  // diffBlocks で突き合わせ、update/insert/delete/move を 1 つの OpBatch にまとめて
+  // 通知する。⚠ onBlockChange 未指定なら一切走らない（現行挙動と完全同一）。
+  // dirty/undo のコードパス・タイミングは変えない（この層は分配後の追加購読者）。
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** true when block-event emission is active (host opted in AND blockIds on). */
+  _blockEventsOn() {
+    return typeof this.options.onBlockChange === 'function' && this.options.blockIds
+  }
+
+  /** Reset the shadow baseline to the current document (no emit). Cancels a pending emit. */
+  _resyncBlockShadow() {
+    if (!this._blockEventsOn()) return
+    clearTimeout(this._blockEmitTimer)
+    this._blockEmitTimer = null
+    this._blockShadow = new Map(
+      this.getBlocks().filter((b) => b.bid != null).map((b) => [b.bid, b.html]),
+    )
+  }
+
+  /** Debounced (400ms, same as history) trigger for the post-hoc block differ. */
+  _scheduleBlockEmit() {
+    if (!this._blockEventsOn() || this._suppressBlockEvents) return
+    clearTimeout(this._blockEmitTimer)
+    this._blockEmitTimer = setTimeout(() => this._emitBlockChanges('local'), HIST_DEBOUNCE_MS)
+  }
+
+  /** Diff shadow vs current, emit one OpBatch, advance the shadow. */
+  _emitBlockChanges(origin = 'local') {
+    if (!this._blockEventsOn()) return
+    clearTimeout(this._blockEmitTimer)
+    this._blockEmitTimer = null
+    if (!this._blockShadow) { this._resyncBlockShadow(); return }
+    const before = [...this._blockShadow].map(([bid, html]) => ({ bid, html }))
+    const after = this.getBlocks().filter((b) => b.bid != null)
+    const ops = diffBlocks(before, after)
+    if (ops.length === 0) return
+    this._blockShadow = new Map(after.map((b) => [b.bid, b.html]))
+    this.options.onBlockChange({ opId: this._uuid(), origin, ops })
+  }
+
   /**
    * ホストが自前の保存 UI で本文を保存し終えたときに呼ぶ。エディタの
    * 未保存状態を消灯し、次の編集で onDirty が再発火するようにする。
@@ -9296,6 +9353,7 @@ export class KuroEditor {
     this._stopAutoSave()
     this._dirtyObserver?.disconnect()
     clearTimeout(this._histTimer)
+    clearTimeout(this._blockEmitTimer)
 
     // Remove document-level listeners registered in _bindEvents()
     document.removeEventListener('selectionchange', this._onDocSelChange)

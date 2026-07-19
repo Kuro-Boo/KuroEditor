@@ -12,6 +12,8 @@ import {
   mergeBlocks,
   resolveConflictsAsDuplicates,
   reconcileOrder,
+  diffBlocks,
+  applyBlockOps,
 } from '../src/blocks.js'
 
 describe('stripInternalIds (tokenizer, DOM-free)', () => {
@@ -106,5 +108,55 @@ describe('reconcileOrder (Plan B / Adapter 修復・決定的)', () => {
     const known = new Set(['q', 'z', 'a'])
     expect(reconcileOrder(order, known)).toEqual(reconcileOrder(order, known))
     expect(reconcileOrder(order, known)).toEqual(['z', 'q', 'a'])
+  })
+})
+
+describe('diffBlocks / applyBlockOps (W2 keyed diff)', () => {
+  const B = (bid, html) => ({ bid, html: html ?? `<p data-bid="${bid}">${bid}</p>` })
+  const roundtrips = (before, after) => {
+    const ops = diffBlocks(before, after)
+    expect(applyBlockOps(before, ops)).toEqual(after)
+    return ops
+  }
+
+  it('pure typing → single update op', () => {
+    const before = [B('a'), B('b')]
+    const after = [B('a', '<p data-bid="a">edited</p>'), B('b')]
+    const ops = roundtrips(before, after)
+    expect(ops).toEqual([{ op: 'update', bid: 'a', html: '<p data-bid="a">edited</p>' }])
+  })
+
+  it('insert at end / middle / front carries the right afterBid', () => {
+    expect(roundtrips([B('a')], [B('a'), B('b')])).toEqual([{ op: 'insert', bid: 'b', html: B('b').html, afterBid: 'a' }])
+    expect(roundtrips([B('a'), B('c')], [B('a'), B('b'), B('c')])).toEqual([{ op: 'insert', bid: 'b', html: B('b').html, afterBid: 'a' }])
+    expect(roundtrips([B('a')], [B('z'), B('a')])).toEqual([{ op: 'insert', bid: 'z', html: B('z').html, afterBid: null }])
+  })
+
+  it('delete emits a delete op', () => {
+    expect(roundtrips([B('a'), B('b'), B('c')], [B('a'), B('c')])).toEqual([{ op: 'delete', bid: 'b' }])
+  })
+
+  it('a single move is detected as ONE move (LIS-minimised)', () => {
+    const ops = roundtrips([B('a'), B('b'), B('c')], [B('c'), B('a'), B('b')])
+    const moves = ops.filter((o) => o.op === 'move')
+    expect(moves).toEqual([{ op: 'move', bid: 'c', afterBid: null }])
+  })
+
+  it('move + edit of the same block emits move then update', () => {
+    const before = [B('a'), B('b')]
+    const after = [B('b', '<p data-bid="b">B!</p>'), B('a')]
+    const ops = roundtrips(before, after)
+    expect(ops).toContainEqual({ op: 'move', bid: 'b', afterBid: null })
+    expect(ops).toContainEqual({ op: 'update', bid: 'b', html: '<p data-bid="b">B!</p>' })
+  })
+
+  it('combined insert+delete+update+move round-trips', () => {
+    const before = [B('a'), B('b'), B('c'), B('d')]
+    const after = [B('d'), B('a', '<p data-bid="a">A2</p>'), B('x'), B('c')] // b deleted, x inserted, d moved, a edited
+    roundtrips(before, after)
+  })
+
+  it('no change → no ops', () => {
+    expect(diffBlocks([B('a'), B('b')], [B('a'), B('b')])).toEqual([])
   })
 })

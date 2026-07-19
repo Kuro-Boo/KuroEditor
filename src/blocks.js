@@ -408,3 +408,103 @@ export function reconcileOrder(order, known) {
   const missing = [...knownSet].filter((bid) => !seen.has(bid)).sort()
   return out.concat(missing)
 }
+
+// ── keyed block diff (W2 事後リコンサイラ) ─────────────────────────────────────
+
+/** Indices (into seq) forming a longest strictly-increasing subsequence. */
+function lisIndices(seq) {
+  const n = seq.length
+  if (n === 0) return new Set()
+  const tails = []          // tails[k] = seq-index of the smallest tail of an incr. subseq of length k+1
+  const prev = new Array(n).fill(-1)
+  for (let i = 0; i < n; i++) {
+    let lo = 0
+    let hi = tails.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (seq[tails[mid]] < seq[i]) lo = mid + 1
+      else hi = mid
+    }
+    if (lo > 0) prev[i] = tails[lo - 1]
+    if (lo === tails.length) tails.push(i)
+    else tails[lo] = i
+  }
+  const res = new Set()
+  let k = tails[tails.length - 1]
+  while (k !== -1) { res.add(k); k = prev[k] }
+  return res
+}
+
+/**
+ * Keyed diff of two block lists (by bid) into an ordered BlockOp[] that
+ * transforms `before` into `after` when applied left-to-right:
+ *   { op:"delete", bid }
+ *   { op:"insert", bid, html, afterBid }   // afterBid null = at the front
+ *   { op:"move",   bid, afterBid }         // afterBid null = to the front
+ *   { op:"update", bid, html }
+ * Moves are minimised via LIS (only blocks that actually changed relative order
+ * are moved). Both inputs MUST have non-null unique bids (blockIds on).
+ *
+ * @param {Array<{bid:string, html:string}>} before
+ * @param {Array<{bid:string, html:string}>} after
+ * @returns {Array<object>}
+ */
+export function diffBlocks(before, after) {
+  const ops = []
+  const beforeBids = before.map((b) => b.bid)
+  const afterBids = after.map((b) => b.bid)
+  const beforeSet = new Set(beforeBids)
+  const afterSet = new Set(afterBids)
+  const beforeHtml = new Map(before.map((b) => [b.bid, b.html]))
+  const afterHtml = new Map(after.map((b) => [b.bid, b.html]))
+
+  for (const bid of beforeBids) if (!afterSet.has(bid)) ops.push({ op: 'delete', bid })
+
+  // Common bids in `after` order, mapped to their index in `before` → LIS = stayed put.
+  const beforeIdx = new Map()
+  beforeBids.forEach((bid, i) => { if (afterSet.has(bid)) beforeIdx.set(bid, i) })
+  const commonInAfter = afterBids.filter((bid) => beforeSet.has(bid))
+  const seq = commonInAfter.map((bid) => beforeIdx.get(bid))
+  const lis = lisIndices(seq)
+  const stable = new Set(commonInAfter.filter((_, i) => lis.has(i)))
+
+  let prevBid = null
+  for (const bid of afterBids) {
+    if (!beforeSet.has(bid)) {
+      ops.push({ op: 'insert', bid, html: afterHtml.get(bid), afterBid: prevBid })
+    } else {
+      if (!stable.has(bid)) ops.push({ op: 'move', bid, afterBid: prevBid })
+      if (afterHtml.get(bid) !== beforeHtml.get(bid)) ops.push({ op: 'update', bid, html: afterHtml.get(bid) })
+    }
+    prevBid = bid
+  }
+  return ops
+}
+
+/**
+ * Apply a BlockOp[] (from diffBlocks) to a block list, returning the new list.
+ * Pure — used to verify a diff round-trips (before + diff == after) and by
+ * non-DOM consumers (server/tests). afterBid null = front.
+ * @param {Array<{bid:string, html:string}>} before
+ * @param {Array<object>} ops
+ * @returns {Array<{bid:string, html:string}>}
+ */
+export function applyBlockOps(before, ops) {
+  let list = before.map((b) => ({ ...b }))
+  const place = (block, afterBid) => {
+    list = list.filter((b) => b.bid !== block.bid)
+    if (afterBid == null) { list.unshift(block); return }
+    const at = list.findIndex((b) => b.bid === afterBid)
+    list.splice(at < 0 ? list.length : at + 1, 0, block)
+  }
+  for (const op of ops) {
+    if (op.op === 'delete') list = list.filter((b) => b.bid !== op.bid)
+    else if (op.op === 'insert') place({ bid: op.bid, html: op.html }, op.afterBid)
+    else if (op.op === 'move') place(list.find((b) => b.bid === op.bid), op.afterBid)
+    else if (op.op === 'update') {
+      const b = list.find((x) => x.bid === op.bid)
+      if (b) b.html = op.html
+    }
+  }
+  return list
+}
