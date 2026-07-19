@@ -7,11 +7,39 @@
  * Repo: https://github.com/Kuro-Boo/KuroEditor
  */
 
+// DOM 非依存の共有ブロック純関数（Worker / 同期サーバーと共通の唯一実装）。
+import {
+  isValidBid,
+  stripInternalIds,
+  stripBlockIds,
+  splitTopLevelBlocks,
+  parseBlocks,
+  normalizeBlockIds,
+  mergeBlocks,
+  resolveConflictsAsDuplicates,
+  reconcileOrder,
+  defaultBidFactory,
+} from './blocks.js'
+
+// 後方互換: 従来 editor.js から import していた名前をそのまま再 export する。
+export {
+  isValidBid,
+  stripInternalIds,
+  stripBlockIds,
+  splitTopLevelBlocks,
+  parseBlocks,
+  normalizeBlockIds,
+  mergeBlocks,
+  resolveConflictsAsDuplicates,
+  reconcileOrder,
+  defaultBidFactory,
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.8'
+export const VERSION = '2.18.9'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -911,261 +939,15 @@ export function edgeOfNode(el, node, offset) {
   }
 }
 
-/**
- * Remove editing-only block ids (data-bid, maintained by the `blockIds`
- * option) from an HTML string. Published/build output must not carry them —
- * they only matter while editing and for block-level merge on STORED data,
- * so getContent() keeps them and getBuildImage() strips them.
- * @param {string} html
- * @returns {string}
- */
-export function stripBlockIds(html) {
-  if (!html.includes('data-bid')) return html   // common case: untouched
-  const div = document.createElement('div')
-  div.innerHTML = html
-  div.querySelectorAll('[data-bid]').forEach(el => el.removeAttribute('data-bid'))
-  return div.innerHTML
-}
+// stripBlockIds / stripInternalIds / isValidBid / splitTopLevelBlocks /
+// mergeBlocks / parseBlocks / normalizeBlockIds / resolveConflictsAsDuplicates /
+// reconcileOrder は DOM 非依存の共有モジュール ./blocks.js に集約し、editor.js
+// 冒頭で import → 末尾で再 export する（後方互換）。エディタ内部も同じ実装を使う。
 
 /**
- * A block id is safe when it is a short token of [A-Za-z0-9_-] (covers UUIDs
- * from crypto.randomUUID and simple ids like "keep-1"). Anything else — quotes,
- * brackets, whitespace, over-long — is rejected so it can be re-minted at the
- * tagging boundary; such an id would otherwise break a `[data-bid="…"]` selector
- * and the sync wire format when external/pasted/MCP content supplies it (F0-5).
- * @param {unknown} id
- * @returns {boolean}
- */
-export function isValidBid(id) {
-  return typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id)
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// BLOCK MERGE — 3-way merge on top-level blocks (data-bid), string based
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/** HTML void elements — no closing tag, never affect nesting depth. */
-const VOID_TAGS = new Set([
-  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
-  'link', 'meta', 'param', 'source', 'track', 'wbr',
-])
-
-/**
- * Split an HTML string into its top-level segments (blocks / text runs)
- * WITHOUT a DOM — a quote-aware, depth-counting tag scanner, so it runs
- * identically in browsers and server runtimes (Cloudflare Workers etc.).
- *
- * Input is expected to be serialized (well-formed) HTML such as getContent()
- * output; that is NOT enforced — when the scan detects malformed nesting the
- * result carries ok:false so callers can refuse to act on it.
- *
- * @param {string} html
- * @returns {{ segments: Array<{ html: string, bid: string|null }>, ok: boolean }}
- */
-export function splitTopLevelBlocks(html) {
-  const segments = []
-  let ok = true
-  const n = html.length
-  let i = 0
-  let segStart = 0
-  let depth = 0
-  let openTag = ''   // opening tag of the current top-level block (bid source)
-
-  const pushSeg = (end) => {
-    if (end > segStart) {
-      const m = openTag.match(/\sdata-bid="([^"]*)"/)
-      segments.push({ html: html.slice(segStart, end), bid: m ? m[1] : null })
-    }
-    segStart = end
-    openTag = ''
-  }
-
-  while (i < n) {
-    const lt = html.indexOf('<', i)
-    if (lt === -1) break
-    // Top-level text run before this tag becomes its own segment
-    if (depth === 0 && lt > segStart) pushSeg(lt)
-
-    if (html.startsWith('<!--', lt)) {
-      const end = html.indexOf('-->', lt + 4)
-      if (end === -1) { ok = false; break }
-      i = end + 3
-      if (depth === 0) pushSeg(i)
-      continue
-    }
-
-    // Scan to the tag's real '>' — attribute values may contain '>'
-    let j = lt + 1
-    let quote = null
-    while (j < n) {
-      const ch = html[j]
-      if (quote) { if (ch === quote) quote = null }
-      else if (ch === '"' || ch === "'") quote = ch
-      else if (ch === '>') break
-      j++
-    }
-    if (j >= n) { ok = false; break }   // unterminated tag
-    const tag = html.slice(lt, j + 1)
-    i = j + 1
-
-    const nameMatch = tag.match(/^<\/?([a-zA-Z][a-zA-Z0-9-]*)/)
-    if (!nameMatch) continue            // stray '<' — keep as text
-    const name = nameMatch[1].toLowerCase()
-
-    if (tag[1] === '/') {
-      if (depth === 0) { ok = false; continue }   // stray closing tag
-      depth--
-      if (depth === 0) pushSeg(i)
-    } else if (VOID_TAGS.has(name) || tag.endsWith('/>')) {
-      if (depth === 0) { openTag = tag; pushSeg(i) }
-    } else {
-      if (depth === 0) openTag = tag
-      depth++
-    }
-  }
-  if (depth !== 0) ok = false
-  if (segStart < n) pushSeg(n)          // trailing text or unclosed remainder
-  return { segments, ok }
-}
-
-/**
- * 3-way merge of two edits of the same document, block by block.
- *
- *   base   — the common ancestor (the body as it was loaded)
- *   local  — the edit at hand (e.g. what is in the editor now)
- *   remote — the other side's latest (e.g. an AI's REST/MCP edit on the server)
- *
- * Matching uses data-bid where present; blocks WITHOUT an id (e.g. raw HTML a
- * client added over REST) fall back to content equality, so identical id-less
- * duplicates cannot be tracked precisely. Inter-block whitespace is dropped.
- *
- * The mechanism never decides a winner: when both sides changed the same block
- * differently the local version is kept in `html` and the full triple is
- * reported in `conflicts` — resolution UX is the host's responsibility.
- *
- * Inputs are EXPECTED to be KuroEditor-generated HTML but this is not a hard
- * precondition: when block splitting fails the function refuses to merge,
- * returns `local` unchanged and says so in `warnings` (+ console.warn).
- *
- * @param {string} baseHtml
- * @param {string} localHtml
- * @param {string} remoteHtml
- * @returns {{
- *   html: string,
- *   conflicts: Array<{ bid: string|null, base: string|null, local: string|null, remote: string|null }>,
- *   warnings: string[],
- * }}
- */
-export function mergeBlocks(baseHtml, localHtml, remoteHtml) {
-  const warnings = []
-  const conflicts = []
-  const base   = splitTopLevelBlocks(baseHtml ?? '')
-  const local  = splitTopLevelBlocks(localHtml ?? '')
-  const remote = splitTopLevelBlocks(remoteHtml ?? '')
-
-  if (!base.ok || !local.ok || !remote.ok) {
-    const which = [!base.ok && 'base', !local.ok && 'local', !remote.ok && 'remote']
-      .filter(Boolean).join(', ')
-    const msg = `mergeBlocks: ブロック分割に失敗 (${which}) — 入力が整形済み (KuroEditor 生成) HTML でない可能性があります。マージせず local を返します。`
-    console.warn(msg)
-    return { html: localHtml, conflicts, warnings: [msg] }
-  }
-
-  // Key: data-bid when present, else the block's own content. Whitespace-only
-  // segments are formatting noise between blocks — excluded entirely.
-  const keyOf = (seg) => seg.bid !== null ? `b:${seg.bid}` : `c:${seg.html}`
-  const toMap = (split, label) => {
-    const map = new Map()
-    for (const seg of split.segments) {
-      if (seg.bid === null && seg.html.trim() === '') continue
-      const key = keyOf(seg)
-      if (map.has(key)) {
-        if (seg.bid !== null) {
-          warnings.push(`mergeBlocks: ${label} に重複した data-bid "${seg.bid}" — 最初の出現のみ照合に使用します。`)
-        }
-        continue
-      }
-      map.set(key, seg)
-    }
-    return map
-  }
-  const bMap = toMap(base, 'base')
-  const lMap = toMap(local, 'local')
-  const rMap = toMap(remote, 'remote')
-
-  // Decide the surviving content for every key (null = dropped)
-  const pick = new Map()
-  const allKeys = new Set([...bMap.keys(), ...lMap.keys(), ...rMap.keys()])
-  for (const key of allKeys) {
-    const b = bMap.get(key)?.html ?? null
-    const l = lMap.get(key)?.html ?? null
-    const r = rMap.get(key)?.html ?? null
-    const bid = (bMap.get(key) ?? lMap.get(key) ?? rMap.get(key)).bid
-
-    if (b !== null && l !== null && r !== null) {
-      const changedL = l !== b
-      const changedR = r !== b
-      if (!changedR) pick.set(key, l)                 // local-only change (or none)
-      else if (!changedL) pick.set(key, r)            // remote-only change
-      else if (l === r) pick.set(key, l)              // both made the same change
-      else {                                          // true conflict — keep local
-        pick.set(key, l)
-        conflicts.push({ bid, base: b, local: l, remote: r })
-      }
-    } else if (b !== null && l !== null && r === null) {
-      // Deleted remotely
-      if (l === b) pick.set(key, null)
-      else { pick.set(key, l); conflicts.push({ bid, base: b, local: l, remote: null }) }
-    } else if (b !== null && l === null && r !== null) {
-      // Deleted locally
-      if (r === b) pick.set(key, null)
-      else { pick.set(key, r); conflicts.push({ bid, base: b, local: null, remote: r }) }
-    } else if (b !== null) {
-      pick.set(key, null)                             // deleted on both sides
-    } else if (l !== null && r !== null) {
-      // Added on both sides under the same id
-      if (l === r) pick.set(key, l)
-      else { pick.set(key, l); conflicts.push({ bid, base: null, local: l, remote: r }) }
-    } else {
-      pick.set(key, l ?? r)                           // one-sided addition
-    }
-  }
-
-  // Order: local's sequence is the skeleton; blocks that only survive on the
-  // remote side (additions / edited-but-locally-deleted) are inserted after
-  // their nearest preceding block from remote's own sequence.
-  const outOrder = []
-  const inOut = new Set()
-  for (const seg of local.segments) {
-    const key = keyOf(seg)
-    if (pick.get(key) != null && !inOut.has(key)) {
-      outOrder.push(key)
-      inOut.add(key)
-    }
-  }
-  let anchor = -1
-  for (const seg of remote.segments) {
-    const key = keyOf(seg)
-    if (inOut.has(key)) { anchor = outOrder.indexOf(key); continue }
-    if (pick.get(key) != null) {
-      outOrder.splice(anchor + 1, 0, key)
-      inOut.add(key)
-      anchor += 1
-    }
-  }
-
-  return { html: outOrder.map((key) => pick.get(key)).join(''), conflicts, warnings }
-}
-
-/**
- * Format raw HTML for human-readable display in the source editor.
- * Block-level elements are placed on their own lines with two-space indentation.
- * Inline elements and their content stay on one line.
- * <pre> content is never reformatted (whitespace is significant inside code blocks).
- *
- * The output is display-only: switching back to WYSIWYG mode re-parses the
- * source, and browsers discard insignificant whitespace between block elements.
- *
+ * Format raw HTML for human-readable display in the source editor (DOM-based,
+ * editor-only). Block-level elements go on their own lines with two-space
+ * indent; <pre> content is never reformatted. Output is display-only.
  * @param {string} html
  * @returns {string}
  */
@@ -9071,7 +8853,142 @@ export class KuroEditor {
    * @returns {string}
    */
   getBuildImage() {
-    return stripBlockIds(this.getContent())
+    return stripInternalIds(this.getContent())   // data-bid と data-cbid の両方を除去
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLOCK API (W1) — block 単位の読み書き。外部同期 Adapter がこれを介して
+  // 文書を扱う。すべて DOM 直接操作 (execCommand 禁止) で、owned-transaction
+  // (dirty observer を止めて自分で mutate → origin=local のときだけ dirty)。
+  // ApplyOptions:
+  //   origin: "local"(=ユーザー編集相当・dirty にする) | "remote" | "program" |
+  //           "history"  （remote/program/history は dirty にしない）
+  //   preserveSelection: 変更後にキャレットを可能なら復元する
+  // ※ onBlockChange イベント発火 (emitEvents) と OpBatch は W2/W3 で追加。
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** All top-level blocks as { bid, type, html } (stored form; blockIds off → bid null). */
+  getBlocks() {
+    return parseBlocks(this.getContent()).map((b) => ({
+      bid: b.bid,
+      type: this._blockType(b.html),
+      html: b.html,
+    }))
+  }
+
+  /** One block by id, or null. */
+  getBlock(bid) {
+    if (!isValidBid(bid)) return null
+    return this.getBlocks().find((b) => b.bid === bid) ?? null
+  }
+
+  /** Replace a block's content, preserving its bid. Returns false if bid not found. */
+  updateBlock(bid, html, opts = {}) {
+    const cur = this._blockElByBid(bid)
+    if (!cur) return false
+    const el = this._renderBlock(html)
+    if (!el) return false
+    if (this.options.blockIds) el.setAttribute('data-bid', bid)   // keep identity
+    this._applyBlockMutation(() => cur.replaceWith(el), opts)
+    return true
+  }
+
+  /**
+   * Insert a new block. Position via opts.beforeBid / opts.afterBid; neither → append.
+   * @param {{bid?:string, html:string}} block
+   */
+  insertBlock(block, opts = {}) {
+    const el = this._renderBlock(block?.html ?? '')
+    if (!el) return false
+    if (this.options.blockIds && isValidBid(block?.bid)) el.setAttribute('data-bid', block.bid)
+    const ref = this._anchorRef(opts)
+    this._applyBlockMutation(() => this.wysiwyg.insertBefore(el, ref), opts)
+    return true
+  }
+
+  /** Remove a block by id. Returns false if not found. */
+  deleteBlock(bid, opts = {}) {
+    const el = this._blockElByBid(bid)
+    if (!el) return false
+    this._applyBlockMutation(() => el.remove(), opts)
+    return true
+  }
+
+  /** Move a block to a new position (opts.beforeBid / opts.afterBid). */
+  moveBlock(bid, opts = {}) {
+    const el = this._blockElByBid(bid)
+    if (!el) return false
+    const ref = this._anchorRef(opts, el)
+    this._applyBlockMutation(() => this.wysiwyg.insertBefore(el, ref), opts)
+    return true
+  }
+
+  /** Ensure every top-level block has a unique, valid data-bid (blockIds only). */
+  ensureBlockIds() {
+    if (this.options.blockIds) this._refreshBlockIds()
+  }
+
+  // ── block API internals ──────────────────────────────────────────────────
+
+  /** First tag name of a stored block html (lowercased), or 'text'. */
+  _blockType(html) {
+    const m = String(html).match(/^\s*<([a-zA-Z][a-zA-Z0-9-]*)/)
+    return m ? m[1].toLowerCase() : 'text'
+  }
+
+  /** Top-level block element carrying data-bid=bid, or null. */
+  _blockElByBid(bid) {
+    if (!isValidBid(bid)) return null
+    for (const el of this.wysiwyg.children) {
+      if (el.getAttribute('data-bid') === bid) return el
+    }
+    return null
+  }
+
+  /** Render a stored-form block html (with [[...]] tokens) into a DOM element. */
+  _renderBlock(storedHtml) {
+    const tmp = document.createElement('div')
+    tmp.innerHTML = renderSpecialLinks(storedHtml ?? '', this.options.urlResolver)
+    return tmp.firstElementChild
+  }
+
+  /** Resolve the insertBefore reference node from beforeBid/afterBid (null = append). */
+  _anchorRef({ beforeBid, afterBid } = {}, moving = null) {
+    if (beforeBid) {
+      const b = this._blockElByBid(beforeBid)
+      if (b && b !== moving) return b
+    }
+    if (afterBid) {
+      const a = this._blockElByBid(afterBid)
+      if (a && a !== moving) return a.nextSibling
+    }
+    return null
+  }
+
+  /**
+   * Run a DOM-mutating block op as an owned transaction: suspend the dirty
+   * observer (so our own mutation is not mis-read as a user edit — the
+   * MutationObserver is microtask-delivered, so a flag would not suffice),
+   * refresh derived state, then mark dirty ONLY when origin is "local".
+   */
+  _applyBlockMutation(mutate, { origin = 'program', preserveSelection = false } = {}) {
+    const sel = typeof window !== 'undefined' ? window.getSelection?.() : null
+    let saved = null
+    if (preserveSelection && sel && sel.rangeCount) {
+      const r = sel.getRangeAt(0)
+      saved = { sc: r.startContainer, so: r.startOffset, ec: r.endContainer, eo: r.endOffset }
+    }
+    this._suspendDirty(() => {
+      mutate()
+      this.toc._doUpdate()
+      this._initAllCodeBlocks()
+      this._updateCharCount()
+      if (this.options.blockIds) this._refreshBlockIds()
+    })
+    if (saved && saved.sc.isConnected && saved.ec.isConnected) {
+      try { sel.setBaseAndExtent(saved.sc, saved.so, saved.ec, saved.eo) } catch { /* selection gone */ }
+    }
+    if (origin === 'local') this._markDirty()
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
