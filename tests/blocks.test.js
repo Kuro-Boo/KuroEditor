@@ -10,6 +10,7 @@ import {
   parseBlocks,
   normalizeBlockIds,
   mergeBlocks,
+  mergeBlock,
   resolveConflictsAsDuplicates,
   reconcileOrder,
   diffBlocks,
@@ -158,5 +159,22 @@ describe('diffBlocks / applyBlockOps (W2 keyed diff)', () => {
 
   it('no change → no ops', () => {
     expect(diffBlocks([B('a'), B('b')], [B('a'), B('b')])).toEqual([])
+  })
+})
+
+describe('mergeBlock (W3 single-block 3-way)', () => {
+  it('remote-only change → remote', () => {
+    expect(mergeBlock('base', 'base', 'remote')).toEqual({ html: 'remote', conflict: null })
+  })
+  it('local-only change → local', () => {
+    expect(mergeBlock('base', 'local', 'base')).toEqual({ html: 'local', conflict: null })
+  })
+  it('same change on both → that value', () => {
+    expect(mergeBlock('base', 'same', 'same')).toEqual({ html: 'same', conflict: null })
+  })
+  it('diverged → keep local, report conflict (no loss)', () => {
+    expect(mergeBlock('base', 'mine', 'theirs')).toEqual({
+      html: 'mine', conflict: { base: 'base', local: 'mine', remote: 'theirs' },
+    })
   })
 })

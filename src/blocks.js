@@ -359,6 +359,25 @@ export function mergeBlocks(baseHtml, localHtml, remoteHtml) {
 }
 
 /**
+ * Single-block 3-way merge (W3 の確定時マージ・キャレット離脱時マージ用)。
+ * base/local/remote は「その 1 ブロックの html」。全て同じ bid を指す前提。
+ *   - local が base のまま → remote を採用（相手だけ編集）
+ *   - remote が base のまま → local を採用（自分だけ編集）
+ *   - local === remote → どちらでも同じ
+ *   - 3 者相違 → 分岐。local を html に採り、remote を conflict に載せる（消さない）
+ * @param {string} base
+ * @param {string} local
+ * @param {string} remote
+ * @returns {{ html: string, conflict: null | { base: string, local: string, remote: string } }}
+ */
+export function mergeBlock(base, local, remote) {
+  if (local === remote) return { html: local, conflict: null }
+  if (local === base) return { html: remote, conflict: null }   // remote-only change
+  if (remote === base) return { html: local, conflict: null }   // local-only change
+  return { html: local, conflict: { base, local, remote } }     // diverged — keep local, report
+}
+
+/**
  * Deterministic auto-resolution for hosts without a conflict UI (KuroNotes 案C・
  * オフライン復帰): keep the local block, and re-insert each remote-side conflict
  * value as a NEW block (fresh bid) right after it, so no edit is silently lost.

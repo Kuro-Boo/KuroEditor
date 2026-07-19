@@ -16,6 +16,7 @@ import {
   parseBlocks,
   normalizeBlockIds,
   mergeBlocks,
+  mergeBlock,
   resolveConflictsAsDuplicates,
   reconcileOrder,
   diffBlocks,
@@ -32,6 +33,7 @@ export {
   parseBlocks,
   normalizeBlockIds,
   mergeBlocks,
+  mergeBlock,
   resolveConflictsAsDuplicates,
   reconcileOrder,
   diffBlocks,
@@ -43,7 +45,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.10'
+export const VERSION = '2.18.11'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5521,6 +5523,7 @@ export class KuroEditor {
       onSave: null,
       onDirty: null,
       onBlockChange: null,   // (batch) => void — W2: block 単位の変更を OpBatch で通知（blockIds 必須）
+      onBlockDiverged: null, // (bid, {base,local,remote}) => void — W3: 確定マージで分岐が起きた
       urlResolver: defaultResolver,
       modalToolbar: null,
       modalMenu: true,
@@ -6177,8 +6180,20 @@ export class KuroEditor {
   }
 
   /** Insert media from a URL typed directly in the dialog. */
-  _insertMediaURL(url) {
-    const enc = buildMediaAttr(url)
+  _insertMediaURL(input) {
+    // The URL field also accepts a HOST media reference — a bare slug/mid or its
+    // [[…]] token form (this is what the KuroCMS "copy MID" button yields). Strip
+    // the token wrapper and resolve the slug to a loadable URL via the host
+    // resolver so the inserted <img>/<video> actually loads. Display-only: the
+    // SLUG/token is what we store in data-kuro-media, so getContent() serializes
+    // back to [[slug]] and the saved data is NEVER rewritten to the resolved URL.
+    // A full http(s) URL (and the standalone identity resolver) passes through
+    // unchanged, preserving prior behavior.
+    let slug = (input ?? '').trim()
+    const tok = slug.match(/^\[\[(.+?)\]\]$/)
+    if (tok) slug = tok[1].trim()
+    const url = this.options.urlResolver?.(slug) ?? slug
+    const enc = buildMediaAttr(slug)
     let html
 
     // ① iframe-embeddable service (YouTube, Vimeo, …)
@@ -6337,6 +6352,8 @@ export class KuroEditor {
     // selectionchange fires after the selection has actually changed — more reliable
     // than mouseup for detecting collapse (e.g. click inside table cell to deselect).
     this._onDocSelChange = () => {
+      // W3: キャレットが保留 block を離れたら確定マージする
+      if (this._heldOps && this._heldOps.size) this._releaseHeldBlocks('caret')
       if (this._mode === 'wysiwyg' && this.popm.el.classList.contains('kuro-popm--visible')) {
         const sel = window.getSelection()
         if (!sel?.rangeCount || sel.isCollapsed || sel.toString().length === 0) {
@@ -6385,6 +6402,17 @@ export class KuroEditor {
       this._updateTableContext()
       this._updateRoundboxContext()
     })
+
+    // IME 変換中はその block を凍結し、リモート更新を保留する（W3・§4.5.2）。
+    // 変換確定後だけ文書変更として扱う（未確定 preedit は個人辞書の漏洩になるため送らない）。
+    this.wysiwyg.addEventListener('compositionstart', () => {
+      this._composingBid = this._caretBid()
+    })
+    this.wysiwyg.addEventListener('compositionend', () => {
+      this._composingBid = null
+      this._releaseHeldBlocks('compositionend')
+    })
+    // キャレット離脱時の確定マージは既存の _onDocSelChange に相乗り（下で登録）。
 
     // Content change → ToC + auto-list + special-link detection
     this.wysiwyg.addEventListener('input', (e) => {
@@ -6548,6 +6576,21 @@ export class KuroEditor {
           else                            this._insertMediaURL(URL.createObjectURL(file))
         }
         return
+      }
+
+      // ①.5 [[…]] トークン単体のペースト（media 画面の「MID をコピー」→本文貼り付け）
+      //      は、本文タイプ時（_detectSpecialLink）と同じ表示展開を通す。データは
+      //      [[…]] トークンのまま（renderSpecialLinks が data-kuro-* にトークンを保存し、
+      //      getContent で [[…]] に戻る＝非改変）。単体トークンだけを対象にし、通常の
+      //      複数行テキスト貼り付けには一切干渉しない。
+      const plainTok = (e.clipboardData?.getData('text/plain') ?? '').trim()
+      if (/^\[\[.+\]\]$/.test(plainTok)) {
+        const rendered = renderSpecialLinks(plainTok, this.options.urlResolver)
+        if (rendered !== plainTok) {
+          e.preventDefault()
+          execFormat('insertHTML', rendered)
+          return
+        }
       }
 
       // ② テキストペースト — CSV / TSV ならテーブルに変換
@@ -8935,6 +8978,111 @@ export class KuroEditor {
     if (this.options.blockIds) this._refreshBlockIds()
   }
 
+  /**
+   * Apply a batch of remote ops to the document (W3 受信側). Each op is applied
+   * through the same block-API DOM path (origin defaults to "remote"), so it is
+   * NOT echoed back via onBlockChange and does NOT mark dirty; the shadow is
+   * advanced to match. update op targeting an IME-composing or caret-parked
+   * block is HELD and version-merged when the block is released (§4.5).
+   *
+   * @param {{ ops: Array<object>, origin?: string }} batch
+   */
+  applyOps(batch, opts = {}) {
+    const ops = batch?.ops ?? []
+    if (ops.length === 0) return
+    // 受信側の適用 origin は常に "remote" 系（呼び出し側の opts でのみ上書き可）。
+    // ⚠ batch.origin は使わない — それは【送信側にとっての】分類（W2 の emit は
+    // origin:"local"）であり、受け手がそれを信じると「相手のローカル編集」を
+    // 自分のローカル編集として dirty 点灯＋再 emit（エコー）してしまう。
+    // クライアント申告値を信頼しない原則（§11.5.1）の editor 版。
+    const origin = opts.origin === 'local' ? 'remote' : (opts.origin ?? 'remote')
+    for (const op of ops) {
+      if (op.op === 'update' && this._isBlockHeld(op.bid)) {
+        this._holdRemoteUpdate(op)          // IME 変換中 / キャレット載車 → 確定時マージへ
+        continue
+      }
+      this._applyOneOp(op, origin)
+    }
+  }
+
+  /** Apply a single remote op immediately (no hold). */
+  _applyOneOp(op, origin) {
+    const opts = { origin }
+    if (op.op === 'update') this.updateBlock(op.bid, op.html, opts)
+    else if (op.op === 'insert') this.insertBlock({ bid: op.bid, html: op.html }, this._anchorOpts(op, opts))
+    else if (op.op === 'delete') this.deleteBlock(op.bid, opts)
+    else if (op.op === 'move') this.moveBlock(op.bid, this._anchorOpts(op, opts))
+  }
+
+  /** Convert an op's afterBid (null = front) into insert/move anchor options. */
+  _anchorOpts(op, base) {
+    if (op.afterBid == null) {
+      const first = this.wysiwyg.firstElementChild
+      const firstBid = first?.getAttribute('data-bid')
+      return firstBid ? { ...base, beforeBid: firstBid } : { ...base }  // no blocks → append == front
+    }
+    return { ...base, afterBid: op.afterBid }
+  }
+
+  /** A block is "held" when it is being composed (IME) or holds the local caret. */
+  _isBlockHeld(bid) {
+    if (!isValidBid(bid)) return false
+    if (this._composingBid === bid) return true
+    return this._caretBid() === bid
+  }
+
+  /** bid of the top-level block containing the collapsed local caret, or null. */
+  _caretBid() {
+    const sel = typeof window !== 'undefined' ? window.getSelection?.() : null
+    if (!sel || !sel.rangeCount) return null
+    let node = sel.getRangeAt(0).startContainer
+    while (node && node !== this.wysiwyg) {
+      if (node.parentElement === this.wysiwyg && node.getAttribute) {
+        return node.getAttribute('data-bid')
+      }
+      node = node.parentElement
+    }
+    return null
+  }
+
+  /** Queue a remote update for a held block; release + merge later. */
+  _holdRemoteUpdate(op) {
+    this._heldOps = this._heldOps || new Map()
+    this._heldOps.set(op.bid, op)           // last remote wins as the merge input
+    clearTimeout(this._holdTimer)
+    this._holdTimer = setTimeout(() => this._releaseHeldBlocks('idle'), HIST_DEBOUNCE_MS)
+  }
+
+  /**
+   * Release held remote updates whose block is no longer composing / caret-parked,
+   * version-merging local vs remote against the shadow base. `reason` is for logs.
+   */
+  _releaseHeldBlocks(_reason) {
+    if (!this._heldOps || this._heldOps.size === 0) return
+    for (const [bid, op] of [...this._heldOps]) {
+      if (this._composingBid === bid) continue           // まだ変換中 → 保留継続
+      // 'caret'(selectionchange) 由来のときだけ「まだキャレットが載っている block」は
+      // 保留継続。'compositionend'(変換確定) と 'idle'(400ms 無操作) はキャレット位置に
+      // 関わらず確定マージする（§4.5.3/§4.5.4 の 3 トリガ）。
+      if (_reason === 'caret' && this._caretBid() === bid) continue
+      this._heldOps.delete(bid)
+      const base = this._blockShadow?.get(bid) ?? null
+      const localBlk = this.getBlock(bid)
+      const local = localBlk ? localBlk.html : null
+      if (local == null) { this._applyOneOp(op, 'remote'); continue }  // block 消えている → 素直に適用
+      const { html, conflict } = mergeBlock(base ?? local, local, op.html)
+      this.updateBlock(bid, html, { origin: 'remote' })
+      if (conflict) this._notifyBlockConflict(bid, conflict)
+    }
+  }
+
+  /** Placeholder for §4.8 通知 (W5 で notify() 実装時に接続)。今は onBlockChange で分岐を知らせる。 */
+  _notifyBlockConflict(bid, conflict) {
+    if (typeof this.options.onBlockDiverged === 'function') {
+      this.options.onBlockDiverged(bid, conflict)
+    }
+  }
+
   // ── block API internals ──────────────────────────────────────────────────
 
   /** First tag name of a stored block html (lowercased), or 'text'. */
@@ -8979,6 +9127,12 @@ export class KuroEditor {
    * refresh derived state, then mark dirty ONLY when origin is "local".
    */
   _applyBlockMutation(mutate, { origin = 'program', preserveSelection = false } = {}) {
+    // 非 local の適用は shadow を現在 DOM へ再同期する（下）。その前に、未送信の
+    // ローカル差分（400ms debounce 待ちの emit）を先に発火して送り出す。これを
+    // しないと再同期が pending 差分を丸ごと飲み込み、ローカル編集が無音で
+    // 未送信のまま消える（OT クライアントの「サーバー op 適用前に送信バッファを
+    // 掃く」規律と同じ）。
+    if (origin !== 'local') this._emitBlockChanges('local')
     const sel = typeof window !== 'undefined' ? window.getSelection?.() : null
     let saved = null
     if (preserveSelection && sel && sel.rangeCount) {
@@ -9309,9 +9463,16 @@ export class KuroEditor {
     return typeof this.options.onBlockChange === 'function' && this.options.blockIds
   }
 
-  /** Reset the shadow baseline to the current document (no emit). Cancels a pending emit. */
+  /**
+   * Reset the shadow baseline to the current document (no emit). Cancels a
+   * pending emit. Maintained whenever blockIds is on — it is the merge base for
+   * W3 (applyOps confirm-time merge), not only the W2 diff base — so it must not
+   * depend on onBlockChange being set. Advances on setContent and remote apply
+   * (= the "last synced" value); a LOCAL edit does NOT advance it (that is the
+   * uncommitted local change the merge compares against).
+   */
   _resyncBlockShadow() {
-    if (!this._blockEventsOn()) return
+    if (!this.options.blockIds) return
     clearTimeout(this._blockEmitTimer)
     this._blockEmitTimer = null
     this._blockShadow = new Map(
@@ -9354,6 +9515,7 @@ export class KuroEditor {
     this._dirtyObserver?.disconnect()
     clearTimeout(this._histTimer)
     clearTimeout(this._blockEmitTimer)
+    clearTimeout(this._holdTimer)
 
     // Remove document-level listeners registered in _bindEvents()
     document.removeEventListener('selectionchange', this._onDocSelChange)
