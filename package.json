@@ -1,6 +1,6 @@
 {
   "name": "kuro-editor",
-  "version": "2.18.12",
+  "version": "2.18.13",
   "description": "WYSIWYG editor - Vanilla JS + HTML + Tailwind CSS, standalone embed",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -37,7 +37,7 @@
   "scripts": {
     "dev": "vite",
     "build:site": "tailwindcss -i build-scripts/landing-tailwind.css -o public/assets/compiled_tailwind_4_1_7.css --minify",
-    "build": "npm run build:site && vite build && rm -rf dist/src && node -e \"require('fs').copyFileSync('src/content.css','dist/kuro-content.css')\" && node -e \"require('fs').copyFileSync('src/blocks.js','dist/kuro-blocks.js')\" && node build-scripts/emit-version.js",
+    "build": "npm run build:site && vite build && rm -rf dist/src && node build-scripts/copy-assets.js && node build-scripts/emit-version.js",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
