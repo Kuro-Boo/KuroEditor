@@ -2,23 +2,23 @@
 // KuroEditor が単一の正として保守し、dist/kuro-blocks.d.ts として emit する。
 // ホスト（KuroCMS 等）はこれを vendored する（手書き .d.ts のドリフトを断つ）。
 
-export interface KuroBlockSegment {
+export type KuroBlockSegment = {
   html: string;
   bid: string | null;
-}
+};
 
-export interface MergeConflict {
+export type MergeConflict = {
   bid: string | null;
   base: string | null;
   local: string | null;
   remote: string | null;
-}
+};
 
-export interface MergeResult {
+export type MergeResult = {
   html: string;
   conflicts: MergeConflict[];
   warnings: string[];
-}
+};
 
 /** bid 文字列が有効な形式か。 */
 export function isValidBid(id: unknown): boolean;
