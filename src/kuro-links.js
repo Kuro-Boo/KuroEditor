@@ -227,10 +227,15 @@ export function renderSpecialLinks(text, resolver = defaultResolver, supportedKi
         const linkBtn = d.link ? `<a class="kuro-media-open-link" href="${d.link}" target="_blank" rel="noopener" contenteditable="false">↗ URLを新規タブで開く</a>` : ''
         if (d.unsupported) {
           // このホストが対応しない種別（例: 画像のみのアプリに動画/音声）。壊れた
-          // プレーヤーではなく中立プレースホルダを出す。data-kuro-media を保持するので
-          // getContent() でトークンは失われず、クリックで ImageMenu が開き削除できる。
-          const kindLabel = d.mediaKind === 'video' ? '動画' : d.mediaKind === 'audio' ? '音声' : 'メディア'
-          return `<figure class="kuro-media-wrap kuro-media-wrap--unsupported${alignClass}"${sizeStyle} data-kuro-media="${enc}"${hrefAttr} contenteditable="false"><span class="kuro-media-unsupported"><span class="kuro-media-unsupported__icon" aria-hidden="true">⚠</span><span class="kuro-media-unsupported__text">この${kindLabel}はこのアプリでは表示できません</span></span>${linkBtn}</figure>`
+          // プレーヤーではなく【通常リンク】に落とす。data-kuro-media を保持するので
+          // getContent() でトークンは失われず、対応ホストでは元どおり再生される。
+          // URL 指定（解決後が http(s)）ならクリックで開けるリンク、内部 ID など URL が
+          // 無い場合は href なしのアンカーテキスト（本文として選択・削除できる）。
+          const isHttp = /^https?:\/\//i.test(d.url)
+          const linkUrl = d.link || (isHttp ? d.url : null)
+          const attrs = linkUrl ? ` href="${linkUrl}" target="_blank" rel="noopener"` : ''
+          const text = isHttp ? d.url : d.slug
+          return `<a class="kuro-media-fallback-link"${attrs} data-kuro-media="${enc}">${text}</a>`
         }
         if (d.mediaKind === 'video') {
           return `<figure class="kuro-media-wrap kuro-media-wrap--video${alignClass}"${sizeStyle} data-kuro-media="${enc}"${hrefAttr}><video src="${d.url}" controls class="kuro-media kuro-media--video"></video>${linkBtn}</figure>`

@@ -23,7 +23,7 @@ export type LinkDescriptor =
       link: string | null;
       mediaKind: "video" | "audio" | "image";
       /** ホストの supportedKinds に mediaKind が含まれないとき true。ホストは
-       *  再生要素でなく中立プレースホルダを描く（トークンは保持）。 */
+       *  再生要素でなく通常リンクに落とす（data-kuro-media でトークンは保持）。 */
       unsupported: boolean;
     }
   | { kind: "wikilink"; slug: string; url: string; label: string; isExternal: boolean }
@@ -77,7 +77,7 @@ export function classifyLink(
 ): LinkDescriptor;
 
 /** [[...]] を editor 用マークアップ（round-trip 用 data-kuro-* 付き）へ展開。
- *  supportedKinds を渡すと、対応外種別は中立プレースホルダで描画する。 */
+ *  supportedKinds を渡すと、対応外種別は通常リンクに落として描画する。 */
 export function renderSpecialLinks(
   text: string,
   resolver?: SlugResolver,

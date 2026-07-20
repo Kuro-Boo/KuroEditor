@@ -64,7 +64,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.17'
+export const VERSION = '2.18.18'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5088,14 +5088,11 @@ export class ImageMenu {
     figureEl.classList.add('kuro-media-wrap--selected')
 
     // All media types share the same menu content (size / align / link / delete)
-    // Only iframes hide the link button — they are already in-place embeds.
-    // 非対応メディアのプレースホルダはサイズ/整列/リンクを意味を持たないので隠し、
-    // 削除だけを残す（ホストが表示できない種別を消せるようにする唯一の操作）。
+    // Only iframes hide the link button — they are already in-place embeds
     const isIframe = figureEl.classList.contains('kuro-media-wrap--iframe')
-    const isUnsupported = figureEl.classList.contains('kuro-media-wrap--unsupported')
-    if (this._sizeRow) this._sizeRow.style.display = isUnsupported ? 'none' : ''
+    if (this._sizeRow) this._sizeRow.style.display = ''
     if (this._linkToggleBtn) {
-      this._linkToggleBtn.style.display = isIframe || isUnsupported ? 'none' : ''
+      this._linkToggleBtn.style.display = isIframe ? 'none' : ''
     }
     this._hideLinkPanel()
 
