@@ -550,3 +550,36 @@ ol.kuro-list-paren-kata {
 li::marker {
   color: var(--kuro-marker-color, inherit);
 }
+
+/* ── Unsupported media placeholder ───────────────────────────────────────────
+   A [[…]] media token whose kind the host does not support (mediaKinds option)
+   renders as this neutral chip instead of a broken player. The token itself is
+   preserved (data-kuro-media), so getContent() round-trips it and the host can
+   sync/keep it; clicking the chip opens the media menu with a delete button. */
+.kuro-media-wrap--unsupported {
+  display: inline-flex;
+  max-width: 100%;
+}
+.kuro-media-unsupported {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.6rem 0.9rem;
+  border: 1px dashed var(--kuro-border, #b8b8b8);
+  border-radius: 8px;
+  background: var(--kuro-code-bg, rgba(128, 128, 128, 0.08));
+  color: var(--kuro-muted, #666);
+  font-size: 0.9em;
+  line-height: 1.4;
+  cursor: pointer;
+  user-select: none;
+}
+.kuro-media-unsupported__icon {
+  font-size: 1.1em;
+  opacity: 0.8;
+}
+.kuro-media-wrap--unsupported.kuro-media-wrap--selected .kuro-media-unsupported {
+  border-style: solid;
+  border-color: var(--kuro-accent, #4a90d9);
+  color: var(--kuro-text, #333);
+}

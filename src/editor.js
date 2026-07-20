@@ -31,6 +31,7 @@ import {
   parseMediaParams,
   buildMediaAttr,
   resolveEmbedUrl,
+  normalizeMediaKinds,
   VIDEO_EXT_RE,
   AUDIO_EXT_RE,
 } from './kuro-links.js'
@@ -55,13 +56,15 @@ export {
   renderSpecialLinks,
   parseMediaParams,
   resolveEmbedUrl,
+  normalizeMediaKinds,
 }
+export { mediaKindFromSlug } from './kuro-links.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.16'
+export const VERSION = '2.18.17'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5085,11 +5088,14 @@ export class ImageMenu {
     figureEl.classList.add('kuro-media-wrap--selected')
 
     // All media types share the same menu content (size / align / link / delete)
-    // Only iframes hide the link button — they are already in-place embeds
+    // Only iframes hide the link button — they are already in-place embeds.
+    // 非対応メディアのプレースホルダはサイズ/整列/リンクを意味を持たないので隠し、
+    // 削除だけを残す（ホストが表示できない種別を消せるようにする唯一の操作）。
     const isIframe = figureEl.classList.contains('kuro-media-wrap--iframe')
-    if (this._sizeRow) this._sizeRow.style.display = ''
+    const isUnsupported = figureEl.classList.contains('kuro-media-wrap--unsupported')
+    if (this._sizeRow) this._sizeRow.style.display = isUnsupported ? 'none' : ''
     if (this._linkToggleBtn) {
-      this._linkToggleBtn.style.display = isIframe ? 'none' : ''
+      this._linkToggleBtn.style.display = isIframe || isUnsupported ? 'none' : ''
     }
     this._hideLinkPanel()
 
@@ -5236,8 +5242,15 @@ export class KuroEditor {
       // 種別(audio 等)が混ざると Files ピッカーだけに落ちるため、画像しか受け付けない
       // ホストは 'image/*' に絞ることで「フォトライブラリ / 写真を撮る」のシートが出る。
       mediaAccept: 'image/*,video/*,audio/*',
+      // ホストが表示に対応するメディア種別（'image' | 'video' | 'audio'）。
+      // null = 全対応（既定）。画像しか扱えないホスト（KuroNotes）は ['image'] を渡す。
+      // 非対応種別の [[…]] トークンは再生要素でなく中立プレースホルダで描画し、
+      // トークン自体は保持したままクリックで削除できる（renderSpecialLinks 参照）。
+      mediaKinds: null,
       ...options,
     }
+    // 対応メディア種別を Set 化（null = 全対応）。renderSpecialLinks に渡す。
+    this._supportedKinds = normalizeMediaKinds(this.options.mediaKinds)
     this._mode          = 'wysiwyg'
     this._tocEnabled              = true   // user's ToC on/off preference (shown by default; auto-hidden when no headings)
     this._savedRange              = null   // last known caret range (for emoji insert)
@@ -6277,7 +6290,7 @@ export class KuroEditor {
       //      複数行テキスト貼り付けには一切干渉しない。
       const plainTok = (e.clipboardData?.getData('text/plain') ?? '').trim()
       if (/^\[\[.+\]\]$/.test(plainTok)) {
-        const rendered = renderSpecialLinks(plainTok, this.options.urlResolver)
+        const rendered = renderSpecialLinks(plainTok, this.options.urlResolver, this._supportedKinds)
         if (rendered !== plainTok) {
           e.preventDefault()
           execFormat('insertHTML', rendered)
@@ -6585,7 +6598,7 @@ export class KuroEditor {
     if (matchStart > 0 && text[matchStart - 1] === '[') return
 
     // Render via the same function used in setContent / mode switch
-    const rendered = renderSpecialLinks(fullMatch, this.options.urlResolver)
+    const rendered = renderSpecialLinks(fullMatch, this.options.urlResolver, this._supportedKinds)
     if (rendered === fullMatch) return   // pattern produced no change
 
     // Replace the [[...]] text range with rendered HTML
@@ -6817,7 +6830,7 @@ export class KuroEditor {
         // (書き換え・コードブロック再配線は編集ではないので dirty 検知は止める。
         //  ソースモードで実際に編集していれば sourceArea の input で dirty 済み)
         this._suspendDirty(() => {
-          this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver)
+          this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver, this._supportedKinds)
           this._initAllCodeBlocks()
         })
         this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
@@ -8312,7 +8325,7 @@ export class KuroEditor {
     this._histBusy = true
     try {
       this._suspendDirty(() => {
-        this.wysiwyg.innerHTML = renderSpecialLinks(html, this.options.urlResolver)
+        this.wysiwyg.innerHTML = renderSpecialLinks(html, this.options.urlResolver, this._supportedKinds)
         this._initAllCodeBlocks()
         if (this.options.blockIds) this._refreshBlockIds()
       })
@@ -8550,7 +8563,7 @@ export class KuroEditor {
    * @param {string} html
    */
   setContent(html) {
-    const rendered = renderSpecialLinks(html ?? '', this.options.urlResolver)
+    const rendered = renderSpecialLinks(html ?? '', this.options.urlResolver, this._supportedKinds)
     this._suspendDirty(() => {
       this.wysiwyg.innerHTML = rendered
       if (this._mode === 'source') this.sourceArea.value = html ?? ''
@@ -8795,7 +8808,7 @@ export class KuroEditor {
   /** Render a stored-form block html (with [[...]] tokens) into a DOM element. */
   _renderBlock(storedHtml) {
     const tmp = document.createElement('div')
-    tmp.innerHTML = renderSpecialLinks(storedHtml ?? '', this.options.urlResolver)
+    tmp.innerHTML = renderSpecialLinks(storedHtml ?? '', this.options.urlResolver, this._supportedKinds)
     return tmp.firstElementChild
   }
 
