@@ -40,6 +40,12 @@ export type SlugResolver = (slug: string) => string;
 export const LINK_TOKEN_RE: RegExp;
 
 /**
+ * メディア資産 ID の接頭辞（img-/vid-/aud-/mid-）。slug がこれに一致すれば
+ * 「これはメディア」の正規シグナル（拡張子網羅に依存しない判定）。
+ */
+export const MEDIA_ID_RE: RegExp;
+
+/**
  * 1 つの [[...]] トークンをホスト非依存の記述子へ分類する。メディア判定・埋め込み
  * 判定・パラメータ解析・優先順位という「editor と public で一致すべき判定」を
  * 一本化する。マークアップの emit は各ホストが記述子から行う。

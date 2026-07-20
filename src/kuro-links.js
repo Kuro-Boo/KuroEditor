@@ -13,14 +13,16 @@ export function defaultResolver(slug) {
 }
 
 /**
- * Convert [[...]] special link syntax in raw text/HTML to rendered HTML.
- * Single-pass combined regex prevents double-matching inside rendered attributes.
- * Priority: [[[card]]] > [[wiki|text]] > [[hyper]]
- * @param {string} text
- * @param {(slug: string) => string} [resolver]
- * @returns {string}
+ * Media-asset ID prefix. A [[slug]] whose slug matches this is a stored media
+ * reference (image / video / audio) — the PREFIX is the canonical "this is
+ * media" signal, so detection never depends on the resolved URL's extension
+ * being in MEDIA_EXT_RE. `mid-` is KuroEditor's own generic upload id; hosts
+ * that mint typed ids (KuroCMS: img-/vid-/aud-) are recognised here too so the
+ * judgment agrees across editor and public build.
  */
-/** File extensions treated as media (image, video, or audio). */
+export const MEDIA_ID_RE = /^(img|vid|aud|mid)-/
+
+/** File extensions treated as media (image, video, or audio) — for bare URLs. */
 export const MEDIA_EXT_RE = /\.(jpe?g|png|gif|webp|svg|avif|mp4|webm|ogg|mov|mp3|wav|aac|flac|m4a)(\?.*)?$/i
 
 export const VIDEO_EXT_RE = /\.(mp4|webm|mov)(\?.*)?$/i
@@ -141,7 +143,7 @@ export function classifyLink(groups, resolver = defaultResolver) {
       const { size, align } = parseMediaParams(wikiLabel)
       return { kind: 'iframe', slug: wikiSlug, url, embedUrl, size, align }
     }
-    const isMedia = wikiSlug.startsWith('mid-')
+    const isMedia = MEDIA_ID_RE.test(wikiSlug)
       || MEDIA_EXT_RE.test(url)
       || (wikiSlug.startsWith('http') && _looksLikeMediaParams(wikiLabel))
     if (isMedia) {
@@ -155,7 +157,7 @@ export function classifyLink(groups, resolver = defaultResolver) {
     const url = resolver(hyper)
     const embedUrl = resolveEmbedUrl(url)
     if (embedUrl) return { kind: 'iframe', slug: hyper, url, embedUrl, size: null, align: null }
-    const isMedia = hyper.startsWith('mid-') || MEDIA_EXT_RE.test(url)
+    const isMedia = MEDIA_ID_RE.test(hyper) || MEDIA_EXT_RE.test(url)
     if (isMedia) {
       const mediaKind = VIDEO_EXT_RE.test(url) ? 'video' : AUDIO_EXT_RE.test(url) ? 'audio' : 'image'
       return { kind: 'media', slug: hyper, url, size: null, align: null, link: null, mediaKind }
