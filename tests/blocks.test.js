@@ -178,3 +178,22 @@ describe('mergeBlock (W3 single-block 3-way)', () => {
     })
   })
 })
+
+describe('resolveConflictsAsDuplicates — 削除系エッジ（二重挿入回帰）', () => {
+  it('local 削除 + remote 編集 → 復活は 1 回だけ（mergeBlocks が復活済みのため複製しない）', () => {
+    const base   = '<p data-bid="a">A</p><p data-bid="b">B</p>'
+    const local  = '<p data-bid="a">A</p>'                          // b を削除
+    const remote = '<p data-bid="a">A</p><p data-bid="b">B改</p>'   // b を編集
+    const resolved = resolveConflictsAsDuplicates(mergeBlocks(base, local, remote), () => 'dup-1')
+    expect((resolved.match(/B改/g) || []).length).toBe(1)
+    expect(resolved).not.toContain('dup-1')
+  })
+  it('remote 削除 + local 編集 → local 保持のみ（複製しない）', () => {
+    const base   = '<p data-bid="a">A</p><p data-bid="b">B</p>'
+    const local  = '<p data-bid="a">A</p><p data-bid="b">B改</p>'   // b を編集
+    const remote = '<p data-bid="a">A</p>'                          // b を削除
+    const resolved = resolveConflictsAsDuplicates(mergeBlocks(base, local, remote), () => 'dup-1')
+    expect((resolved.match(/B改/g) || []).length).toBe(1)
+    expect(resolved).not.toContain('dup-1')
+  })
+})

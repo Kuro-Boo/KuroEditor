@@ -396,7 +396,11 @@ export function resolveConflictsAsDuplicates(result, idFactory = defaultBidFacto
   // Walk conflicts in reverse so earlier splice indices stay valid.
   const insertions = []
   for (const c of result.conflicts) {
-    if (c.remote == null) continue
+    // 複製が要るのは「local が保持された真の分岐」（両者とも編集）のみ。
+    //  - remote == null（相手が削除・自分が編集）→ html は local を保持済み。複製不要
+    //  - local == null（自分が削除・相手が編集）→ mergeBlocks が html に remote を
+    //    復活済み。ここで挿入すると同じ内容が二重になる
+    if (c.remote == null || c.local == null) continue
     const dup = setBidOnOpeningTag(c.remote, idFactory())
     const at = c.bid != null && byBid.has(c.bid) ? byBid.get(c.bid) + 1 : out.length
     insertions.push({ at, html: dup })
