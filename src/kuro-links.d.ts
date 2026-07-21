@@ -118,6 +118,14 @@ export function _urlCardInner(
 /** URL カードのアンカー（[[slug|]]、editor 用）。 */
 export function _buildUrlCard(slug: string, url: string): string;
 
+/** URL カードの「読込みエラー」内側マークアップ（対象 404/到達不可）。呼び手は
+ *  `kuro-url-card--error` を付与。editor と公開クライアントが同一表示を出す単一の正。 */
+export function _urlCardErrorInner(slug: string, url: string): string;
+
+/** メディア(img/vid/aud)の src ロード失敗プレースホルダ `.kuro-media-broken` の
+ *  マークアップ。editor の error ハンドラと公開の error リスナが共有する単一の正。 */
+export function buildBrokenMedia(src: string): string;
+
 /** 埋め込み iframe の figure（editor 用）。 */
 export function _buildIframeFigure(
   embedUrl: string,

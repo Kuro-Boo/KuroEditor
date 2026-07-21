@@ -132,6 +132,38 @@ export function _urlCardInner(slug, url, meta = null) {
 }
 
 /**
+ * URL カードの「読込みエラー」内側マークアップ。対象ページが 404/到達不可と
+ * 確定したとき、カード内側をこれに差し替える（呼び手は `kuro-url-card--error`
+ * クラスを付与）。エディタ側の 2 段階表示（onFetchUrlMeta が {error:'target'} を
+ * 返した場合）と公開ページのクライアント enrich が同一マークアップを出すための
+ * 単一の正。`_urlCardInner` と同じ骨格でタイトルだけ固定文言にする。
+ */
+export function _urlCardErrorInner(slug, url) {
+  const isHttp = /^https?:\/\//i.test(slug)
+  const sub = isHttp ? slug : url
+  return `<span class="kuro-url-card__icon">${URL_CARD_ICON}</span>` +
+    `<span class="kuro-url-card__body">` +
+      `<span class="kuro-url-card__title">読込みエラー</span>` +
+      `<span class="kuro-url-card__url">${_escapeHtml(sub)}</span>` +
+    `</span>` +
+    `<span class="kuro-url-card__arrow">↗</span>`
+}
+
+/**
+ * メディア（img/vid/aud）の src ロード失敗プレースホルダ（.kuro-media-broken）の
+ * マークアップ。エディタ（wysiwyg の error イベントハンドラ）と公開ページ（同等の
+ * error リスナ）が同一の壊れ表示を出すための単一の正。CSS は content.css に置き、
+ * 公開・編集の双方に配られる。src はテキストとして安全にエスケープする。
+ */
+export function buildBrokenMedia(src) {
+  return `<div class="kuro-media-broken" contenteditable="false">` +
+    `<span class="kuro-media-broken__icon">🔗</span>` +
+    `<span class="kuro-media-broken__label">メディアを読込できません</span>` +
+    `<span class="kuro-media-broken__url">${_escapeHtml(src)}</span>` +
+    `</div>`
+}
+
+/**
  * Build the URL card anchor for [[slug|]] — the "explicitly no title" form.
  * contenteditable=false so the card behaves as one atomic object while editing
  * (deleted in one Backspace, no caret inside).

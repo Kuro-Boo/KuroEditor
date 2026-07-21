@@ -249,6 +249,11 @@ h5[id^='kuro-h-'] {
   flex: none;
   opacity: 0.5;
 }
+/* 読込みエラー状態（対象が 404/到達不可）— エディタの 2 段階表示と公開ページの
+   クライアント enrich が同一表示を出す。内側は _urlCardErrorInner が生成。 */
+.kuro-content .kuro-url-card--error {
+  opacity: 0.6;
+}
 
 /* Blockquote — left vertical accent bar */
 .kuro-content blockquote {
@@ -375,6 +380,42 @@ h5[id^='kuro-h-'] {
 .kuro-content .kuro-media-wrap--left + p,
 .kuro-content .kuro-media-wrap--right + p {
   clear: none;
+}
+
+/* Broken media placeholder — img/vid/aud の src ロード失敗時に、エディタの error
+   ハンドラと公開ページの error リスナが同一マークアップ(buildBrokenMedia)へ差し替え、
+   このスタイルで揃える(WYSIWYG)。テーマ変数で light/dark 双方に追従。編集側の
+   cursor/hover アフォーダンスだけ editor.css に残す。 */
+.kuro-content .kuro-media-broken {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  min-height: 5rem;
+  padding: 1.25rem 1rem;
+  border: 2px dashed var(--kuro-box-border);
+  border-radius: 0.5rem;
+  background: var(--kuro-box-bg);
+  color: inherit;
+  opacity: 0.75;
+  user-select: none;
+}
+.kuro-content .kuro-media-broken__icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.kuro-content .kuro-media-broken__label {
+  font-size: 0.875rem;
+}
+.kuro-content .kuro-media-broken__url {
+  max-width: 100%;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Code block — KuroEditor saves code blocks as <pre><code> (the in-editor

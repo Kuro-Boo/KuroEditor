@@ -1197,21 +1197,16 @@
            bg-red-950 text-red-400 text-sm select-none;
   }
 
-  /* ── Broken URL placeholder (URL inserted but media failed to load) ── */
+  /* ── Broken media affordance ──
+     基本の見た目は content.css（.kuro-content .kuro-media-broken）に移動し公開ページ
+     と共有。ここは編集キャンバス専用のアフォーダンス（選択・修正できるよう pointer/
+     hover）だけを足す。 */
   .kuro-media-broken {
-    @apply flex flex-col items-center justify-center gap-1
-           px-4 py-5 w-full rounded-lg
-           border-2 border-dashed border-neutral-600
-           text-neutral-500 cursor-pointer select-none
-           transition-colors;
-    min-height: 5rem;
+    @apply cursor-pointer transition-colors;
   }
   .kuro-media-broken:hover {
     @apply border-indigo-500 text-indigo-400;
   }
-  .kuro-media-broken__icon  { font-size: 1.4rem; line-height: 1; }
-  .kuro-media-broken__label { @apply text-sm; }
-  .kuro-media-broken__url   { @apply text-xs font-mono truncate max-w-full; }
 
   /* ════════════════════════════════════════════════════════
      CONTENT TYPOGRAPHY (inside .kuro-content)

@@ -27,6 +27,8 @@ import {
   defaultResolver,
   renderSpecialLinks,
   _urlCardInner,
+  _urlCardErrorInner,
+  buildBrokenMedia,
   _buildIframeFigure,
   parseMediaParams,
   buildMediaAttr,
@@ -64,7 +66,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.19'
+export const VERSION = '2.18.20'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5199,16 +5201,21 @@ export class KuroEditor {
    *                                // ホスト側に委ねる。未指定時は
    *                                // navigator.clipboard.readText にフォールバック。
    *   onFetchUrlMeta?: (slug: string) =>
-   *       Promise<{ title?: string, description?: string, favicon?: string, image?: string } | null>,
+   *       Promise<{ title?: string, description?: string, favicon?: string, image?: string }
+   *               | { error: 'target' } | null>,
    *                                // URL カード [[slug|]] の「豪華表示」用メタ取得（任意）。
    *                                // カードはまず URL 由来の簡易表示で即描画され（画面は
    *                                // ブロックしない）、この async が解決したらそのカードだけ
    *                                // タイトル/説明/favicon/サムネイルで差し替える 2 段階方式。
    *                                // ブラウザは CORS で外部ページの <title> を読めないため、
    *                                // ホストがサーバー側 fetch や unfurl サービスで解決して返す。
-   *                                // 返り値は取得できたキーだけでよく、null/失敗/未指定なら
-   *                                // 簡易表示のまま。取得結果は保存されない（getContent は
-   *                                // 常に [[slug|]] に戻す）ため、セッション内キャッシュのみ。
+   *                                // 返り値は取得できたキーだけでよく、null/未指定なら簡易表示
+   *                                // のまま。対象ページが 404/到達不可と【確定】したときは
+   *                                // { error: 'target' } を返すと「読込みエラー」枠に差し替わる
+   *                                // （公開ページと同一表示）。自サービス側の一時障害は null を
+   *                                // 返して簡易表示のままにする（誤って恒久エラーを出さない）。
+   *                                // 取得結果は保存されない（getContent は常に [[slug|]] に
+   *                                // 戻す）ため、セッション内キャッシュのみ。
    * }} [options]
    */
   constructor(mountEl, options = {}) {
@@ -5840,7 +5847,10 @@ export class KuroEditor {
         // カードが消えた / テキストリンクに戻った場合は破棄
         if (!card.isConnected || !card.classList.contains('kuro-url-card')) return
         card.dataset.metaState = 'done'
-        if (meta) this._applyUrlCardMeta(card, slug, url, meta)
+        // onFetchUrlMeta が {error:'target'} を返す＝対象が 404/到達不可と確定 →
+        // 「読込みエラー」枠（公開ページと同一表示）。null（未指定/一時障害）は簡易のまま。
+        if (meta && meta.error === 'target') this._applyUrlCardError(card, slug, url)
+        else if (meta) this._applyUrlCardMeta(card, slug, url, meta)
       })
     }
   }
@@ -5850,6 +5860,14 @@ export class KuroEditor {
     this._suspendDirty(() => {
       card.innerHTML = _urlCardInner(slug, url, meta)
       card.classList.add('kuro-url-card--rich')
+    })
+  }
+
+  /** 対象が読込み不可と確定したカードを「読込みエラー」枠へ差し替える（公開ページと同一）。 */
+  _applyUrlCardError(card, slug, url) {
+    this._suspendDirty(() => {
+      card.innerHTML = _urlCardErrorInner(slug, url)
+      card.classList.add('kuro-url-card--error')
     })
   }
 
@@ -6206,19 +6224,9 @@ export class KuroEditor {
       const figure = target.closest('.kuro-media-wrap[data-kuro-media]')
       if (!figure || !this.wysiwyg.contains(figure)) return
       const src = target.getAttribute('src') || ''
-      const wrap = createElement('div', {
-        className: 'kuro-media-broken',
-        attrs: { contenteditable: 'false' },
-      })
-      const icon  = createElement('span', { className: 'kuro-media-broken__icon',  html: '🔗' })
-      const label = createElement('span', { className: 'kuro-media-broken__label', html: 'メディアを読込できません' })
-      const urlEl = createElement('span', { className: 'kuro-media-broken__url' })
-      urlEl.textContent = src   // textContent = XSS-safe
-      wrap.appendChild(icon)
-      wrap.appendChild(label)
-      wrap.appendChild(urlEl)
-      figure.innerHTML = ''
-      figure.appendChild(wrap)
+      // 公開ページの error リスナと同一マークアップ（buildBrokenMedia＝単一の正）。
+      // src は buildBrokenMedia 内で _escapeHtml 済み（XSS-safe）。
+      figure.innerHTML = buildBrokenMedia(src)
     }, true)
 
     // ── Drag-and-drop media files ─────────────────────────────────────────
