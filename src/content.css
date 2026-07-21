@@ -169,8 +169,11 @@ h5[id^='kuro-h-'] {
   text-decoration: line-through;
 }
 
-/* URL card — [[URL|]] (表題なしを明示した記法) を Dropbox Paper 風カードで表示 */
-.kuro-content .kuro-url-card {
+/* URL card — [[URL|]] (表題なしを明示した記法) を Dropbox Paper 風カードで表示。
+   非対応メディアのフォールバックカード (.kuro-media-fallback-card) も同じボックスを
+   共有する (内側の __icon/__body/__title/__url は親クラス非依存で効くため流用可)。 */
+.kuro-content .kuro-url-card,
+.kuro-content .kuro-media-fallback-card {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -183,7 +186,8 @@ h5[id^='kuro-h-'] {
   text-decoration: none;
   transition: border-color 0.15s, background 0.15s;
 }
-.kuro-content .kuro-url-card:hover {
+.kuro-content .kuro-url-card:hover,
+.kuro-content .kuro-media-fallback-card:hover {
   color: inherit;
   border-color: var(--kuro-link);
 }
@@ -551,12 +555,14 @@ li::marker {
   color: var(--kuro-marker-color, inherit);
 }
 
-/* ── Unsupported-media fallback link ─────────────────────────────────────────
+/* ── Unsupported-media fallback card ─────────────────────────────────────────
    A [[…]] media token whose kind the host does not support (mediaKinds option)
-   is not rendered as a player; it degrades to a normal link. The token itself
-   is preserved (data-kuro-media) so getContent() round-trips it unchanged and a
-   host that DOES support the kind still renders the media. Styled as a normal
-   link — this rule only ensures long URLs wrap instead of overflowing. */
-.kuro-media-fallback-link {
+   is not rendered as a player; it degrades to a link CARD (.kuro-media-fallback-
+   card, styled with .kuro-url-card above). The token itself is preserved
+   (data-kuro-media) so getContent() round-trips it unchanged and a host that DOES
+   support the kind still renders the media — see kuro-links.js renderSpecialLinks.
+   Only long titles/URLs inside the card need to wrap. */
+.kuro-media-fallback-card .kuro-url-card__title,
+.kuro-media-fallback-card .kuro-url-card__url {
   word-break: break-word;
 }

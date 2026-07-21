@@ -227,15 +227,17 @@ export function renderSpecialLinks(text, resolver = defaultResolver, supportedKi
         const linkBtn = d.link ? `<a class="kuro-media-open-link" href="${d.link}" target="_blank" rel="noopener" contenteditable="false">↗ URLを新規タブで開く</a>` : ''
         if (d.unsupported) {
           // このホストが対応しない種別（例: 画像のみのアプリに動画/音声）。壊れた
-          // プレーヤーではなく【通常リンク】に落とす。data-kuro-media を保持するので
-          // getContent() でトークンは失われず、対応ホストでは元どおり再生される。
-          // URL 指定（解決後が http(s)）ならクリックで開けるリンク、内部 ID など URL が
-          // 無い場合は href なしのアンカーテキスト（本文として選択・削除できる）。
+          // プレーヤーではなく【リンクカード】へ落とす。data-kuro-media を保持するので
+          // getContent() でトークンは失われず（保存フォーマットは対応ホストと同一）、
+          // 対応ホストでは元どおり再生される。URL 指定（解決後が http(s)）ならクリック
+          // で開けるカード、内部 ID など URL が無い場合は href なしのカード。
+          // ⚠ kuro-url-card クラスは付けない — URL カードの編集 UI が data-kuro-wiki
+          // 前提でトークンを [[slug|]] へ書き換え、メディアトークンを壊すため。専用
+          // クラスにして見た目（ボックス）だけ url-card と共有する。
           const isHttp = /^https?:\/\//i.test(d.url)
           const linkUrl = d.link || (isHttp ? d.url : null)
           const attrs = linkUrl ? ` href="${linkUrl}" target="_blank" rel="noopener"` : ''
-          const text = isHttp ? d.url : d.slug
-          return `<a class="kuro-media-fallback-link"${attrs} data-kuro-media="${enc}">${text}</a>`
+          return `<a class="kuro-media-fallback-card"${attrs} contenteditable="false" data-kuro-media="${enc}">${_urlCardInner(d.slug, d.slug)}</a>`
         }
         if (d.mediaKind === 'video') {
           return `<figure class="kuro-media-wrap kuro-media-wrap--video${alignClass}"${sizeStyle} data-kuro-media="${enc}"${hrefAttr}><video src="${d.url}" controls class="kuro-media kuro-media--video"></video>${linkBtn}</figure>`
