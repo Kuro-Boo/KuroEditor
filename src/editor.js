@@ -66,7 +66,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.20'
+export const VERSION = '2.18.21'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -6211,6 +6211,25 @@ export class KuroEditor {
     }
     document.addEventListener('mousedown', this._onDocMousedown)
 
+    // ── Tap / click feedback ──────────────────────────────────────────────
+    // Briefly flood the pressed button so touch users see exactly which control
+    // they hit (the finger hides it); also sharpens mouse feedback. Delegated to
+    // ANY <button> in this editor's chrome or its body-level floats — every
+    // KuroEditor control is a <button> and carries a kuro- class, so the
+    // [class*="kuro-"] guard skips host-page buttons. pointerdown covers
+    // touch / mouse / pen. The flash CSS (.kuro-tap-flash) lives in editor.css.
+    this._onDocPointerdown = (e) => {
+      const btn = e.target?.closest?.('button')
+      if (!btn || btn.disabled || !btn.closest('[class*="kuro-"]')) return
+      btn.classList.remove('kuro-tap-flash')
+      void btn.offsetWidth   // reflow so a rapid re-tap restarts the animation
+      btn.classList.add('kuro-tap-flash')
+      btn.addEventListener('animationend', (ev) => {
+        if (ev.animationName === 'kuro-tap-flash') btn.classList.remove('kuro-tap-flash')
+      }, { once: true })
+    }
+    document.addEventListener('pointerdown', this._onDocPointerdown, true)
+
     // Keyboard shortcuts
     this.wysiwyg.addEventListener('keydown', (e) => this._onKeydown(e))
 
@@ -9231,6 +9250,7 @@ export class KuroEditor {
     document.removeEventListener('selectionchange', this._onDocSelChange)
     document.removeEventListener('mousedown',       this._onDocMousedown)
     document.removeEventListener('mouseup',         this._onDocMouseup)
+    document.removeEventListener('pointerdown',     this._onDocPointerdown, true)
 
     this.toc.destroy()
     this.roundboxMenu.destroy()

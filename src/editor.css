@@ -45,6 +45,30 @@
   --kuro-table-head-bg: #262626; /* neutral-800 */
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   TAP / CLICK FEEDBACK — flash the pressed control's region.
+   On touch the finger hides the button, so it's hard to tell exactly what was
+   hit; a brief flood makes the tapped region unmistakable (and sharpens mouse
+   feedback too). The delegated pointerdown handler (editor.js _bindEvents) adds
+   `.kuro-tap-flash` to ANY <button> in the chrome or a body-level float — all
+   KuroEditor controls are <button>s — and removes it on animationend.
+   Implemented as an inset box-shadow flood so it covers the region over any base
+   colour WITHOUT touching layout, and renders under the icon/label so they stay
+   legible. UNLAYERED + global so it applies to floating menus (outside
+   .kuro-editor) and isn't overridden by layered button rules. Chrome is always
+   dark, so a bright indigo flood reads on every button. Host-overridable via
+   --kuro-tap-flash. Honors prefers-reduced-motion (kept, but shorter — it is
+   functional feedback, not decoration).
+   ────────────────────────────────────────────────────────────────────────── */
+@keyframes kuro-tap-flash {
+  from { box-shadow: inset 0 0 0 999px var(--kuro-tap-flash, rgba(129, 140, 248, 0.6)); }
+  to   { box-shadow: inset 0 0 0 999px transparent; }
+}
+.kuro-tap-flash { animation: kuro-tap-flash 220ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .kuro-tap-flash { animation-duration: 120ms; }
+}
+
 /* KuroEditor — dark mode only */
 @layer kuroeditor {
   :root { color-scheme: dark; }
