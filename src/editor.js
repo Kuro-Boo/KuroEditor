@@ -37,9 +37,13 @@ import {
   VIDEO_EXT_RE,
   AUDIO_EXT_RE,
 } from './kuro-links.js'
+// 保存/取込み HTML の正規化（editor の paste・host の API・メンテナンス掃除で共通）。
+import { normalizeContentHtml, inspectContentHtml } from './normalize.js'
 
 // 後方互換: 従来 editor.js から import していた名前をそのまま再 export する。
 export {
+  normalizeContentHtml,
+  inspectContentHtml,
   isValidBid,
   stripInternalIds,
   stripBlockIds,
@@ -66,7 +70,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.24'
+export const VERSION = '2.19.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5264,6 +5268,7 @@ export class KuroEditor {
     this._urlMetaInflight = new Map()   // slug → in-flight Promise (dedupes concurrent fetches)
 
     this._build()
+    this._pinExecCommandDefaults()
     this._bindEvents()
     // Honour the restored auto-save preference (the checkbox 'change' event does
     // not fire for the initial programmatic checked state set in _build()).
@@ -6400,7 +6405,9 @@ export class KuroEditor {
     normalizePastedLinks(body, this.options.urlResolver)
     this._normalizePastedTables(body)
 
-    return body.innerHTML
+    // Same canonicalization the host API applies on ingest — one shared
+    // implementation, so pasted content and API-written content cannot drift.
+    return normalizeContentHtml(body.innerHTML)
   }
 
   /**
@@ -8640,7 +8647,13 @@ export class KuroEditor {
     // Clone the live tree, then serialize code-block textareas to <pre><code>.
     const clone = this.wysiwyg.cloneNode(true)
     this._serializeCodeBlocksToHtml(clone)
-    return unrenderSpecialLinks(clone.innerHTML)
+    // Canonicalize on the way OUT — this is the single point where editor DOM
+    // becomes stored HTML, so it is where the spelling is pinned (<b> and
+    // bold-only spans → <strong>, div paragraphs → <p>). contenteditable is
+    // free to build whatever the browser prefers in the live tree; what gets
+    // SAVED is the same shape the API writes. The transform is idempotent and
+    // renders identically, so this never shows up as a visible edit.
+    return normalizeContentHtml(unrenderSpecialLinks(clone.innerHTML))
   }
 
   /**
@@ -8914,6 +8927,25 @@ export class KuroEditor {
   // drag) into "a block node was added" → it gets an id. characterData is not
   // observed, so ids stay stable while typing inside a block.
   // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Pin the two contenteditable defaults that decide what execCommand emits.
+   * Both are per-document and browser-dependent; leaving them unset is why the
+   * saved corpus ended up with <div> paragraphs, <div><br></div> blank lines and
+   * bold written three different ways.
+   *
+   *   defaultParagraphSeparator — Chrome defaults to "div", so every Enter made
+   *     a <div> while the API wrote <p>. Pinned to "p".
+   *   styleWithCSS — when true, execCommand('bold') emits
+   *     <span style="font-weight:…"> instead of a tag. Pinned to false so
+   *     emphasis stays a real element; getContent() then spells it <strong>.
+   *
+   * Wrapped in try/catch: both are no-ops in non-browser test environments.
+   */
+  _pinExecCommandDefaults() {
+    try { document.execCommand('defaultParagraphSeparator', false, 'p') } catch { /* jsdom */ }
+    try { document.execCommand('styleWithCSS', false, false) } catch { /* jsdom */ }
+  }
 
   /** Generate a block id. Uses crypto.randomUUID when available. */
   _uuid() {

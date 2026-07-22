@@ -13,6 +13,8 @@ const files = [
   ['src/kuro-blocks.d.ts', 'dist/kuro-blocks.d.ts'],
   ['src/kuro-links.js', 'dist/kuro-links.js'],
   ['src/kuro-links.d.ts', 'dist/kuro-links.d.ts'],
+  ['src/normalize.js', 'dist/kuro-normalize.js'],
+  ['src/kuro-normalize.d.ts', 'dist/kuro-normalize.d.ts'],
 ];
 
 for (const [from, to] of files) {
