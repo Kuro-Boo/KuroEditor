@@ -137,3 +137,107 @@ describe('malformed block id is canonicalized, never crashes selectors (F0-5)', 
     expect(new Set(bids).size).toBe(2)
   })
 })
+
+/**
+ * F0-6: pasting rich HTML must not import block identity.
+ *
+ * Copying inside KuroEditor puts data-bid on the clipboard. Pasting it back used
+ * to insert the id verbatim, and because the block-id MutationObserver watched
+ * only childList (no subtree), a paste landing INSIDE an existing block was
+ * never re-tagged — so two blocks kept claiming the same bid. mergeBlocks only
+ * matches the first occurrence, so the second block silently stopped merging.
+ * Observed live: one article had 2 ids used by 7 blocks (one of them 6×).
+ */
+describe('pasted content never imports block ids (F0-6)', () => {
+  beforeEach(() => { document.body.innerHTML = '' })
+
+  /** all bids in the document, nested ones included. */
+  function allBids(ed) {
+    return [...ed.wysiwyg.querySelectorAll('[data-bid]')].map((e) => e.getAttribute('data-bid'))
+  }
+
+  it('strips data-bid / data-cbid from sanitized paste HTML', () => {
+    const ed = new KuroEditor(makeMount(), {
+      blockIds: true,
+      initialContent: '<p data-bid="orig-1">a</p>',
+    })
+    const clean = ed._sanitizePastedHTML(
+      '<p data-bid="orig-1" data-cbid="c-1">copied</p>' +
+      '<div data-bid="orig-2"><span data-bid="orig-3">nested</span></div>',
+    )
+    expect(clean).not.toContain('data-bid')
+    expect(clean).not.toContain('data-cbid')
+    expect(clean).toContain('copied')   // content itself survives
+    expect(clean).toContain('nested')
+  })
+
+  it('keeps stripping ids inside clipboard fragment markers', () => {
+    const ed = new KuroEditor(makeMount(), { blockIds: true, initialContent: '<p>a</p>' })
+    const clean = ed._sanitizePastedHTML(
+      '<html><head><style>x{}</style></head><body>' +
+      '<!--StartFragment--><p data-bid="dup">copied</p><!--EndFragment--></body></html>',
+    )
+    expect(clean).not.toContain('data-bid')
+    expect(clean).not.toContain('<style')
+  })
+
+  it('re-issues a duplicated bid on a node inserted INSIDE a block', () => {
+    const ed = new KuroEditor(makeMount(), {
+      blockIds: true,
+      initialContent: '<div data-bid="wrap-1"><p>a</p></div><p data-bid="dup-me">b</p>',
+    })
+    // Simulate a paste landing inside the existing <div> block, carrying an id
+    // that is already in use elsewhere in the document.
+    const nested = document.createElement('p')
+    nested.setAttribute('data-bid', 'dup-me')
+    nested.textContent = 'pasted copy'
+    ed.wysiwyg.firstElementChild.appendChild(nested)
+    ed._dedupeNestedBids(nested)
+
+    const bids = allBids(ed)
+    expect(new Set(bids).size).toBe(bids.length)   // every id unique again
+    expect(nested.getAttribute('data-bid')).not.toBe('dup-me')
+    expect(isValidBid(nested.getAttribute('data-bid'))).toBe(true)
+  })
+
+  it('converges nested duplicates that already exist in stored content', () => {
+    const ed = new KuroEditor(makeMount(), {
+      blockIds: true,
+      // shape seen in the damaged live article: same bid on a top-level block
+      // and again on a <p> nested two levels down
+      initialContent:
+        '<p data-bid="x-1">a</p>' +
+        '<div data-bid="w-1"><div><p data-bid="x-1">b</p><p data-bid="x-1">c</p></div></div>',
+    })
+    const bids = allBids(ed)
+    expect(new Set(bids).size).toBe(bids.length)
+    expect(bids.every(isValidBid)).toBe(true)
+  })
+
+  it('the observer itself catches a nested duplicate (subtree is observed)', async () => {
+    const ed = new KuroEditor(makeMount(), {
+      blockIds: true,
+      initialContent: '<div data-bid="wrap-1"><p>a</p></div><p data-bid="dup-me">b</p>',
+    })
+    // No direct _dedupeNestedBids call here: the MutationObserver must see an
+    // insertion BELOW the top level, which only happens with subtree: true.
+    const nested = document.createElement('p')
+    nested.setAttribute('data-bid', 'dup-me')
+    nested.textContent = 'pasted copy'
+    ed.wysiwyg.firstElementChild.appendChild(nested)
+    await new Promise((r) => setTimeout(r, 0))   // let the observer callback run
+
+    const bids = allBids(ed)
+    expect(new Set(bids).size).toBe(bids.length)
+    expect(nested.getAttribute('data-bid')).not.toBe('dup-me')
+  })
+
+  it('does not mint ids for ordinary nested markup', () => {
+    const ed = new KuroEditor(makeMount(), {
+      blockIds: true,
+      initialContent: '<p data-bid="p-1">a <b>bold</b> <span>x</span></p>',
+    })
+    expect(ed.wysiwyg.querySelector('b').hasAttribute('data-bid')).toBe(false)
+    expect(ed.wysiwyg.querySelector('span').hasAttribute('data-bid')).toBe(false)
+  })
+})

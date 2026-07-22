@@ -66,7 +66,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.18.23'
+export const VERSION = '2.18.24'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -6353,6 +6353,18 @@ export class KuroEditor {
    * @param {string} html  clipboard `text/html`
    */
   _pasteSanitizedHTML(html) {
+    const clean = this._sanitizePastedHTML(html)
+    if (clean) execFormat('insertHTML', clean)
+  }
+
+  /**
+   * Pure sanitize step of {@link _pasteSanitizedHTML} — clipboard markup in,
+   * cleaned markup out, no selection/DOM side effects (kept separate so the
+   * rules are directly testable).
+   * @param {string} html  clipboard `text/html`
+   * @returns {string} cleaned markup
+   */
+  _sanitizePastedHTML(html) {
     // Browser/Office clipboards wrap the real selection in fragment markers;
     // use that slice when present so we don't drag in <head>/<style> noise.
     const frag = html.match(/<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/)
@@ -6367,6 +6379,14 @@ export class KuroEditor {
     for (const el of body.querySelectorAll('*')) {
       el.removeAttribute('color')   // legacy <font color> / [color]
       el.removeAttribute('bgcolor')
+      // Block identity is per-document and minted by THIS editor. Copying from
+      // KuroEditor (or another KuroEditor document) puts data-bid/data-cbid on
+      // the clipboard; pasting them back would create TWO blocks claiming the
+      // same id, which silently breaks 3-way merge matching (mergeBlocks only
+      // uses the first occurrence). A pasted copy is always a NEW block, so the
+      // ids are dropped here and re-minted by the block-id observer.
+      el.removeAttribute('data-bid')
+      el.removeAttribute('data-cbid')
       const st = el.style
       if (st && el.hasAttribute('style')) {
         for (const p of COLOR_PROPS) st.removeProperty(p)
@@ -6380,8 +6400,7 @@ export class KuroEditor {
     normalizePastedLinks(body, this.options.urlResolver)
     this._normalizePastedTables(body)
 
-    const clean = body.innerHTML
-    if (clean) execFormat('insertHTML', clean)
+    return body.innerHTML
   }
 
   /**
@@ -8907,18 +8926,54 @@ export class KuroEditor {
     this._ensureBlockIds()
     this._blockIdObserver = new MutationObserver((records) => {
       for (const r of records) {
+        const topLevel = r.target === this.wysiwyg
         for (const n of r.addedNodes) {
-          if (n.nodeType === Node.ELEMENT_NODE) this._tagBlock(n, true)
+          if (n.nodeType !== Node.ELEMENT_NODE) continue
+          // Top level → a real block: give it an id (minting one if missing).
+          // Deeper → content landing INSIDE a block: never mint (that would tag
+          // every span/b), but DO re-issue an id that is already taken, so a
+          // nested paste cannot leave two blocks sharing one bid.
+          if (topLevel) this._tagBlock(n, true)
+          else this._dedupeNestedBids(n)
         }
       }
     })
-    // Only direct-child add/remove — never characterData (keeps ids stable while typing).
-    this._blockIdObserver.observe(this.wysiwyg, { childList: true })
+    // subtree is required: paste/drag frequently inserts INSIDE an existing
+    // block, and a childList-only observation never sees those nodes — that is
+    // how duplicated data-bid used to survive. characterData stays unobserved
+    // so ids remain stable while typing.
+    this._blockIdObserver.observe(this.wysiwyg, { childList: true, subtree: true })
   }
 
   /** Ensure every top-level block carries a unique data-bid. */
   _ensureBlockIds() {
     for (const el of this.wysiwyg.children) this._tagBlock(el)
+    // Content loaded from storage can already contain nested, duplicated ids
+    // (written before the paste fix); converge them on load too.
+    this._dedupeNestedBids(this.wysiwyg)
+  }
+
+  /**
+   * Re-issue any data-bid on/under `node` that is malformed or already used by
+   * another element. Only touches elements that ALREADY carry an id — nested
+   * nodes are never given one.
+   * @param {Element} node
+   */
+  _dedupeNestedBids(node) {
+    const carriers = []
+    if (node.nodeType === Node.ELEMENT_NODE && node.hasAttribute('data-bid')) carriers.push(node)
+    if (node.querySelectorAll) carriers.push(...node.querySelectorAll('[data-bid]'))
+    if (!carriers.length) return
+    const all = [...this.wysiwyg.querySelectorAll('[data-bid]')]
+    for (const el of carriers) {
+      const id = el.getAttribute('data-bid')
+      if (!isValidBid(id)) { el.setAttribute('data-bid', this._uuid()); continue }
+      // Re-read the attribute on every pass so ids re-issued in this same loop
+      // are accounted for.
+      if (all.filter((e) => e.getAttribute('data-bid') === id).length > 1) {
+        el.setAttribute('data-bid', this._uuid())
+      }
+    }
   }
 
   /**
