@@ -1569,19 +1569,12 @@
     &:focus { @apply border-indigo-500; }
   }
 
-  /* ── Media ── */
-  .kuro-media {
-    @apply max-w-full rounded-lg my-2;
-  }
-
-  .kuro-media--video {
-    @apply w-full;
-  }
-
-  .kuro-media--audio {
-    @apply w-full;
-    display: block;
-  }
+  /* ── Media ──
+     figure / img / video / audio / iframe の LAYOUT（サイズ・float・16:9 枠・
+     open-link ボタンの見た目）は content.css（.kuro-content …）に一本化した。
+     公開ページは editor.css を読まないため、ここに置くと本番だけ回り込みも
+     16:9 も効かない、というズレになる。ここには編集時だけのアフォーダンス
+     （2 段階クリックの ::before オーバーレイ、選択アウトライン、cursor）を残す。 */
 
   /*
    * Two-click selection for interactive media (video / audio / iframe).
@@ -1608,83 +1601,14 @@
 
   .kuro-media-wrap--selected::before { display: none; }
 
-  /* Base media wrapper — block by default so width / float work */
-  .kuro-media-wrap {
-    @apply my-3;
-    display: block;
-    /* Default: centered (same visual as before, now via margin instead of text-center) */
-    margin-left: auto;
-    margin-right: auto;
-  }
+  /* Base wrapper / alignment / 16:9 iframe / float clearfix は content.css。 */
 
-  /* ── Alignment variants ── */
-  .kuro-media-wrap--left {
-    float: left;
-    margin-left: 0;
-    margin-right: 1em;
-  }
-
-  .kuro-media-wrap--right {
-    float: right;
-    margin-right: 0;
-    margin-left: 1em;
-  }
-
-  .kuro-media-wrap--center {
-    margin-left: auto;
-    margin-right: auto;
-    float: none;
-  }
-
-  /* Media float clearfix (.kuro-content p / media-wrap + p) moved to content.css. */
-
-  /* ── iframe embed (YouTube, Vimeo, …) — responsive 16:9 ── */
-  .kuro-media-wrap--iframe {
-    /* Default to full width so the iframe is comfortably viewable */
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .kuro-iframe-wrap {
-    position: relative;
-    padding-top: 56.25%;   /* 16:9 aspect ratio */
-    width: 100%;
-    border-radius: 0.5rem;
-    overflow: hidden;
-    background: #000;
-  }
-
-  .kuro-media--iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-  }
-
-  /* ── Click-through link button (inside figure, below the media) ── */
+  /* ── Click-through link button — 見た目は content.css
+     (.kuro-content .kuro-media-open-link)。ここは編集側の操作性だけ。 */
   .kuro-media-open-link {
-    display: block;
-    margin-top: 0.375rem;
-    padding: 0.25rem 0.75rem;
-    border-radius: 0.375rem;
-    text-align: center;
-    font-size: 0.75rem;
-    line-height: 1.5;
-    color: theme('colors.indigo.400');
-    background: theme('colors.neutral.800');
-    border: 1px solid theme('colors.neutral.700');
-    text-decoration: none;
-    transition: background 120ms, color 120ms;
-    user-select: none;
     cursor: pointer;
     /* Prevent text editing inside the contenteditable wysiwyg */
     -webkit-user-modify: read-only;
-    &:hover {
-      @apply bg-indigo-900/60;
-      color: theme('colors.indigo.200');
-    }
   }
 
   /* ── Selected state (shown while ImageMenu is open) ── */

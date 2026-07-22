@@ -373,6 +373,98 @@ h5[id^='kuro-h-'] {
   content: '📌';
 }
 
+/* ── Media layout (figure / img / video / audio / iframe embed) ──────────────
+   [[…]] メディアトークンの figure レイアウトは編集側と公開側で同一である必要が
+   あるため（WYSIWYG の単一の正）ここに置く。以前は editor.css にしか無く、公開
+   ページでは float（文字の回り込み）も iframe の 16:9 枠も一切効いていなかった。
+   editor.css 側の同名ルールは @layer 内なので、UNLAYERED なこのファイルが勝つ
+   （値は同一なのでエディタの見た目は変わらない）。編集時のみのアフォーダンス
+   （::before の 2 段階クリック、選択アウトライン）は editor.css に残す。 */
+.kuro-content .kuro-media {
+  max-width: 100%;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.kuro-content .kuro-media--video {
+  width: 100%;
+}
+.kuro-content .kuro-media--audio {
+  width: 100%;
+  display: block;
+}
+
+/* Base wrapper — block so width / float が効く。既定は中央寄せ。 */
+.kuro-content .kuro-media-wrap {
+  display: block;
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Alignment variants — left/right は float して本文が回り込む */
+.kuro-content .kuro-media-wrap--left {
+  float: left;
+  margin-left: 0;
+  margin-right: 1em;
+}
+.kuro-content .kuro-media-wrap--right {
+  float: right;
+  margin-left: 1em;
+  margin-right: 0;
+}
+.kuro-content .kuro-media-wrap--center {
+  float: none;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* iframe embed (YouTube / Vimeo …) — レスポンシブ 16:9 */
+.kuro-content .kuro-media-wrap--iframe {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+.kuro-content .kuro-iframe-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 */
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #000;
+}
+.kuro-content .kuro-media--iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Click-through link button (figure 内・メディアの下) — テーマ変数で light/dark
+   双方に追従。編集側の cursor / user-modify アフォーダンスだけ editor.css に残す。 */
+.kuro-content .kuro-media-open-link {
+  display: block;
+  margin-top: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--kuro-box-border);
+  border-radius: 0.375rem;
+  background: var(--kuro-box-bg);
+  color: var(--kuro-link);
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-decoration: none;
+  user-select: none;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.kuro-content .kuro-media-open-link:hover {
+  border-color: var(--kuro-link);
+  color: var(--kuro-link-hover);
+}
+
 /* Media float clearfix — a paragraph after a floated media shouldn't overlap it */
 .kuro-content p {
   clear: none;
