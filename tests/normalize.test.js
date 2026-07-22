@@ -76,7 +76,23 @@ describe('empty blocks', () => {
 
   it('an empty <p> stays a single <br> paragraph', () => {
     expect(N('<p><br></p>')).toBe('<p><br></p>')
-    expect(N('<p>   </p>')).toBe('<p><br></p>')
+  })
+
+  it('a COLLAPSED blank block never gains a <br> (it must stay zero-height)', () => {
+    // <p>\n</p> renders as nothing; <p><br></p> renders as one blank line.
+    // Rewriting the first into the second would insert visible blank lines.
+    expect(N('<p>\n</p>')).toBe('<p>\n</p>')
+    expect(N('<p>   </p>')).toBe('<p>   </p>')
+    expect(N('<div>  </div>')).toBe('<p>  </p>')
+  })
+
+  it('a nested collapsed block is dropped, a nested <br> block keeps its line', () => {
+    expect(N('<div data-bid="w"><p>a</p><div> </div></div>')).toBe('<p>a</p>')
+    expect(N('<div data-bid="w"><p>a</p><div><br></div></div>')).toBe('<p>a</p><br>')
+  })
+
+  it('collapses multiple <br> in a blank block to one', () => {
+    expect(N('<div><br><br></div>')).toBe('<p><br></p>')
   })
 
   it('&nbsp; is content, not emptiness', () => {
@@ -131,5 +147,24 @@ describe('inspectContentHtml', () => {
   it('reports no change for already-canonical content', () => {
     const s = inspectContentHtml('<p>a <strong>b</strong></p><p><br></p>')
     expect(s.changed).toBe(false)
+  })
+})
+
+describe('mismatched nesting is refused, not guessed at (regression)', () => {
+  it('leaves a body containing an unescaped "<A word …>" untouched', () => {
+    // Seen live: an article whose text contained a literal "<A função …>".
+    // It parses as an <a> that is never closed, so a lenient unwind would let
+    // the following </b> close it too and emit a </a> that was never written.
+    const src = '<div><b><A função de uso final não é um bônus></b></div>'
+    expect(N(src)).toBe(src)
+  })
+
+  it('refuses interleaved tags rather than re-ordering them', () => {
+    const src = '<p><b><i>x</b></i></p>'
+    expect(N(src)).toBe(src)
+  })
+
+  it('still normalizes a document with correctly nested inline tags', () => {
+    expect(N('<div><b><i>x</i></b></div>')).toBe('<p><strong><i>x</i></strong></p>')
   })
 })
