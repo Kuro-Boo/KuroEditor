@@ -44,9 +44,28 @@ describe('paragraphs are <p>', () => {
     expect(N('<div data-bid="x-1">text</div>')).toBe('<p data-bid="x-1">text</p>')
   })
 
-  it('keeps styling on a renamed div (alignment must survive)', () => {
-    expect(N('<div style="text-align: center;">c</div>'))
-      .toBe('<p style="text-align: center;">c</p>')
+  it('only a BARE div is treated as a paragraph', () => {
+    // A div carrying anything (class/style/data-*) may be a real container.
+    // We cannot prove it is a paragraph, so the tag is left alone.
+    const styled = '<div style="text-align: center;">c</div>'
+    expect(N(styled)).toBe(styled)
+  })
+
+  it('never turns a structural container into a paragraph (regression)', () => {
+    // These are real shapes from the corpus. Renaming any of them to <p> is
+    // destructive: a <p> cannot hold block content, and the editor's callout /
+    // code-block handling looks for the container element.
+    const callout = '<div class="kuro-callout kuro-callout--tip">tip text</div>'
+    expect(N(callout)).toBe(callout)
+    const codeWrap = '<div data-language="plain" spellcheck="false">x</div>'
+    expect(N(codeWrap)).toBe(codeWrap)
+    const tableWrap = '<div class="kuro-table">cells</div>'
+    expect(N(tableWrap)).toBe(tableWrap)
+  })
+
+  it('does not unwrap a container just because it holds blocks', () => {
+    const src = '<div class="kuro-callout"><p>a</p><p>b</p></div>'
+    expect(N(src)).toBe(src)
   })
 
   it('unwraps a bare div that only wraps blocks', () => {
@@ -166,5 +185,31 @@ describe('mismatched nesting is refused, not guessed at (regression)', () => {
 
   it('still normalizes a document with correctly nested inline tags', () => {
     expect(N('<div><b><i>x</i></b></div>')).toBe('<p><strong><i>x</i></strong></p>')
+  })
+})
+
+describe('self-heals containers a previous version renamed to <p> (R5)', () => {
+  it('restores a callout that was turned into a paragraph', () => {
+    expect(N('<p class="kuro-callout kuro-callout--tip">tip</p>'))
+      .toBe('<div class="kuro-callout kuro-callout--tip">tip</div>')
+  })
+
+  it('restores a code-block wrapper', () => {
+    expect(N('<p data-language="plain" spellcheck="false">x</p>'))
+      .toBe('<div data-language="plain" spellcheck="false">x</div>')
+  })
+
+  it('leaves an ordinary styled paragraph as a paragraph', () => {
+    const src = '<p style="text-align: center;">c</p>'
+    expect(N(src)).toBe(src)
+    const classed = '<p class="lead">c</p>'
+    expect(N(classed)).toBe(classed)
+  })
+
+  it('round-trips: damage then repair returns the original container', () => {
+    const original = '<div class="kuro-callout kuro-callout--tip">tip</div>'
+    const damaged = '<p class="kuro-callout kuro-callout--tip">tip</p>'
+    expect(N(damaged)).toBe(original)
+    expect(N(N(damaged))).toBe(original)   // idempotent
   })
 })
