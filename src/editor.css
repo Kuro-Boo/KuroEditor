@@ -1618,6 +1618,16 @@
     border-radius: theme('borderRadius.lg');
   }
 
+  /* Atomic-block wrapper — editor-only box that gives a top-level inline card /
+     bare <br> a block so the caret can navigate around it (see editor.js
+     _wrapAtomicBlocks). Purely structural: no margin of its own, so spacing is
+     the card's / blank line's own. getContent() strips it, so it never reaches
+     the published page. */
+  [data-kuro-block] {
+    display: block;
+    margin: 0;
+  }
+
   /* ── Card link ── */
   /* .kuro-card-link の見た目は content.css（.kuro-content .kuro-card-link）。
      公開ページは editor.css を読まないため、ここに置くと本番だけ素のリンクになる。 */

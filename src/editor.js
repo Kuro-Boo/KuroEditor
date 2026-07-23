@@ -70,7 +70,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.19.4'
+export const VERSION = '2.20.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4602,7 +4602,15 @@ export class LinkEditPopup {
     // 表示テキストを空にして URL カード化した場合は豪華表示を後追い取得。
     // writeLinkParts が同じ <a> を作り替える (data-meta-state は付かない) ので
     // _enhanceUrlCards が新しいカードとして処理する。
-    if (isCard) this.editor._enhanceUrlCards()
+    if (isCard) {
+      // A card just created at the top level is a loose inline atom — box it now
+      // so the caret can navigate it immediately (setContent does this on load).
+      if (a.parentElement === this.editor.wysiwyg) {
+        this.editor._wrapAtomicBlocks(this.editor.wysiwyg)
+        this.activeLink = a
+      }
+      this.editor._enhanceUrlCards()
+    }
     if (fresh) this._position(a)   // 実体ができたので、その <a> に位置を合わせ直す
   }
 
@@ -7409,19 +7417,27 @@ export class KuroEditor {
   _handleHeadingMerge(e) {
     const HEADINGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
     const SIMPLE   = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
+    // A block this handler may take a merge over: a plain paragraph/heading, OR
+    // one of our atomic-block wrappers (<div data-kuro-block> around a URL card /
+    // blank line). Arbitrary <div>s (callout / code / roundbox) are excluded so
+    // their native editing is untouched.
+    const mergeable = (el) =>
+      !!el &&
+      (SIMPLE.has(el.tagName) ||
+        (el.tagName === 'DIV' && el.hasAttribute('data-kuro-block')))
 
     const sel = window.getSelection()
     if (!sel?.rangeCount || !sel.isCollapsed) return false
     const range = sel.getRangeAt(0)
     const block = this._nearestBlock(range.startContainer)
     if (!block || block === this.wysiwyg) return false
-    if (block.parentElement !== this.wysiwyg || !SIMPLE.has(block.tagName)) return false
+    if (block.parentElement !== this.wysiwyg || !mergeable(block)) return false
 
     const edge = e.key === 'Backspace' ? 'start' : 'end'
     if (!this._caretAtBlockEdge(block, range, edge)) return false
 
     const other = edge === 'start' ? block.previousElementSibling : block.nextElementSibling
-    if (!other || !SIMPLE.has(other.tagName)) return false
+    if (!mergeable(other)) return false
     // Take over the merge in two cases:
     //  (a) a heading is on either side — the native merge injects style garbage
     //      and loses the heading tag; and
@@ -8659,6 +8675,10 @@ export class KuroEditor {
     const rendered = renderSpecialLinks(html ?? '', this.options.urlResolver, this._supportedKinds)
     this._suspendDirty(() => {
       this.wysiwyg.innerHTML = rendered
+      // Box top-level inline cards / bare <br>s so the caret can navigate them.
+      // Done before block-id tagging so the wrappers (which never get an id) are
+      // in place and the real blocks inside keep their ids.
+      this._wrapAtomicBlocks(this.wysiwyg)
       if (this._mode === 'source') this.sourceArea.value = html ?? ''
       this.toc._doUpdate()
       this._initAllCodeBlocks()
@@ -8690,6 +8710,9 @@ export class KuroEditor {
     // Clone the live tree, then serialize code-block textareas to <pre><code>.
     const clone = this.wysiwyg.cloneNode(true)
     this._serializeCodeBlocksToHtml(clone)
+    // Strip the presentational atomic-block wrappers so the stored form is the
+    // same token-based shape as before this feature (no migration, no drift).
+    this._unwrapAtomicBlocks(clone)
     // Canonicalize on the way OUT — this is the single point where editor DOM
     // becomes stored HTML, so it is where the spelling is pinned (<b> and
     // bold-only spans → <strong>, div paragraphs → <p>). contenteditable is
@@ -9028,6 +9051,57 @@ export class KuroEditor {
     this._dedupeNestedBids(this.wysiwyg)
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ATOMIC-BLOCK WRAPPING
+  // ───────────────────────────────────────────────────────────────────────────
+  // A URL card / media-fallback card renders as an INLINE <a contenteditable=
+  // "false">. When such a card sits at the top level (a "出典" list, cards on
+  // their own lines) the browser has no editable position beside it: the caret
+  // can't land to its right, arrow keys skip it, and Backspace on an adjacent
+  // blank line eats the card. The published page never has this problem (no
+  // caret), so the STORED form stays token-based and untouched — the fix lives
+  // only in the live editor DOM: each top-level inline card and each bare
+  // top-level <br> is wrapped in a margin-less <div data-kuro-block> so it
+  // becomes a real block box. getContent() strips the wrappers again, so save /
+  // publish / normalize are all unchanged (see _unwrapAtomicBlocks).
+  // Media (<figure>), callouts, code and roundboxes are already block elements
+  // and are left alone; the card chip [[[…]]] is intentionally inline.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Selector for the inline cards that must be boxed at the top level. */
+  static get ATOMIC_CARD_SEL() { return 'a.kuro-url-card, a.kuro-media-fallback-card' }
+
+  /** Wrap top-level inline cards and bare <br>s in <div data-kuro-block>. */
+  _wrapAtomicBlocks(root) {
+    const sel = KuroEditor.ATOMIC_CARD_SEL
+    let node = root.firstChild
+    while (node) {
+      const next = node.nextSibling
+      if (
+        node.nodeType === Node.ELEMENT_NODE &&
+        !node.hasAttribute('data-kuro-block') &&
+        (node.tagName === 'BR' || node.matches?.(sel))
+      ) {
+        const box = document.createElement('div')
+        box.setAttribute('data-kuro-block', '')
+        root.insertBefore(box, node)
+        box.appendChild(node)
+      }
+      node = next
+    }
+  }
+
+  /**
+   * Remove the presentational wrappers from a DETACHED clone (getContent path),
+   * restoring the exact top-level shape the storage/normalize layers expect.
+   * A wrapper never carries a data-bid (see _tagBlock), so nothing is lost.
+   */
+  _unwrapAtomicBlocks(root) {
+    for (const box of [...root.querySelectorAll('div[data-kuro-block]')]) {
+      box.replaceWith(...box.childNodes)
+    }
+  }
+
   /**
    * Re-issue any data-bid on/under `node` that is malformed or already used by
    * another element. Only touches elements that ALREADY carry an id — nested
@@ -9060,6 +9134,11 @@ export class KuroEditor {
    */
   _tagBlock(el, isNew = false) {
     if (!el || el.nodeType !== Node.ELEMENT_NODE) return
+    // Atomic-block wrappers (<div data-kuro-block>) are presentational: they only
+    // exist in the live DOM to give a top-level card / blank line a block box so
+    // the caret can sit around it, and getContent() strips them. They must never
+    // get a data-bid (they are not persisted, and the block inside keeps its own).
+    if (el.hasAttribute('data-kuro-block')) return
     const id = el.getAttribute('data-bid')
     // Missing OR malformed id → mint a fresh, safe one. External / pasted / MCP
     // content can carry a data-bid with quotes or brackets that would break a
