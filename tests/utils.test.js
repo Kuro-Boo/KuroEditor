@@ -848,10 +848,23 @@ describe('popupBottomLimit', () => {
     expect(popupBottomLimit(el)).toBe(window.innerHeight - 4)
   })
 
-  it('returns viewport bottom for slotted mmenu (host toolbar, not fixed)', () => {
-    const el = mmenu(300)
+  it('ignores a slotted mmenu placed high up (top toolbar)', () => {
+    // A top-slotted toolbar sits in the upper half → not a bottom obstacle.
+    const el = mmenu(20)
     el.classList.add('kuro-mmenu--slotted')
     expect(popupBottomLimit(el)).toBe(window.innerHeight - 4)
+    el.remove()
+  })
+
+  it('dodges a slotted mmenu anchored to the viewport bottom (regression)', () => {
+    // KuroCMS slots the toolbar into a fixed .articleBottomBar at the bottom of
+    // the viewport. The popup used to clamp to the raw viewport bottom and slide
+    // under it. A slotted bar whose centre is in the lower half is a real
+    // obstacle and must clamp to its top.
+    const top = window.innerHeight - 60
+    const el = mmenu(top)
+    el.classList.add('kuro-mmenu--slotted')
+    expect(popupBottomLimit(el)).toBe(top - 6)
     el.remove()
   })
 

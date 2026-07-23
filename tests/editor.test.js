@@ -357,6 +357,41 @@ describe('KuroEditor', () => {
       const e = pressKey('Backspace')
       expect(e.defaultPrevented).toBe(false)
     })
+
+    // ── Blank line between atomic blocks (URL cards / media) ──────────────────
+    // Deleting the gap must remove ONLY the blank line; the native merge used to
+    // eat a contenteditable=false card.
+    const CARD = (u) =>
+      `<p><a class="kuro-url-card" contenteditable="false" href="${u}" data-kuro-wiki="">${u}</a></p>`
+
+    it('Delete on the blank line between two URL cards keeps both cards', () => {
+      editor.setContent(CARD('https://a.example') + '<p><br></p>' + CARD('https://b.example'))
+      const blank = editor.wysiwyg.querySelectorAll('p')[1]
+      setCaret(blank, 0)
+      const e = pressKey('Delete')
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.wysiwyg.querySelectorAll('a.kuro-url-card').length).toBe(2)
+      expect(editor.wysiwyg.querySelectorAll('p').length).toBe(2)  // blank removed
+    })
+
+    it('Backspace at the second card removes the blank line, both cards survive', () => {
+      editor.setContent(CARD('https://a.example') + '<p><br></p>' + CARD('https://b.example'))
+      const secondCardP = editor.wysiwyg.querySelectorAll('p')[2]
+      setCaret(secondCardP, 0)
+      const e = pressKey('Backspace')
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.wysiwyg.querySelectorAll('a.kuro-url-card').length).toBe(2)
+      expect(editor.wysiwyg.querySelectorAll('p').length).toBe(2)
+    })
+
+    it('Delete at the end of a card block removes the following blank line, card survives', () => {
+      editor.setContent(CARD('https://a.example') + '<p><br></p>' + CARD('https://b.example'))
+      const firstCardP = editor.wysiwyg.querySelectorAll('p')[0]
+      setCaret(firstCardP, firstCardP.childNodes.length)
+      const e = pressKey('Delete')
+      expect(e.defaultPrevented).toBe(true)
+      expect(editor.wysiwyg.querySelectorAll('a.kuro-url-card').length).toBe(2)
+    })
   })
 
   // ── ホスト設定オプション (modalMenu / saveUi / canvasDark) ─────────────────

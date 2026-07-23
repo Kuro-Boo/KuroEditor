@@ -70,7 +70,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.19.3'
+export const VERSION = '2.19.4'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -459,12 +459,19 @@ function debounce(fn, ms) {
  */
 export function popupBottomLimit(mmenuEl, margin = 4) {
   const vpBottom = window.innerHeight - margin
-  if (
-    mmenuEl?.isConnected &&
-    !mmenuEl.classList.contains('kuro-mmenu--slotted')
-  ) {
+  if (mmenuEl?.isConnected) {
     const r = mmenuEl.getBoundingClientRect()
-    if (r.height > 0) return Math.min(vpBottom, r.top - 6)
+    if (r.height > 0) {
+      // A floating (body-fixed) mmenu is always a bottom overlay. A slotted
+      // mmenu lives in the host's own layout, so it is only an obstacle when
+      // the host anchored its bar to the viewport BOTTOM (e.g. KuroCMS's fixed
+      // .articleBottomBar). A top-slotted toolbar sits high up and must NOT
+      // clamp popups. Decide by where the bar actually is: its vertical centre
+      // below the viewport midpoint ⇒ it is a bottom bar to dodge.
+      const floating = !mmenuEl.classList.contains('kuro-mmenu--slotted')
+      const atBottom = floating || (r.top + r.bottom) / 2 > window.innerHeight / 2
+      if (atBottom) return Math.min(vpBottom, r.top - 6)
+    }
   }
   return vpBottom
 }
@@ -7415,7 +7422,21 @@ export class KuroEditor {
 
     const other = edge === 'start' ? block.previousElementSibling : block.nextElementSibling
     if (!other || !SIMPLE.has(other.tagName)) return false
-    if (!HEADINGS.has(block.tagName) && !HEADINGS.has(other.tagName)) return false
+    // Take over the merge in two cases:
+    //  (a) a heading is on either side — the native merge injects style garbage
+    //      and loses the heading tag; and
+    //  (b) a blank line sits next to a block holding an ATOMIC element
+    //      (a URL card <a contenteditable=false>, or media img/video/iframe/…).
+    //      The native "delete the blank line" merge eats that atomic element —
+    //      the reported "deleting the gap between two URL cards deletes a card".
+    //      One side is empty here, so the empty-block branches below just remove
+    //      the blank line and never run the destructive child-move merge.
+    const headingInvolved =
+      HEADINGS.has(block.tagName) || HEADINGS.has(other.tagName)
+    const atomicBlankMerge =
+      (this._isEmptyBlock(block) || this._isEmptyBlock(other)) &&
+      (this._hasAtomicChild(block) || this._hasAtomicChild(other))
+    if (!headingInvolved && !atomicBlankMerge) return false
 
     // 結合方向は常に「下のブロックが上へ合流」
     const upper = edge === 'start' ? other : block
@@ -7469,6 +7490,18 @@ export class KuroEditor {
   _isEmptyBlock(el) {
     if (el.textContent.trim() !== '') return false
     return !el.querySelector('img, video, audio, iframe, table, hr, textarea')
+  }
+
+  /**
+   * ブロックが「原子的（それ自体で 1 単位）」な要素を含むか。URL カード
+   * (<a contenteditable="false">) やメディア (img/video/…) は、隣接する空行を
+   * ブラウザ既定の結合で消すと巻き込まれて消える。それを DOM 直接操作の安全な
+   * 結合へ横取りする判定に使う。
+   */
+  _hasAtomicChild(el) {
+    return !!el.querySelector(
+      '[contenteditable="false"], img, video, audio, iframe, table, hr',
+    )
   }
 
   /**
