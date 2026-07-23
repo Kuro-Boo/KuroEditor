@@ -70,7 +70,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.19.2'
+export const VERSION = '2.19.3'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4380,6 +4380,16 @@ export class LinkEditPopup {
       if (!a?.isConnected && !this._pendingRange) return
       if (cb.checked) {
         this._textInput.value = ''                       // 空 → [[URL|]] カード
+        // A card IS kuro [[url|]] notation. A plain <a href> (from paste / AI /
+        // older content, e.g. a 出典 list link) carries no data-kuro-* attr, so
+        // writeLinkParts would take its non-kuro branch and refuse empty text —
+        // the box would tick but no card appears. Promote the anchor here so the
+        // empty-text card path runs.
+        if (a?.isConnected
+            && !a.hasAttribute('data-kuro-wiki')
+            && !a.hasAttribute('data-kuro-link')) {
+          a.setAttribute('data-kuro-wiki', '')
+        }
       } else if (!this._textInput.value.trim()) {
         this._textInput.value = this._urlInput.value.trim()  // カード解除 → 既定表示 = URL
       }

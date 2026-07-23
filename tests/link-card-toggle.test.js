@@ -50,6 +50,25 @@ describe('LinkEditPopup card toggle', () => {
     expect(ed.linkEditPopup._cardToggle.checked).toBe(true)
   })
 
+  it('プレーンな <a href> リンクもチェックでカード化できる（regression）', () => {
+    // AI/ペースト/旧コンテンツ由来のリンクは data-kuro-* を持たない素の <a>。
+    // 以前は writeLinkParts の非 kuro 分岐が空テキストを拒否し、チェックしても
+    // カードにならなかった（出典リストのリンクで発生）。
+    const ed = new KuroEditor(makeMount(), {
+      initialContent: '<p><a href="https://www.kantou.gr.jp/">秋田竿燈まつり公式</a></p>',
+    })
+    const a = ed.wysiwyg.querySelector('a')
+    expect(a.hasAttribute('data-kuro-wiki')).toBe(false)  // 素のリンク
+    const popup = ed.linkEditPopup
+    popup.open(a)
+
+    popup._cardToggle.checked = true
+    popup._cardToggle.dispatchEvent(new Event('change'))
+
+    expect(a.classList.contains('kuro-url-card')).toBe(true)
+    expect(a.getAttribute('data-kuro-wiki')).toBe(encodeURIComponent('[[https://www.kantou.gr.jp/|]]'))
+  })
+
   it('表示テキストを手入力で空にしてもチェックが追従する', () => {
     const ed = new KuroEditor(makeMount(), { initialContent: '<p>[[https://example.com|x]]</p>' })
     const a = ed.wysiwyg.querySelector('a')
