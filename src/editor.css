@@ -149,6 +149,14 @@
            transition-colors cursor-pointer select-none;
   }
 
+  /* キャレットがそのブロックの中にある間の点灯（今は角丸ボックスのみ）。
+     見た目は popm の --active（コールアウト）と揃える。 */
+  .kuro-mmenu__btn--active,
+  .kuro-mmenu__btn--active:hover {
+    @apply bg-neutral-500 text-white;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
+  }
+
   .kuro-mmenu__autosave {
     @apply flex items-center gap-1.5 flex-shrink-0;
   }
@@ -189,6 +197,14 @@
   .kuro-mmenu--slotted .kuro-mmenu__btn,
   .kuro-mmenu--slotted .kuro-mmenu__btn:hover {
     all: revert;
+  }
+  /* slotted 時は見た目を host に譲る（上の all: revert）が、「今このブロックの
+     中にいる」は見た目でなく状態の表示なので残す。all: revert と同じ詳細度で
+     後に置くことで打ち消されないようにする。 */
+  .kuro-mmenu--slotted .kuro-mmenu__btn--active {
+    outline: 2px solid rgb(129 140 248);   /* indigo-400 */
+    outline-offset: -2px;
+    border-radius: 0.5rem;
   }
   /* Save / divider are host's responsibility in slotted mode */
   .kuro-mmenu--slotted .kuro-mmenu__save,
@@ -270,6 +286,13 @@
     @apply px-2.5 py-1.5 text-sm text-neutral-400 cursor-pointer rounded
            hover:text-neutral-200 hover:bg-neutral-700
            transition-colors select-none;
+  }
+
+  /* mmenu 側と同じ「今このブロックの中にいる」表示 */
+  .kuro-tabs__action--active,
+  .kuro-tabs__action--active:hover {
+    @apply bg-neutral-600 text-white;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
   }
 
   /* Autosave wrap in tab bar (shares checkbox/label styles with mmenu) */
@@ -380,6 +403,11 @@
   }
   /* source モードは生 HTML 編集中でカウントが本文入力と連動しないので隠す */
   .kuro-charcount--hidden { display: none; }
+
+  /* スマホ幅で 2 段目に収まらないとき、1 段目（目次ボタンの左）へ逃がした状態。
+     すぐ右に区切り線 (.kuro-tabs__sep) が来るので右マージンだけ詰める。
+     移動そのものは JS (_syncCharCountSlot) — 実際に折り返したかを測って決める */
+  .kuro-charcount--in-top { margin-right: 0; }
 
   .kuro-charcount__col {
     display: inline-block;

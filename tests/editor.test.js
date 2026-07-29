@@ -2,7 +2,7 @@
  * Integration tests — KuroEditor class (DOM interaction via happy-dom)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { KuroEditor as RealKuroEditor, createTableHtml, linkAtCaret } from '../src/editor.js'
+import { KuroEditor as RealKuroEditor, createTableHtml, linkAtCaret, buildTableGrid } from '../src/editor.js'
 
 function makeMount() {
   const el = document.createElement('div')
@@ -1580,6 +1580,117 @@ describe('KuroEditor', () => {
     })
   })
 
+  describe('table — 行 / 列の挿入', () => {
+    // 各行が論理グリッドで埋めているマス数。rowspan/colspan を解決した実像なので、
+    // 全行で揃っていなければ（＝穴やはみ出しがあれば）その表は壊れている
+    const gridCols = (table) =>
+      buildTableGrid(table).grid.map((row) => row.filter(Boolean).length)
+
+    const setTable = (html) => {
+      editor.wysiwyg.innerHTML = html
+      const table = editor.wysiwyg.querySelector('table')
+      editor.tableInserter.activeTable = table
+      return table
+    }
+
+    it('列を足すと colgroup にも <col> が増える（幅の合計は 100% のまま）', () => {
+      // 回帰対象: 列幅をドラッグすると colgroup + table-layout:fixed になる。
+      // <col> を足さずに列だけ足すと新しい列の幅が 0 になり表が壊れていた。
+      const table = setTable(
+        '<table class="kuro-table"><colgroup>' +
+          '<col style="width:50%"><col style="width:30%"><col style="width:20%">' +
+        '</colgroup><tbody>' +
+          '<tr><td>A</td><td>B</td><td>C</td></tr>' +
+          '<tr><td>D</td><td>E</td><td>F</td></tr>' +
+        '</tbody></table>')
+
+      editor.tableInserter._insertCol(1)
+
+      expect(gridCols(table)).toEqual([4, 4])
+      const cols = Array.from(table.querySelectorAll('col'))
+      expect(cols.length).toBe(4)
+      const widths = cols.map((c) => parseFloat(c.style.width))
+      expect(widths.every((w) => w > 0)).toBe(true)
+      expect(widths.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 3)
+      // 既存列の比率は保たれる (50:30:20 → 相対比は不変)
+      expect(widths[0] / widths[3]).toBeCloseTo(50 / 20, 3)
+    })
+
+    it('colgroup が無い表（列幅未調整）はそのまま列だけ増える', () => {
+      const table = setTable(
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td>A</td><td>B</td></tr>' +
+          '<tr><td>C</td><td>D</td></tr>' +
+        '</tbody></table>')
+      editor.tableInserter._insertCol(2)   // 右端に追加
+      expect(gridCols(table)).toEqual([3, 3])
+      expect(table.querySelector('colgroup')).toBeNull()
+      expect(Array.from(table.querySelectorAll('tr')[0].cells).map(c => c.textContent))
+        .toEqual(['A', 'B', ''])
+    })
+
+    it('rowspan があっても各行の列数が揃う（cells[i] は i 列目ではない）', () => {
+      // 回帰対象: row.cells[index] で挿していたため、rowspan で物理セルが
+      // 少ない行だけ挿入位置がズレる / 挿さらないで表がガタガタになっていた。
+      const table = setTable(
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td rowspan="2">A</td><td>B</td><td>C</td></tr>' +
+          '<tr><td>E</td><td>F</td></tr>' +
+        '</tbody></table>')
+
+      editor.tableInserter._insertCol(1)   // 結合セルの右隣に 1 列
+
+      expect(gridCols(table)).toEqual([4, 4])
+      const rows = table.querySelectorAll('tr')
+      // 新しい空セルは A の直後 / E の手前＝同じ論理列に入る
+      expect(Array.from(rows[0].cells).map(c => c.textContent)).toEqual(['A', '', 'B', 'C'])
+      expect(Array.from(rows[1].cells).map(c => c.textContent)).toEqual(['', 'E', 'F'])
+      expect(rows[0].cells[0].getAttribute('rowspan')).toBe('2')
+    })
+
+    it('境界をまたぐ colspan セルは分割せず 1 列ぶん広げる', () => {
+      const table = setTable(
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td colspan="2">AB</td><td>C</td></tr>' +
+          '<tr><td>D</td><td>E</td><td>F</td></tr>' +
+        '</tbody></table>')
+
+      editor.tableInserter._insertCol(1)   // AB の内側の境界
+
+      expect(gridCols(table)).toEqual([4, 4])
+      const rows = table.querySelectorAll('tr')
+      expect(rows[0].cells[0].getAttribute('colspan')).toBe('3')   // 割らずに広げた
+      expect(rows[0].cells[0].textContent).toBe('AB')
+      expect(Array.from(rows[1].cells).map(c => c.textContent)).toEqual(['D', '', 'E', 'F'])
+    })
+
+    it('行の挿入: 境界をまたぐ rowspan セルは分割せず 1 行ぶん伸ばす', () => {
+      const table = setTable(
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td rowspan="2">A</td><td>B</td></tr>' +
+          '<tr><td>D</td></tr>' +
+        '</tbody></table>')
+
+      editor.tableInserter._insertRow(1)   // A がまたぐ境界
+
+      const rows = table.querySelectorAll('tr')
+      expect(rows.length).toBe(3)
+      expect(rows[0].cells[0].getAttribute('rowspan')).toBe('3')
+      // 新しい行は A に覆われる列を除いた 1 セルだけ
+      expect(Array.from(rows[1].cells).map(c => c.textContent)).toEqual([''])
+      expect(gridCols(table)).toEqual([2, 2, 2])   // どの行も rowspan 込みで 2 列ぶん埋まる
+    })
+
+    it('行の挿入: 末尾に足すと列数の揃った行が増える', () => {
+      const table = setTable(
+        '<table class="kuro-table"><tbody>' +
+          '<tr><td>A</td><td>B</td><td>C</td></tr>' +
+        '</tbody></table>')
+      editor.tableInserter._insertRow(1)
+      expect(gridCols(table)).toEqual([3, 3])
+    })
+  })
+
   // ── メディアダイアログの accept (mediaAccept) ────────────────────────────────
 
   describe('mediaAccept', () => {
@@ -1717,9 +1828,90 @@ describe('KuroEditor', () => {
       expect(shownDigits(editor)).toBe('8')
     })
 
+    // happy-dom はレイアウトを持たない（offsetTop/offsetHeight が常に 0）ので、
+    // 折り返し判定に使う数値だけを差し替えて _syncCharCountSlot() の分岐を見る。
+    const layout = (el, top, height) => {
+      Object.defineProperty(el, 'offsetTop',    { value: top,    configurable: true })
+      Object.defineProperty(el, 'offsetHeight', { value: height, configurable: true })
+    }
+
+    it('2 段目に収まる幅ならそのまま 2 段目の右端', () => {
+      layout(editor._tabActions, 0, 32)
+      layout(editor.charCount,   6, 20)      // アクション群と同じ行（縦中央揃えのズレ）
+      editor._syncCharCountSlot()
+      expect(editor.charCount.closest('.kuro-tabs__row--bottom')).not.toBeNull()
+      expect(editor.charCount.classList.contains('kuro-charcount--in-top')).toBe(false)
+    })
+
+    it('狭くて 3 行目に落ちるときは 1 段目の目次ボタンの左へ逃がす', () => {
+      layout(editor._tabActions, 0, 32)
+      layout(editor.charCount,  32, 20)      // アクション群の下＝単独で 3 行目
+      editor._syncCharCountSlot()
+      expect(editor.charCount.closest('.kuro-tabs__row--top')).not.toBeNull()
+      expect(editor.charCount.classList.contains('kuro-charcount--in-top')).toBe(true)
+      // 目次ボタンより前（区切り線の直前）にいる
+      const right = editor.charCount.parentElement
+      const kids = [...right.children]
+      expect(kids.indexOf(editor.charCount)).toBeLessThan(kids.indexOf(editor.tabTocBtn))
+
+      // 幅が戻れば 2 段目へ帰る
+      layout(editor.charCount, 6, 20)
+      editor._syncCharCountSlot()
+      expect(editor.charCount.closest('.kuro-tabs__row--bottom')).not.toBeNull()
+      expect(editor.charCount.classList.contains('kuro-charcount--in-top')).toBe(false)
+    })
+
+    it('ソースモード（非表示）中は測れないので動かさない', () => {
+      layout(editor._tabActions, 0, 32)
+      layout(editor.charCount,  32, 20)      // 折り返している値でも…
+      editor.setMode('source')
+      editor._syncCharCountSlot()
+      expect(editor.charCount.closest('.kuro-tabs__row--bottom')).not.toBeNull()
+    })
+
     it('toolbar no longer shows a text char-count label', () => {
       expect(document.querySelector('.kuro-tabs__char-count')).toBeNull()
       expect(document.querySelector('.kuro-mmenu__char-count')).toBeNull()
+    })
+  })
+
+  describe('角丸ボックス — 中にいる間は挿入ボタンが点灯', () => {
+    const caretAt = (node, offset = 0) =>
+      window.getSelection().setBaseAndExtent(node, offset, node, offset)
+    const lit = (ed) => ({
+      mmenu: ed._mmenuBtns.roundbox.classList.contains('kuro-mmenu__btn--active'),
+      tabs:  ed._tabActionBtns.roundbox.classList.contains('kuro-tabs__action--active'),
+    })
+
+    beforeEach(() => {
+      editor.setContent(
+        '<div class="kuro-roundbox" data-width="60%" data-align="center"><p>in</p></div><p>out</p>',
+      )
+    })
+
+    it('キャレットがボックス内なら点灯、外へ出れば消灯', () => {
+      const [inP, outP] = editor.wysiwyg.querySelectorAll('p')
+
+      caretAt(inP.firstChild)
+      editor._updateRoundboxContext()
+      expect(lit(editor)).toEqual({ mmenu: true, tabs: true })
+
+      caretAt(outP.firstChild)
+      editor._updateRoundboxContext()
+      expect(lit(editor)).toEqual({ mmenu: false, tabs: false })
+    })
+
+    it('点灯は BOX設定メニューの表示と 1:1', () => {
+      const inP = editor.wysiwyg.querySelector('.kuro-roundbox p')
+      caretAt(inP.firstChild)
+      editor._updateRoundboxContext()
+      expect(editor.roundboxMenu.isActive).toBe(true)
+      expect(lit(editor)).toEqual({ mmenu: true, tabs: true })
+
+      // メニューを閉じる経路（モード切替・click outside 等）でも必ず消える
+      editor.setMode('view')
+      expect(editor.roundboxMenu.isActive).toBe(false)
+      expect(lit(editor)).toEqual({ mmenu: false, tabs: false })
     })
   })
 })

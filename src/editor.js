@@ -70,7 +70,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.20.2'
+export const VERSION = '2.20.3'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -2386,12 +2386,14 @@ export class RoundboxMenu {
     const align = box.dataset.align || 'center'
     this._alignBtns.forEach(b => b.classList.toggle('active', b.dataset.align === align))
     this.el.style.display = 'flex'
+    this._editor._setRoundboxBtnActive(true)
     this._position()
   }
 
   deactivate() {
     this._box = null
     this.el.style.display = 'none'
+    this._editor._setRoundboxBtnActive(false)
   }
 
   get isActive() { return !!this._box }
@@ -3298,6 +3300,9 @@ export class TableInserter {
       // 何も該当しない (= rowspan で上から張り出している行) はそのまま
       void removed
     }
+    // 列を消したら <col> も 1 本消す（挿入と対称。放置すると幅の合計が
+    // 100% を割り、table-layout:fixed の表が右に痩せる）
+    this._colgroupDelete(table, colIdx)
     this._currentCell = null
     this._updateDelBtns()
   }
@@ -3576,39 +3581,124 @@ export class TableInserter {
     this._pendingColBorderIdx = null
   }
 
+  // ── Row / column insertion ────────────────────────────────────────────────
+  //
+  // ⚠ 行・列の挿入は【論理グリッド】(buildTableGrid) で考えること。
+  //   row.cells[i] は i 列目のセルではない — 手前の colspan や上の行から
+  //   垂れてくる rowspan があると、物理セル数は論理列数より少なくなる。
+  //   セル番号のまま挿すと行ごとにセル数が食い違い、表が崩れる。
+  // ⚠ 列の増減は <colgroup> と必ずセットで行うこと。列幅をドラッグすると
+  //   TableResizer が colgroup を作り table-layout:fixed が効くので、<col> を
+  //   足さずに列だけ足すと新しい列の幅が 0 になって表が壊れる（これが
+  //   「縦の列を追加すると表が壊れる」の実体）。
+
+  /** 新規セル（ヘッダー行の概念は廃止済みなので常に <td>）。 */
+  _newCell() {
+    const cell = document.createElement('td')
+    cell.setAttribute('contenteditable', 'true')
+    cell.innerHTML = '<br>'
+    return cell
+  }
+
   _insertRow(index) {
-    // ヘッダー行廃止: 新規セルは常に <td>。
-    const rows = Array.from(this.activeTable.querySelectorAll('tr'))
+    const table = this.activeTable
+    if (!table) return
+    const { rows, grid } = buildTableGrid(table)
     if (!rows.length) return
-    const refRow = rows[Math.min(index, rows.length - 1)]
-    const cols   = refRow.cells.length
+    const nCols = grid[0]?.length ?? 0
+    const at    = Math.max(0, Math.min(index, rows.length))
+
     const newRow = document.createElement('tr')
-    for (let i = 0; i < cols; i++) {
-      const cell = document.createElement('td')
-      cell.setAttribute('contenteditable', 'true')
-      cell.innerHTML = '<br>'
-      newRow.appendChild(cell)
+    const grown  = new Set()
+    for (let c = 0; c < nCols; c++) {
+      // 境界をまたぐ rowspan セルは分割せず 1 行ぶん伸ばす
+      // （ユーザーが結合したセルを勝手に割らない）
+      if (at > 0 && at < rows.length && grid[at - 1][c] && grid[at - 1][c] === grid[at][c]) {
+        const spanned = grid[at - 1][c]
+        if (!grown.has(spanned)) {
+          grown.add(spanned)
+          spanned.setAttribute('rowspan',
+            String(parseInt(spanned.getAttribute('rowspan') || '1', 10) + 1))
+        }
+        continue   // この列は伸ばしたセルが覆うので新しいセルは要らない
+      }
+      newRow.appendChild(this._newCell())
     }
-    if (index >= rows.length) {
-      rows[rows.length - 1].insertAdjacentElement('afterend', newRow)
-    } else {
-      rows[index].insertAdjacentElement('beforebegin', newRow)
-    }
+
+    if (at >= rows.length) rows[rows.length - 1].insertAdjacentElement('afterend', newRow)
+    else                   rows[at].insertAdjacentElement('beforebegin', newRow)
   }
 
   _insertCol(index) {
-    // ヘッダー行廃止: 新規セルは常に <td>。
-    Array.from(this.activeTable.querySelectorAll('tr')).forEach(row => {
-      const cells = row.cells
-      const cell  = document.createElement('td')
-      cell.setAttribute('contenteditable', 'true')
-      cell.innerHTML = '<br>'
-      if (index >= cells.length) {
-        cells[cells.length - 1]?.insertAdjacentElement('afterend', cell)
-      } else {
-        cells[index]?.insertAdjacentElement('beforebegin', cell)
+    const table = this.activeTable
+    if (!table) return
+    const { rows, grid, pos } = buildTableGrid(table)
+    if (!rows.length) return
+    const nCols = grid[0]?.length ?? 0
+    const at    = Math.max(0, Math.min(index, nCols))
+
+    const grown = new Set()
+    for (let r = 0; r < rows.length; r++) {
+      // 境界をまたぐ colspan セルは分割せず 1 列ぶん広げる
+      if (at > 0 && at < nCols && grid[r][at - 1] && grid[r][at - 1] === grid[r][at]) {
+        const spanned = grid[r][at - 1]
+        if (!grown.has(spanned)) {
+          grown.add(spanned)
+          spanned.setAttribute('colspan',
+            String(parseInt(spanned.getAttribute('colspan') || '1', 10) + 1))
+        }
+        continue
       }
-    })
+      // 挿入位置は「論理列 at 以降で最初に この行から始まる セル」の前。
+      // rowspan で上から垂れているセルは物理セル列に居ないので、
+      // cells[at] ではなく論理位置 (pos) で探す
+      const ref = Array.from(rows[r].cells).find((c) => (pos.get(c)?.col ?? -1) >= at)
+      const cell = this._newCell()
+      if (ref) rows[r].insertBefore(cell, ref)
+      else     rows[r].appendChild(cell)
+    }
+
+    this._colgroupInsert(table, at, nCols)
+  }
+
+  /**
+   * colgroup があるテーブルに列を 1 本足す。既存列は比率を保ったまま
+   * 新しい列のぶんだけ縮め、合計が 100% のままになるようにする。
+   * colgroup が無いテーブル（列幅を一度も触っていない）は何もしない。
+   */
+  _colgroupInsert(table, at, nCols) {
+    const cg = table.querySelector('colgroup')
+    if (!cg || !cg.children.length) return
+    const cols  = Array.from(cg.children)
+    const share = 100 / (nCols + 1)
+    const scale = (100 - share) / 100
+    for (const c of cols) {
+      const w = parseFloat(c.style.width) || (100 / cols.length)
+      c.style.width = `${(w * scale).toFixed(4)}%`
+    }
+    const col = document.createElement('col')
+    col.style.width = `${share.toFixed(4)}%`
+    cg.insertBefore(col, cols[at] ?? null)
+  }
+
+  /**
+   * 列を 1 本消したときの colgroup 側の後始末。消えた列の幅を残りへ
+   * 比例配分し直す（放置すると合計が 100% を割り、fixed レイアウトの
+   * 表が右に痩せる）。
+   */
+  _colgroupDelete(table, at) {
+    const cg = table.querySelector('colgroup')
+    if (!cg || cg.children.length <= 1) return
+    const col = cg.children[at]
+    if (!col) return
+    const gone = parseFloat(col.style.width) || 0
+    col.remove()
+    const rest = 100 - gone
+    if (rest <= 0) return
+    for (const c of Array.from(cg.children)) {
+      const w = parseFloat(c.style.width) || 0
+      c.style.width = `${(w / rest * 100).toFixed(4)}%`
+    }
   }
 
   destroy() {
@@ -5572,6 +5662,10 @@ export class KuroEditor {
     row1Right.appendChild(tocSep)
     row1Right.appendChild(this.tabTocBtn)
 
+    // 幅が足りないとき文字カウンターを逃がす先（目次ボタンの左）— _syncCharCountSlot()
+    this._row1Right   = row1Right
+    this._charCountUp = tocSep
+
     const row1 = createElement('div', { className: 'kuro-tabs__row kuro-tabs__row--top' })
     row1.appendChild(row1Left)
     row1.appendChild(row1Right)
@@ -5605,6 +5699,45 @@ export class KuroEditor {
     this.tabBar.appendChild(row1)
     this.tabBar.appendChild(row2)
     this.root.appendChild(this.tabBar)
+
+    // スマホ幅ではアクション群が折り返し、カウンターが単独で 3 行目に落ちる。
+    // その場合だけ 1 行目（目次ボタンの左）へ逃がす。_bindEvents() の
+    // ResizeObserver が幅の変化ごとに再判定する。
+    this._tabActions = tabActions
+    this._row2Right  = row2Right
+  }
+
+  /**
+   * 文字カウンターの居場所を幅に応じて決める。
+   *   2 段目の右端（既定） / 1 段目の目次ボタンの左（狭くて 3 行目に落ちるとき）
+   *
+   * 閾値の px を決め打ちせず「2 段目に置いてみて、実際に折り返したか」で判定する。
+   * エディタは任意の幅に埋め込まれ、ホストのオプション（saveUi / versionUi /
+   * canvasDarkUi / clipControl）でボタンの数も変わるので、幅のマジックナンバーは
+   * どれも外れる。offsetTop の読み取りはレイアウトを起こすが、判定と移動は同じ
+   * タスク内で完結するので描画には出ない（ちらつかない）。
+   */
+  _syncCharCountSlot() {
+    if (!this.charCount || !this._row2Right) return
+    // display:none（ソースモード）では offsetTop が測れない。表示に戻るときに再度呼ぶ
+    if (this.charCount.classList.contains('kuro-charcount--hidden')) return
+
+    // 判定は必ず「2 段目に置いた状態」で行う（1 段目にある間は折り返しを観測できない）
+    if (this.charCount.parentElement !== this._row2Right) {
+      this._row2Right.appendChild(this.charCount)
+      this.charCount.classList.remove('kuro-charcount--in-top')
+    }
+    // レイアウト前・非表示（display:none のホスト / happy-dom）では測れないので何もしない
+    const actionsH = this._tabActions.offsetHeight
+    if (!actionsH) return
+    // 「折り返した」= カウンターの上端がアクション群の下端より下にある。
+    // 同じ行にいる間は縦中央揃えのぶん offsetTop が数 px ずれるので、
+    // 単純な > 比較では同一行を折り返しと誤判定する
+    const wrapped = this.charCount.offsetTop >= this._tabActions.offsetTop + actionsH
+    if (wrapped) {
+      this._row1Right.insertBefore(this.charCount, this._charCountUp)
+      this.charCount.classList.add('kuro-charcount--in-top')
+    }
   }
 
   // ── Body = pane (edit) + ToC panel ───────────────────────────────────────
@@ -6152,6 +6285,21 @@ export class KuroEditor {
       this._updateTableContext()
       this._updateRoundboxContext()
     })
+
+    // タブバーの幅が変わるたびに文字カウンターの居場所を測り直す。
+    // viewport ではなくタブバー自身を見る（エディタはホストの任意幅の中に
+    // 埋め込まれ、ToC パネルの開閉やペイン幅の変化でも折り返しは変わる）。
+    // ResizeObserver 内での DOM 変更はループを招きうるので rAF に逃がす。
+    if (typeof ResizeObserver !== 'undefined') {
+      let pending = false
+      this._tabBarRO = new ResizeObserver(() => {
+        if (pending) return
+        pending = true
+        requestAnimationFrame(() => { pending = false; this._syncCharCountSlot() })
+      })
+      this._tabBarRO.observe(this.tabBar)
+    }
+    this._syncCharCountSlot()
 
     // IME 変換中はその block を凍結し、リモート更新を保留する（W3・§4.5.2）。
     // 変換確定後だけ文書変更として扱う（未確定 preedit は個人辞書の漏洩になるため送らない）。
@@ -6911,6 +7059,7 @@ export class KuroEditor {
         this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
         this.pane.classList.remove('kuro-pane--source')
         this.charCount.classList.remove('kuro-charcount--hidden')
+        this._syncCharCountSlot()   // 非表示中は測れないので、戻したここで再判定
       }
       this.tocPanelEl.classList.remove('kuro-toc--hidden')
       this.toc._doUpdate()
@@ -8551,6 +8700,11 @@ export class KuroEditor {
         )
       }
     }
+    // 桁が増減すると幅が変わる = 2 段目に収まるかどうかも変わるので測り直す。
+    // ⚠ リールを回す前に済ませること。判定はカウンターを一度 2 段目へ挿し直して
+    //    行う（下の _syncCharCountSlot 参照）ので、回した後にやると再挿入で
+    //    transition の起点が消え、桁上がりのアニメーションが飛ぶ
+    this._syncCharCountSlot()
     // 0 の位置で一度レイアウトを確定させてから目標へ回す
     // (生成と同じフレームで transform を入れると transition が走らない)
     void this.charCount.offsetWidth
@@ -8648,6 +8802,16 @@ export class KuroEditor {
     const box = this._roundboxAtCaret()
     if (box) this.roundboxMenu.activate(box)
     else this.roundboxMenu.deactivate()
+  }
+
+  // 角丸ボックスの挿入ボタン（mmenu / タブバー）を「今この中にいる」表示にする。
+  // popm のコールアウトボタンと同じ考え方だが、点灯条件は RoundboxMenu の
+  // activate/deactivate に相乗りさせる（＝ BOX設定ポップアップが出ている間だけ光る）。
+  // キャレット位置から独自に判定すると、BOX設定の select / 寄せボタンを触って
+  // 選択がボックスの外へ出た瞬間に「メニューは出ているのにボタンは暗い」とズレる。
+  _setRoundboxBtnActive(on) {
+    this._mmenuBtns?.roundbox?.classList.toggle('kuro-mmenu__btn--active', on)
+    this._tabActionBtns?.roundbox?.classList.toggle('kuro-tabs__action--active', on)
   }
 
   _promptMedia() {
@@ -9451,6 +9615,7 @@ export class KuroEditor {
   destroy() {
     this._stopAutoSave()
     this._dirtyObserver?.disconnect()
+    this._tabBarRO?.disconnect()
     clearTimeout(this._histTimer)
     clearTimeout(this._blockEmitTimer)
     clearTimeout(this._holdTimer)
