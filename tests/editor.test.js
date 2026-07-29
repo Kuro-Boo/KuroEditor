@@ -1593,6 +1593,23 @@ describe('KuroEditor', () => {
       return table
     }
 
+    const text     = (table) => Array.from(table.querySelectorAll('tr'))
+      .map((tr) => Array.from(tr.cells).map((c) => c.textContent))
+    const colWidths = (table) => Array.from(table.querySelectorAll('col'))
+      .map((c) => parseFloat(c.style.width))
+
+    // 端の挿入・削除は「片側に隣接セルが無い」ぶん実装の分岐が違う
+    // （挿入は ref セルが無くて appendChild へ落ちる / 削除は colgroup の
+    //  先頭・末尾を触る）ので、中央とは別に押さえる。
+    const grid3x3 = () => setTable(
+      '<table class="kuro-table"><colgroup>' +
+        '<col style="width:50%"><col style="width:30%"><col style="width:20%">' +
+      '</colgroup><tbody>' +
+        '<tr><td>A</td><td>B</td><td>C</td></tr>' +
+        '<tr><td>D</td><td>E</td><td>F</td></tr>' +
+        '<tr><td>G</td><td>H</td><td>I</td></tr>' +
+      '</tbody></table>')
+
     it('列を足すと colgroup にも <col> が増える（幅の合計は 100% のまま）', () => {
       // 回帰対象: 列幅をドラッグすると colgroup + table-layout:fixed になる。
       // <col> を足さずに列だけ足すと新しい列の幅が 0 になり表が壊れていた。
@@ -1688,6 +1705,124 @@ describe('KuroEditor', () => {
         '</tbody></table>')
       editor.tableInserter._insertRow(1)
       expect(gridCols(table)).toEqual([3, 3])
+    })
+
+    // ── 端（先頭 / 最後）の挿入 ────────────────────────────────────────────
+    it('列の挿入: 先頭に足すと全行の左端に入り、<col> も先頭に増える', () => {
+      const table = grid3x3()
+      editor.tableInserter._insertCol(0)
+
+      expect(gridCols(table)).toEqual([4, 4, 4])
+      expect(text(table)).toEqual([
+        ['', 'A', 'B', 'C'],
+        ['', 'D', 'E', 'F'],
+        ['', 'G', 'H', 'I'],
+      ])
+      const w = colWidths(table)
+      expect(w.length).toBe(4)
+      expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 3)
+      expect(w[0]).toBeCloseTo(25, 3)                 // 新しい列は 1/(n+1)
+      expect(w[1] / w[3]).toBeCloseTo(50 / 20, 3)     // 既存列の比率は不変
+    })
+
+    it('列の挿入: 末尾に足すと全行の右端に入り、<col> も末尾に増える', () => {
+      const table = grid3x3()
+      editor.tableInserter._insertCol(3)   // 列数 = 3 → 右端の境界
+
+      expect(gridCols(table)).toEqual([4, 4, 4])
+      expect(text(table)).toEqual([
+        ['A', 'B', 'C', ''],
+        ['D', 'E', 'F', ''],
+        ['G', 'H', 'I', ''],
+      ])
+      const w = colWidths(table)
+      expect(w.length).toBe(4)
+      expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 3)
+      expect(w[3]).toBeCloseTo(25, 3)                 // 新しい列は末尾
+      expect(w[0] / w[2]).toBeCloseTo(50 / 20, 3)
+    })
+
+    it('行の挿入: 先頭 / 末尾に足すと空行がその位置に入る', () => {
+      const table = grid3x3()
+      editor.tableInserter._insertRow(0)
+      expect(text(table)[0]).toEqual(['', '', ''])
+      expect(text(table)[1]).toEqual(['A', 'B', 'C'])
+
+      editor.tableInserter._insertRow(table.querySelectorAll('tr').length)
+      const rows = text(table)
+      expect(rows.length).toBe(5)
+      expect(rows[3]).toEqual(['G', 'H', 'I'])
+      expect(rows[4]).toEqual(['', '', ''])
+      expect(gridCols(table)).toEqual([3, 3, 3, 3, 3])
+      // 行の増減は <col> に関係しない
+      expect(colWidths(table).length).toBe(3)
+    })
+  })
+
+  describe('table — 行 / 列の削除（先頭 / 最後）', () => {
+    const gridCols = (table) =>
+      buildTableGrid(table).grid.map((row) => row.filter(Boolean).length)
+    const text = (table) => Array.from(table.querySelectorAll('tr'))
+      .map((tr) => Array.from(tr.cells).map((c) => c.textContent))
+    const colWidths = (table) => Array.from(table.querySelectorAll('col'))
+      .map((c) => parseFloat(c.style.width))
+
+    // 削除はツールバーの「−」= カーソルのあるセルが対象
+    const setTable = (html) => {
+      editor.wysiwyg.innerHTML = html
+      const table = editor.wysiwyg.querySelector('table')
+      editor.tableInserter.activeTable = table
+      return table
+    }
+    const grid3x3 = () => setTable(
+      '<table class="kuro-table"><colgroup>' +
+        '<col style="width:50%"><col style="width:30%"><col style="width:20%">' +
+      '</colgroup><tbody>' +
+        '<tr><td>A</td><td>B</td><td>C</td></tr>' +
+        '<tr><td>D</td><td>E</td><td>F</td></tr>' +
+        '<tr><td>G</td><td>H</td><td>I</td></tr>' +
+      '</tbody></table>')
+    const cursorAt = (table, r, c) => {
+      editor.tableInserter._currentCell = table.querySelectorAll('tr')[r].cells[c]
+    }
+
+    it('列の削除: 先頭列を消すと <col> も 1 本減り、幅は残りへ配分される', () => {
+      const table = grid3x3()
+      cursorAt(table, 1, 0)
+      editor.tableInserter._deleteCol()
+
+      expect(gridCols(table)).toEqual([2, 2, 2])
+      expect(text(table)).toEqual([['B', 'C'], ['E', 'F'], ['H', 'I']])
+      const w = colWidths(table)
+      expect(w.length).toBe(2)
+      expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 3)
+      expect(w[0] / w[1]).toBeCloseTo(30 / 20, 3)   // 残った列の比率は不変
+    })
+
+    it('列の削除: 最後の列を消しても表と <col> が揃ったまま', () => {
+      const table = grid3x3()
+      cursorAt(table, 0, 2)
+      editor.tableInserter._deleteCol()
+
+      expect(gridCols(table)).toEqual([2, 2, 2])
+      expect(text(table)).toEqual([['A', 'B'], ['D', 'E'], ['G', 'H']])
+      const w = colWidths(table)
+      expect(w.length).toBe(2)
+      expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 3)
+      expect(w[0] / w[1]).toBeCloseTo(50 / 30, 3)
+    })
+
+    it('行の削除: 先頭行 / 最後の行を消すと残りはそのまま（<col> は不変）', () => {
+      const table = grid3x3()
+      cursorAt(table, 0, 1)
+      editor.tableInserter._deleteRow()
+      expect(text(table)).toEqual([['D', 'E', 'F'], ['G', 'H', 'I']])
+
+      cursorAt(table, 1, 2)          // いまの最後の行
+      editor.tableInserter._deleteRow()
+      expect(text(table)).toEqual([['D', 'E', 'F']])
+      expect(gridCols(table)).toEqual([3])
+      expect(colWidths(table).length).toBe(3)
     })
   })
 
