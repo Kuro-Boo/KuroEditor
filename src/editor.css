@@ -1202,9 +1202,6 @@
     @apply inline-flex items-center gap-1.5;
   }
   .kuro-del-btn > svg { @apply flex-none; }
-  .kuro-del-btn:disabled {
-    @apply opacity-40 pointer-events-none cursor-default;
-  }
 
   /* ── Recipe Dialog（RecipeCard の唯一の編集手段）──
      LinkOpenDialog と同じオーバーレイ + ボックス方式。行が増える入力なので

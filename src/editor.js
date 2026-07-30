@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.22.3'
+export const VERSION = '2.22.4'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5083,15 +5083,12 @@ export class RecipeDialog {
 
   /**
    * @param {object|null} recipe 既存カードの内容（null = 新規）
-   * @param {{layout?: object, canDelete?: boolean}} [opts]
+   * @param {{layout?: object}} [opts]
    */
-  open(recipe = null, { layout = null, canDelete = false } = {}) {
+  open(recipe = null, { layout = null } = {}) {
     this._layout = normalizeRecipeLayout(layout ?? RECIPE_LAYOUT_DEFAULT)
     this._sizeSelect.value = this._layout.width
     this._setAlign(this._layout.align)
-    // 新規挿入中は消す対象がない。隠すとボタンの位置が動いて分かりにくいので
-    // 場所は保ったまま無効化する（「今は押せない」ことが見て分かる）
-    this._deleteBtn.disabled = !canDelete
     const r = normalizeRecipe(recipe ?? emptyRecipe())
     this._yieldInput.value = r.yield
     this._prepInput.value = r.prepTimeMinutes === undefined ? '' : String(r.prepTimeMinutes)
@@ -9204,11 +9201,14 @@ export class KuroEditor {
     this._editingRecipeCard = card
     this.recipeDialog.open(decodeRecipe(card.getAttribute('data-recipe')), {
       layout: { width: card.dataset.width, align: card.dataset.align },
-      canDelete: true,
     })
   }
 
-  /** モーダルの「削除」。カードごと消す（Undo で戻せるので確認は挟まない）。 */
+  /**
+   * モーダルの「削除」。カードごと消す（Undo で戻せるので確認は挟まない）。
+   * 新規作成中（まだカードが無い）なら消すものが無いので、モーダルが閉じるだけ
+   * ＝「やめる」になる。状態でボタンを出し分けない（同じ場所に同じボタン）。
+   */
   _deleteRecipeCard() {
     const card = this._editingRecipeCard ?? this._recipeCard()
     this._editingRecipeCard = null
