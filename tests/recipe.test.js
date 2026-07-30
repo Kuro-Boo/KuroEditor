@@ -219,7 +219,7 @@ describe('表示レイアウト（幅 / 寄せ）', () => {
   })
 
   it('選べる幅は 25/50/75/100%、寄せは left/center/right', () => {
-    expect(RECIPE_WIDTHS).toEqual(['25%', '50%', '75%', '100%'])
+    expect(RECIPE_WIDTHS).toEqual(['25%', '30%', '50%', '60%', '75%', '100%'])
     expect(RECIPE_ALIGNS).toEqual(['left', 'center', 'right'])
   })
 

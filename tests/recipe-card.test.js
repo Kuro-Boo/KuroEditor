@@ -138,6 +138,72 @@ describe('挿入と編集', () => {
     expect(out).toContain('生しいたけ')
   })
 
+  it('カードの上にはボタンを一切置かない（WYSIWYG＝公開ページと同じ見た目）', () => {
+    ed.setContent(cardHtml())
+    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
+    expect(card.querySelector('button')).toBeNull()
+    expect(card.querySelector('select')).toBeNull()
+  })
+
+  it('モーダルのタイトル行にサイズ選択・寄せ 3 種・削除がある', () => {
+    ed.setContent(cardHtml())
+    ed.wysiwyg.querySelector(RECIPE_CARD_SEL).dispatchEvent(new Event('click', { bubbles: true }))
+    const d = ed.recipeDialog
+    expect([...d._sizeSelect.options].map((o) => o.value))
+      .toEqual(['25%', '30%', '50%', '60%', '75%', '100%'])
+    expect(d._alignBtns.map((b) => b.dataset.align)).toEqual(['left', 'center', 'right'])
+    expect(d._deleteBtn.textContent).toContain('削除')   // 表現はエディタ共通
+    expect(d._deleteBtn.querySelector('svg')).not.toBeNull()
+  })
+
+  it('削除は状態で出し分けない（新規でも同じ場所に同じボタン）', () => {
+    ed._tabActionBtns.recipe.click()
+    const btn = ed.recipeDialog._deleteBtn
+    expect(btn.hidden).toBe(false)
+    expect(btn.disabled).toBe(false)
+    // まだカードが無いので、押しても消すものが無く「やめる」になるだけ
+    btn.click()
+    expect(ed.recipeDialog.isVisible).toBe(false)
+    expect(ed.wysiwyg.querySelector(RECIPE_CARD_SEL)).toBeNull()
+  })
+
+  it('モーダルでサイズと寄せを決めるとカードに反映される（左右は float）', () => {
+    ed._tabActionBtns.recipe.click()
+    fill()
+    ed.recipeDialog._sizeSelect.value = '60%'
+    ed.recipeDialog._alignBtns.find((b) => b.dataset.align === 'left').click()
+    ed.recipeDialog._saveBtn.click()
+
+    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
+    expect(card.dataset.width).toBe('60%')
+    expect(card.dataset.align).toBe('left')
+    expect(card.getAttribute('style')).toBe('width:60%;float:left;margin:0 1em 1em 0')
+  })
+
+  it('再編集ではカードの現在のレイアウトがモーダルに載る', () => {
+    ed.setContent(buildRecipeCardHtml(normalizeRecipe(RECIPE), { width: '30%', align: 'right' }))
+    ed.wysiwyg.querySelector(RECIPE_CARD_SEL).dispatchEvent(new Event('click', { bubbles: true }))
+    expect(ed.recipeDialog._sizeSelect.value).toBe('30%')
+    expect(ed.recipeDialog._alignBtns.find((b) => b.classList.contains('active')).dataset.align)
+      .toBe('right')
+
+    // そのまま保存すればレイアウトは変わらない
+    ed.recipeDialog._saveBtn.click()
+    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
+    expect(card.dataset.width).toBe('30%')
+    expect(card.getAttribute('style')).toContain('float:right')
+  })
+
+  it('モーダルの「削除」でカードごと消える', () => {
+    ed.setContent(cardHtml())
+    ed.wysiwyg.querySelector(RECIPE_CARD_SEL).dispatchEvent(new Event('click', { bubbles: true }))
+    ed.recipeDialog._deleteBtn.click()
+
+    expect(ed.wysiwyg.querySelector(RECIPE_CARD_SEL)).toBeNull()
+    expect(ed.recipeDialog.isVisible).toBe(false)
+    expect(ed.isDirty()).toBe(true)      // undo で戻せる編集として載る
+  })
+
   it('更新しても data-bid は引き継ぐ（同じブロックの同一性）', () => {
     const ed2 = new KuroEditor(makeMount(), { recipeUi: true, blockIds: true })
     ed2.setContent(cardHtml())

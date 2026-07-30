@@ -51,7 +51,7 @@ export const RECIPE_CARD_SEL = `div[data-kuro-block="${RECIPE_BLOCK}"]`
  *   角丸ボックスと同じ `data-width` / `data-align` + インライン style で持たせ、
  *   公開ページでは JS 無しでそのまま再現できるようにする。
  */
-export const RECIPE_WIDTHS = ['25%', '50%', '75%', '100%']
+export const RECIPE_WIDTHS = ['25%', '30%', '50%', '60%', '75%', '100%']
 export const RECIPE_ALIGNS = ['left', 'center', 'right']
 export const RECIPE_LAYOUT_DEFAULT = { width: '100%', align: 'center' }
 
