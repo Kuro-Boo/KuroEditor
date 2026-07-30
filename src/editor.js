@@ -50,6 +50,7 @@ import {
   decodeRecipe,
   emptyRecipe,
   normalizeRecipe,
+  renderRecipePreview,
   validateRecipe,
 } from './recipe.js'
 
@@ -99,7 +100,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.21.0'
+export const VERSION = '2.21.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -6587,13 +6588,22 @@ export class KuroEditor {
       this._updateRoundboxContext()
     })
 
-    // RecipeCard はダブルクリックでモーダルを開く（仕様 §4）。カード自体は
-    // contenteditable="false" なので、本文側の編集経路とは競合しない。
-    this.wysiwyg.addEventListener('dblclick', (e) => {
+    // RecipeCard の操作（仕様 §4）。カードは contenteditable="false" なので
+    // 本文の編集経路とは競合しない。
+    //   クリック  … 編集モーダルを開く（カードは中を直接いじれないので、
+    //                「選んだら直せる」が唯一の自然な導線になる）
+    //   🗑       … カードごと削除（undo で戻せるので確認は挟まない）
+    // ダブルクリックでも同じモーダルが開く（1 回目の click で既に開いている）。
+    this.wysiwyg.addEventListener('click', (e) => {
       if (this._mode !== 'wysiwyg' || !this.recipeDialog) return
       const card = e.target?.closest?.(RECIPE_CARD_SEL)
       if (!card || !this.wysiwyg.contains(card)) return
       e.preventDefault()
+      if (e.target.closest('.kuro-recipe__del')) {
+        card.remove()
+        this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+        return
+      }
       this._editingRecipeCard = card
       this.recipeDialog.open(decodeRecipe(card.getAttribute('data-recipe')))
     })
@@ -7354,6 +7364,7 @@ export class KuroEditor {
       // WYSIWYG → Source: serialize code-block textareas, then reverse-render
       const clone = this.wysiwyg.cloneNode(true)
       this._serializeCodeBlocksToHtml(clone)
+      this._serializeRecipeCards(clone)   // HTML タブにも編集用ボタンを見せない
       this.sourceArea.value = prettifyHTML(unrenderSpecialLinks(clone.innerHTML))
       this.pane.classList.add('kuro-pane--source')
       this.tocPanelEl.classList.add('kuro-toc--hidden')
@@ -7370,6 +7381,7 @@ export class KuroEditor {
           this._initAllCodeBlocks()
         })
         this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
+        this._suspendDirty(() => this._decorateRecipeCards())
         this.pane.classList.remove('kuro-pane--source')
         this.charCount.classList.remove('kuro-charcount--hidden')
         this._syncCharCountSlot()   // 非表示中は測れないので、戻したここで再判定
@@ -9078,6 +9090,39 @@ export class KuroEditor {
   }
 
   /**
+   * ライブ DOM のカードへ編集用 chrome（右上の 🗑）を足す。冪等。
+   *
+   * ⚠ chrome は **保存されない**。getContent() / ソース表示の直前に
+   *   `_serializeRecipeCards()` がプレビューを data-recipe から作り直すので、
+   *   ボタンごと消える（コードブロックの 🗑 と同じ考え方）。
+   *   保存 HTML に編集用ボタンを混ぜないための決まりごと。
+   */
+  _decorateRecipeCards(root = this.wysiwyg) {
+    for (const card of root.querySelectorAll(RECIPE_CARD_SEL)) {
+      if (card.querySelector(':scope > .kuro-recipe__del')) continue
+      const del = createElement('button', {
+        className: 'kuro-recipe__del',
+        html: ICON.trash,
+        attrs: { type: 'button', title: 'レシピカードを削除', 'aria-label': 'レシピカードを削除' },
+      })
+      card.appendChild(del)
+    }
+  }
+
+  /**
+   * 保存/ソース表示用のクローンで、各カードの内側を **data-recipe から作り直す**。
+   * これで (1) 編集用 chrome が落ち、(2) プレビューが常に正本と一致する。
+   * 復号できないカードは触らない（壊れたものを更に壊さない）。
+   */
+  _serializeRecipeCards(root) {
+    for (const card of root.querySelectorAll(RECIPE_CARD_SEL)) {
+      const data = decodeRecipe(card.getAttribute('data-recipe'))
+      if (!data) continue
+      card.innerHTML = renderRecipePreview(normalizeRecipe(data))
+    }
+  }
+
+  /**
    * 鍋ボタン / ダブルクリックの入口。既存カードがあればその内容で、無ければ
    * 空のフォームで開く。挿入位置を決めるためキャレットは保存しておく。
    */
@@ -9112,6 +9157,7 @@ export class KuroEditor {
       this._insertRecipeCardAtCaret(card)
     }
     this._editingRecipeCard = null
+    this._decorateRecipeCards()
     // 挿入も更新も「ユーザーの編集」なので dirty / undo 履歴へ載せる
     this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
@@ -9262,6 +9308,7 @@ export class KuroEditor {
     this._resetHistory()     // 新しい文書 — それ以前の手には undo で戻さない
     this._resyncBlockShadow() // W2: 新しい文書を shadow の基準に（load は onBlockChange を出さない）
     this._enhanceUrlCards()  // URL カードの豪華表示を後追いで取得（非ブロッキング）
+    this._suspendDirty(() => this._decorateRecipeCards())  // 🗑 は編集ではない
   }
 
   /**
@@ -9273,6 +9320,8 @@ export class KuroEditor {
     // Clone the live tree, then serialize code-block textareas to <pre><code>.
     const clone = this.wysiwyg.cloneNode(true)
     this._serializeCodeBlocksToHtml(clone)
+    // RecipeCard の内側を正本(data-recipe)から作り直す = 編集用 chrome を保存しない
+    this._serializeRecipeCards(clone)
     // Strip the presentational atomic-block wrappers so the stored form is the
     // same token-based shape as before this feature (no migration, no drift).
     this._unwrapAtomicBlocks(clone)

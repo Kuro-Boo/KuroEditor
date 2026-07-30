@@ -103,12 +103,50 @@ describe('挿入と編集', () => {
     expect(decodeRecipe(cards[0].getAttribute('data-recipe')).yield).toBe('4人分')
   })
 
-  it('ダブルクリックでモーダルが開く', () => {
+  it('ダブルクリックでも開いたまま（実ブラウザは dblclick の前に click が来る）', () => {
     ed.setContent(cardHtml())
     const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
+    card.dispatchEvent(new Event('click', { bubbles: true }))
     card.dispatchEvent(new Event('dblclick', { bubbles: true }))
     expect(ed.recipeDialog.isVisible).toBe(true)
     expect(ed.recipeDialog._yieldInput.value).toBe('2人分')
+  })
+
+  it('カードをクリックすると編集モーダルが開く', () => {
+    ed.setContent(cardHtml())
+    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
+    card.dispatchEvent(new Event('click', { bubbles: true }))
+    expect(ed.recipeDialog.isVisible).toBe(true)
+    expect(ed.recipeDialog._yieldInput.value).toBe('2人分')
+  })
+
+  it('右上に 🗑 が出て、押すとカードごと消える（モーダルは開かない）', () => {
+    ed.setContent(cardHtml())
+    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
+    const del = card.querySelector('.kuro-recipe__del')
+    expect(del).not.toBeNull()
+
+    del.dispatchEvent(new Event('click', { bubbles: true }))
+    expect(ed.wysiwyg.querySelector(RECIPE_CARD_SEL)).toBeNull()
+    expect(ed.recipeDialog.isVisible).toBe(false)   // 削除ボタンでは編集を開かない
+    expect(ed.isDirty()).toBe(true)                 // undo で戻せる編集として載る
+  })
+
+  it('🗑（編集用 chrome）は保存 HTML に出ない', () => {
+    ed.setContent(cardHtml())
+    expect(ed.wysiwyg.querySelector('.kuro-recipe__del')).not.toBeNull()  // 画面には出る
+    expect(ed.getContent()).not.toContain('kuro-recipe__del')             // 保存には出ない
+    expect(ed.getContent()).toContain('data-kuro-block="recipe-card"')
+  })
+
+  it('保存時にプレビューは正本(data-recipe)から作り直される', () => {
+    ed.setContent(cardHtml())
+    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
+    // 本文側が何かの拍子に壊れても、保存内容は正本から復元される
+    card.innerHTML = '<p>荒らされたプレビュー</p>'
+    const out = ed.getContent()
+    expect(out).not.toContain('荒らされた')
+    expect(out).toContain('生しいたけ')
   })
 
   it('更新しても data-bid は引き継ぐ（同じブロックの同一性）', () => {

@@ -438,6 +438,9 @@
   .kuro-pane--view .kuro-pane__wysiwyg:empty::before { content: none; }
   /* コードブロックの 🗑 は編集用なので隠す（📋 コピーは閲覧でも使うので残す） */
   .kuro-pane--view .kuro-code__del { display: none; }
+  /* レシピカードの 🗑 も同様。閲覧モードではカードのクリック導線も切る */
+  .kuro-pane--view .kuro-recipe__del { display: none; }
+  .kuro-pane--view [data-kuro-block="recipe-card"] { cursor: default; }
   .kuro-pane--view a { cursor: pointer; }
 
   /* 閲覧モード中は編集アクション (挿入系・Undo/Redo) が disabled になる */
