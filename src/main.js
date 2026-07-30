@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window._kuroEditor = new KuroEditor(mount, {
 
+    // レシピカード（🔗 リンクの右に鍋ボタン）。レシピを扱うホストだけが on にする
+    recipeUi: true,
+
     initialContent: [
       '<p>KuroEditor 開発デモへようこそ。上のモーダルメニューから各機能をお試しください。</p>',
       '<p>🖼 メディアボタンでは <strong>URL 入力</strong>と<strong>ファイル選択</strong>が使えます。</p>',
