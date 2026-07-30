@@ -1192,6 +1192,15 @@
     @apply text-white bg-indigo-600 hover:bg-indigo-500;
   }
 
+  /* 押せない状態のボタン（理由は title で示す）。
+     ⚠ `disabled` + `pointer-events:none`（閲覧モードの流儀）は使わない —
+       tooltip すら出ず「押せないのに理由が分からない」状態になる。
+       見た目だけ淡くし、クリックはハンドラ側で無視する。 */
+  .kuro-btn-locked {
+    @apply opacity-35;
+    cursor: not-allowed;
+  }
+
   /* ── 削除ボタンの表現（エディタ共通）──────────────────────────────
      ブロックを消す操作は【SVG ゴミ箱 + 「削除」】で統一する。
      ⚠ 絵文字（🗑）は使わない — フォント差で大きさ・ベースラインがずれる。

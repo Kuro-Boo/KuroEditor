@@ -95,18 +95,61 @@ describe('挿入と編集', () => {
     expect(ed.wysiwyg.querySelector(RECIPE_CARD_SEL)).toBeNull()
   })
 
-  it('カードが既にあれば鍋ボタンは【編集】になり 2 個目を作らない', () => {
+  it('カードが 1 枚あると鍋ボタンはグレーアウトし、押しても増えない', () => {
     ed.setContent(`<p>本文</p>${cardHtml()}`)
-    ed._tabActionBtns.recipe.click()
-    // 既存の内容がフォームに載っている
-    expect(ed.recipeDialog._yieldInput.value).toBe('2人分')
+    const btn = ed._tabActionBtns.recipe
+    expect(btn.classList.contains('kuro-btn-locked')).toBe(true)
+    expect(btn.getAttribute('aria-disabled')).toBe('true')
+    expect(btn.getAttribute('title')).toContain('1 記事につきレシピカードは 1 つまで')
+    expect(btn.getAttribute('title')).toContain('カードをクリック')   // 編集の導線も示す
 
-    ed.recipeDialog._yieldInput.value = '4人分'
-    ed.recipeDialog._saveBtn.click()
+    btn.click()
+    expect(ed.recipeDialog.isVisible).toBe(false)                     // 開かない
+    expect(ed.wysiwyg.querySelectorAll(RECIPE_CARD_SEL).length).toBe(1)
+  })
 
-    const cards = ed.wysiwyg.querySelectorAll(RECIPE_CARD_SEL)
-    expect(cards.length).toBe(1)
-    expect(decodeRecipe(cards[0].getAttribute('data-recipe')).yield).toBe('4人分')
+  it('カードを消すと鍋ボタンは押せる状態へ戻る', () => {
+    ed.setContent(cardHtml())
+    expect(ed._tabActionBtns.recipe.classList.contains('kuro-btn-locked')).toBe(true)
+
+    ed.wysiwyg.querySelector(RECIPE_CARD_SEL).dispatchEvent(new Event('click', { bubbles: true }))
+    ed.recipeDialog._deleteBtn.click()
+
+    const btn = ed._tabActionBtns.recipe
+    expect(btn.classList.contains('kuro-btn-locked')).toBe(false)
+    expect(btn.getAttribute('aria-disabled')).toBe('false')
+    btn.click()
+    expect(ed.recipeDialog.isVisible).toBe(true)
+  })
+
+  it('キーボードで消した（本文編集で消えた）ときも鍋ボタンが復帰する', () => {
+    // 自前の削除ボタンを通らない経路（選択して Backspace 等）。ブラウザは
+    // ノードを消して input を発火するので、その通りに再現する。
+    ed.setContent(cardHtml())
+    expect(ed._tabActionBtns.recipe.classList.contains('kuro-btn-locked')).toBe(true)
+
+    ed.wysiwyg.querySelector(RECIPE_CARD_SEL).remove()
+    ed.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+
+    const btn = ed._tabActionBtns.recipe
+    expect(btn.classList.contains('kuro-btn-locked')).toBe(false)
+    expect(btn.getAttribute('aria-disabled')).toBe('false')
+    expect(btn.getAttribute('title')).not.toContain('1 つまで')
+    btn.click()
+    expect(ed.recipeDialog.isVisible).toBe(true)   // また挿入できる
+  })
+
+  it('undo でカードが戻ればまたグレーアウトする', () => {
+    ed.setContent('<p>本文</p>')
+    expect(ed._tabActionBtns.recipe.classList.contains('kuro-btn-locked')).toBe(false)
+    // 履歴の復元経路（undo/redo）でもカードの有無が変わる
+    ed._restoreSnapshot({ html: cardHtml(), caret: 0 })
+    expect(ed._tabActionBtns.recipe.classList.contains('kuro-btn-locked')).toBe(true)
+  })
+
+  it('mmenu 側の鍋ボタンも同じ状態になる', () => {
+    ed.setContent(cardHtml())
+    expect(ed._mmenuBtns.recipe.classList.contains('kuro-btn-locked')).toBe(true)
   })
 
   it('ダブルクリックでも開いたまま（実ブラウザは dblclick の前に click が来る）', () => {

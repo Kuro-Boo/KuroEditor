@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.23.0'
+export const VERSION = '2.23.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -6718,6 +6718,7 @@ export class KuroEditor {
       this._detectSpecialLink(e)
       this._detectEmojiShortcode(e)
       this._updateCharCount()
+      this._syncRecipeBtn()   // 貼付・削除・undo/redo でカードの有無が変わる
       if (this.imageMenu.isVisible) this.imageMenu.deactivate()
       // Code blocks are <textarea>-based now; their own input listener handles
       // gutter sync. Nothing to do at the wysiwyg level.
@@ -7453,6 +7454,7 @@ export class KuroEditor {
           this._initAllCodeBlocks()
         })
         this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
+        this._syncRecipeBtn()
         this.pane.classList.remove('kuro-pane--source')
         this.charCount.classList.remove('kuro-charcount--hidden')
         this._syncCharCountSlot()   // 非表示中は測れないので、戻したここで再判定
@@ -8998,6 +9000,7 @@ export class KuroEditor {
       this._enhanceUrlCards()
       this.toc._doUpdate()
       this._updateCharCount()
+      this._syncRecipeBtn()   // 履歴の復元でカードの有無が変わる
     } finally {
       this._histBusy = false
     }
@@ -9160,6 +9163,34 @@ export class KuroEditor {
     return this.wysiwyg.querySelector(RECIPE_CARD_SEL)
   }
 
+  /** 鍋ボタンのラベル（状態で変わるのは tooltip だけ。位置も見た目の大きさも動かさない）。 */
+  static get RECIPE_BTN_TITLE() { return 'レシピカード（材料・時間・手順）' }
+  static get RECIPE_BTN_LOCKED_TITLE() {
+    // 押せない理由を必ず書く。黙って無反応にしない（何が起きたか分からなくなる）
+    return '1 記事につきレシピカードは 1 つまでです。編集するにはカードをクリックしてください'
+  }
+
+  /**
+   * 鍋ボタンは【挿入専用】。既にカードが 1 枚あるときはグレーアウトして押せなくする
+   * （仕様: 1 記事 = 1 レシピ。JSON-LD の name/画像/公開日を記事から取る設計なので、
+   *  2 枚目には固有の識別子が無く、同名 Recipe が並ぶ壊れた構造化データになる）。
+   * ⚠ `disabled` は使わない — CSS の `pointer-events:none`（閲覧モードの流儀）だと
+   *   tooltip すら出ず、「押せないのに理由が分からない」状態になるため。
+   *   見た目だけ淡くして `aria-disabled` を立て、クリックは _handleMMenu で無視する。
+   */
+  _syncRecipeBtn() {
+    if (!this.options.recipeUi) return
+    const locked = !!this._recipeCard()
+    const title = locked
+      ? KuroEditor.RECIPE_BTN_LOCKED_TITLE : KuroEditor.RECIPE_BTN_TITLE
+    for (const btn of [this._tabActionBtns?.recipe, this._mmenuBtns?.recipe]) {
+      if (!btn) continue
+      btn.classList.toggle('kuro-btn-locked', locked)
+      btn.setAttribute('aria-disabled', locked ? 'true' : 'false')
+      btn.setAttribute('title', title)
+    }
+  }
+
   /**
    * ⚠ カードの上に編集用ボタンを置かないこと（WYSIWYG）。
    *
@@ -9188,9 +9219,9 @@ export class KuroEditor {
    */
   _openRecipeDialog() {
     if (!this.recipeDialog) return          // recipeUi: false
+    // 既に 1 枚あるなら鍋ボタンは無効（理由は tooltip）。編集はカードのクリックから
+    if (this._recipeCard()) return
     this._saveRange()
-    const card = this._recipeCard()
-    if (card) { this._openRecipeCard(card); return }
     this._editingRecipeCard = null
     this.recipeDialog.open(null)
   }
@@ -9214,6 +9245,7 @@ export class KuroEditor {
     this._editingRecipeCard = null
     if (!card?.isConnected) return
     card.remove()
+    this._syncRecipeBtn()
     this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
 
@@ -9240,6 +9272,7 @@ export class KuroEditor {
       this._insertRecipeCardAtCaret(card)
     }
     this._editingRecipeCard = null
+    this._syncRecipeBtn()
     // 挿入も更新も「ユーザーの編集」なので dirty / undo 履歴へ載せる
     this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
@@ -9390,6 +9423,7 @@ export class KuroEditor {
     this._resetHistory()     // 新しい文書 — それ以前の手には undo で戻さない
     this._resyncBlockShadow() // W2: 新しい文書を shadow の基準に（load は onBlockChange を出さない）
     this._enhanceUrlCards()  // URL カードの豪華表示を後追いで取得（非ブロッキング）
+    this._syncRecipeBtn()
   }
 
   /**
