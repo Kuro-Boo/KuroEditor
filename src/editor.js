@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.22.7'
+export const VERSION = '2.23.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -5630,12 +5630,12 @@ export class KuroEditor {
    *     cellFocusBg?: string,
    *     dragOverBg?: string,
    *   } | null,
-   *   recipeUi?: boolean,          // true でツールバー（タブバー下段 / mmenu）の 🔗 リンクの右に
+   *   recipeUi?: boolean,          // ツールバー（タブバー下段 / mmenu）の 🔗 リンクの右に
    *                                // 「鍋」ボタンを出し、RecipeCard（レシピの構造化ブロック）を
-   *                                // 挿入・編集できるようにする（既定 false = 非表示）。
-   *                                // レシピ記事を扱うホストだけが on にする（KuroCMS の
-   *                                // articleType === 'recipe' に対応）。本文に置ける
-   *                                // RecipeCard は 1 個で、2 度目の押下は既存カードの編集になる。
+   *                                // 挿入・編集できるようにする（既定 true = 表示）。
+   *                                // レシピを扱わないホスト（メモアプリ等）は false を渡して
+   *                                // ボタンごと消す。本文に置ける RecipeCard は 1 個で、
+   *                                // 2 度目の押下は既存カードの編集になる。
    *   clipControl?: boolean,       // true で文字選択ポップアップにコピー/切り取り/貼り付けの
    *                                // 3 ボタンを表示（既定 false = 非表示）。WebView 埋め込み等、
    *                                // ホストがクリップボードを仲介する環境向け。
@@ -5685,7 +5685,7 @@ export class KuroEditor {
       canvasDark: null,
       canvasDarkUi: false,
       versionUi: true,
-      recipeUi: false,
+      recipeUi: true,
       blockIds: false,
       canvasColors: null,
       canvasDarkColors: null,

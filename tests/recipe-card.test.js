@@ -23,15 +23,21 @@ const cardHtml = (r = RECIPE) => buildRecipeCardHtml(normalizeRecipe(r))
 beforeEach(() => { document.body.innerHTML = '' })
 
 describe('recipeUi オプション', () => {
-  it('既定 (false) では鍋ボタンもモーダルも作らない', () => {
+  it('既定 (true) で鍋ボタンが出る', () => {
     const ed = new KuroEditor(makeMount())
+    expect(ed._tabActionBtns.recipe).toBeDefined()
+    expect(ed.recipeDialog).not.toBeNull()
+  })
+
+  it('false では鍋ボタンもモーダルも作らない（レシピを扱わないホスト）', () => {
+    const ed = new KuroEditor(makeMount(), { recipeUi: false })
     expect(ed._tabActionBtns.recipe).toBeUndefined()
     expect(ed._mmenuBtns.recipe).toBeUndefined()
     expect(ed.recipeDialog).toBeNull()
     expect(document.querySelector('.kuro-recipe-dialog')).toBeNull()
   })
 
-  it('true でタブバー / mmenu の【リンクの右】に鍋ボタンが出る', () => {
+  it('タブバー / mmenu の【リンクの右】に並ぶ', () => {
     const ed = new KuroEditor(makeMount(), { recipeUi: true })
     expect(ed._tabActionBtns.recipe).toBeDefined()
     expect(ed._mmenuBtns.recipe).toBeDefined()
@@ -42,7 +48,7 @@ describe('recipeUi オプション', () => {
   })
 
   it('recipeUi: false では API 経由でもモーダルが開かない', () => {
-    const ed = new KuroEditor(makeMount())
+    const ed = new KuroEditor(makeMount(), { recipeUi: false })
     ed._handleMMenu('recipe')
     expect(document.querySelector('.kuro-recipe-dialog--visible')).toBeNull()
   })
@@ -259,7 +265,7 @@ describe('保存往復（getContent / getBuildImage）', () => {
 
   it('recipeUi: false のホストでも本文のカードは壊さず素通しする', () => {
     // 記事タイプが変わってボタンを消しても、保存済み本文は保全されるべき
-    const ed = new KuroEditor(makeMount())
+    const ed = new KuroEditor(makeMount(), { recipeUi: false })
     ed.setContent(cardHtml())
     expect(ed.getContent()).toContain('data-kuro-block="recipe-card"')
   })
