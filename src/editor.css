@@ -1214,8 +1214,33 @@
     max-width: 100%;
     max-height: 85vh;
   }
+  /* タイトル行: 左に見出し、右にカードの設定（表示サイズ / 寄せ / 削除） */
+  .kuro-recipe-dialog__head {
+    @apply flex items-center justify-between gap-3;
+  }
   .kuro-recipe-dialog__title {
     @apply text-sm font-semibold text-neutral-100;
+  }
+  .kuro-recipe-dialog__tools {
+    @apply flex flex-none items-center gap-1;
+  }
+  .kuro-recipe-dialog__size {
+    @apply px-1.5 py-1 rounded-lg
+           bg-neutral-900 border border-neutral-700
+           text-xs text-neutral-200 outline-none
+           focus:border-neutral-500 cursor-pointer;
+  }
+  .kuro-recipe-dialog__tool {
+    @apply flex items-center justify-center px-2 py-1.5 rounded-lg
+           bg-neutral-900 border border-neutral-700 text-neutral-300
+           hover:border-neutral-500 hover:text-white
+           cursor-pointer transition-colors;
+  }
+  .kuro-recipe-dialog__tool.active {
+    @apply bg-indigo-600 border-indigo-500 text-white;
+  }
+  .kuro-recipe-dialog__tool--danger {
+    @apply text-red-300 border-red-900/60 hover:bg-red-950/40 hover:text-red-200;
   }
   .kuro-recipe-dialog__note {
     @apply m-0 text-xs leading-relaxed text-neutral-400;
@@ -1236,20 +1261,6 @@
            focus:border-neutral-500;
   }
   .kuro-recipe-dialog__input--amount { @apply flex-none; width: 8rem; }
-  /* 寄せ 3 種（モーダル内）。選択中はアクセント色で塗る */
-  .kuro-recipe-dialog__aligns {
-    @apply flex items-center gap-1;
-  }
-  .kuro-recipe-dialog__aligns button {
-    @apply flex items-center justify-center px-2 py-1.5 rounded-lg
-           bg-neutral-900 border border-neutral-700 text-neutral-300
-           hover:border-neutral-500 hover:text-white
-           cursor-pointer transition-colors;
-  }
-  .kuro-recipe-dialog__aligns button.active {
-    @apply bg-indigo-600 border-indigo-500 text-white;
-  }
-  .kuro-recipe-dialog__spacer { @apply flex-1; }
   .kuro-recipe-dialog__section {
     @apply flex flex-col gap-1.5;
   }
@@ -1289,10 +1300,6 @@
   }
   .kuro-recipe-dialog__btn--primary {
     @apply text-white bg-indigo-600 hover:bg-indigo-500;
-  }
-  .kuro-recipe-dialog__btn--danger {
-    @apply bg-transparent text-red-300 border border-red-900/60
-           hover:bg-red-950/40 hover:text-red-200;
   }
 
   /* ── Media Dialog ── */

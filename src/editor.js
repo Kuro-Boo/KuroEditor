@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.22.1'
+export const VERSION = '2.22.2'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4871,47 +4871,27 @@ export class RecipeDialog {
     })
     this._box = createElement('div', { className: 'kuro-recipe-dialog__box' })
 
-    this._box.appendChild(createElement('div', {
+    // タイトル行: 左に見出し、右にカードの設定（表示サイズ / 寄せ / 削除）
+    const head = createElement('div', { className: 'kuro-recipe-dialog__head' })
+    head.appendChild(createElement('div', {
       className: 'kuro-recipe-dialog__title', html: 'レシピカード',
     }))
-    this._box.appendChild(createElement('p', {
-      className: 'kuro-recipe-dialog__note',
-      // 仕様 §4 の warn: 料理名・説明・完成画像・公開日は記事側の入力を使う
-      html: '料理名・説明・完成画像・公開日は記事のタイトル / 要約 / アイキャッチを使います。ここでは入力しません。',
-    }))
+    const tools = createElement('div', { className: 'kuro-recipe-dialog__tools' })
 
-    // ── 人数・時間 ──────────────────────────────────────────────────────
-    const head = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._yieldInput = this._field(head, '人数', { placeholder: '2人分' })
-    this._prepInput  = this._field(head, '下準備（分）', { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
-    this._cookInput  = this._field(head, '調理（分）',   { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
-    this._box.appendChild(head)
-
-    // ── 表示（サイズ / 寄せ）───────────────────────────────────────────
-    // ⚠ ここは**レシピの内容ではない**（Schema.org へは出さない）。本文中での
-    //   見せ方なので、カードの上ではなくこのモーダルに置く（WYSIWYG＝編集画面の
-    //   カードは公開ページと同じに見えていなければならない）。
-    const layoutRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    const sizeWrap = createElement('label', { className: 'kuro-recipe-dialog__field' })
-    sizeWrap.appendChild(createElement('span', {
-      className: 'kuro-recipe-dialog__label', html: '表示サイズ',
-    }))
+    // 表示サイズ。⚠ レシピの内容ではない（Schema.org へは出さない）ので
+    // data-recipe には混ぜず、data-width/data-align + インライン style で持つ
     this._sizeSelect = createElement('select', {
-      className: 'kuro-recipe-dialog__input', attrs: { 'aria-label': '表示サイズ' },
+      className: 'kuro-recipe-dialog__size',
+      attrs: { title: '表示サイズ', 'aria-label': '表示サイズ' },
     })
     for (const w of RECIPE_WIDTHS) {
       const opt = document.createElement('option')
       opt.value = w; opt.textContent = w
       this._sizeSelect.appendChild(opt)
     }
-    sizeWrap.appendChild(this._sizeSelect)
-    layoutRow.appendChild(sizeWrap)
+    tools.appendChild(this._sizeSelect)
 
-    const alignWrap = createElement('div', { className: 'kuro-recipe-dialog__field' })
-    alignWrap.appendChild(createElement('span', {
-      className: 'kuro-recipe-dialog__label', html: '寄せ（左右は本文が回り込む）',
-    }))
-    const aligns = createElement('div', { className: 'kuro-recipe-dialog__aligns' })
+    // 寄せ。左右は画像・角丸ボックスと同じ float で本文が回り込む
     this._alignBtns = []
     for (const [align, icon, title] of [
       ['left',   ICON.alignLeft,   '左寄せ（回り込み）'],
@@ -4919,16 +4899,38 @@ export class RecipeDialog {
       ['right',  ICON.alignRight,  '右寄せ（回り込み）'],
     ]) {
       const btn = createElement('button', {
+        className: 'kuro-recipe-dialog__tool',
         html: icon,
         attrs: { type: 'button', title, 'aria-label': title, 'data-align': align },
       })
       btn.addEventListener('click', () => this._setAlign(align))
-      aligns.appendChild(btn)
+      tools.appendChild(btn)
       this._alignBtns.push(btn)
     }
-    alignWrap.appendChild(aligns)
-    layoutRow.appendChild(alignWrap)
-    this._box.appendChild(layoutRow)
+
+    // 削除（既存カードの編集中だけ出す）。確認は挟まない（Undo で戻せる）
+    this._deleteBtn = createElement('button', {
+      className: 'kuro-recipe-dialog__tool kuro-recipe-dialog__tool--danger',
+      html: ICON.trash,
+      attrs: { type: 'button', title: 'このレシピカードを削除', 'aria-label': 'このレシピカードを削除' },
+    })
+    this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
+    tools.appendChild(this._deleteBtn)
+
+    head.appendChild(tools)
+    this._box.appendChild(head)
+    this._box.appendChild(createElement('p', {
+      className: 'kuro-recipe-dialog__note',
+      // 仕様 §4 の warn: 料理名・説明・完成画像・公開日は記事側の入力を使う
+      html: '料理名・説明・完成画像・公開日は記事のタイトル / 要約 / アイキャッチを使います。ここでは入力しません。',
+    }))
+
+    // ── 人数・時間 ──────────────────────────────────────────────────────
+    const basics = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._yieldInput = this._field(basics, '人数', { placeholder: '2人分' })
+    this._prepInput  = this._field(basics, '下準備（分）', { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
+    this._cookInput  = this._field(basics, '調理（分）',   { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
+    this._box.appendChild(basics)
 
     // ── 材料 / 手順（可変行）────────────────────────────────────────────
     this._ingList = this._listSection('材料', '材料を追加', () => this._addIngredient())
@@ -4940,14 +4942,6 @@ export class RecipeDialog {
     this._box.appendChild(this._errors)
 
     const footer = createElement('div', { className: 'kuro-recipe-dialog__footer' })
-    // 削除は左端（保存の隣に置くと押し間違える）。新規挿入中は出さない
-    this._deleteBtn = createElement('button', {
-      className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--danger',
-      html: 'このレシピカードを削除', attrs: { type: 'button' },
-    })
-    this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
-    footer.appendChild(this._deleteBtn)
-    footer.appendChild(createElement('div', { className: 'kuro-recipe-dialog__spacer' }))
     this._cancelBtn = createElement('button', {
       className: 'kuro-recipe-dialog__btn', html: 'キャンセル', attrs: { type: 'button' },
     })
