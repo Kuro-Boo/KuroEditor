@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.22.0'
+export const VERSION = '2.22.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4856,10 +4856,15 @@ export class LinkOpenDialog {
  */
 export class RecipeDialog {
   /**
-   * @param {(recipe: object) => void} onSave 正規化・検証済みのレシピを受け取る
+   * @param {{
+   *   onSave: (recipe: object, layout: {width:string, align:string}) => void,
+   *   onDelete: () => void,
+   * }} handlers
    */
-  constructor(onSave) {
+  constructor({ onSave, onDelete }) {
     this.onSave = onSave
+    this.onDelete = onDelete
+    this._layout = { ...RECIPE_LAYOUT_DEFAULT }
     this.el = createElement('div', {
       className: 'kuro-recipe-dialog',
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'レシピカードの編集' },
@@ -4882,6 +4887,49 @@ export class RecipeDialog {
     this._cookInput  = this._field(head, '調理（分）',   { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
     this._box.appendChild(head)
 
+    // ── 表示（サイズ / 寄せ）───────────────────────────────────────────
+    // ⚠ ここは**レシピの内容ではない**（Schema.org へは出さない）。本文中での
+    //   見せ方なので、カードの上ではなくこのモーダルに置く（WYSIWYG＝編集画面の
+    //   カードは公開ページと同じに見えていなければならない）。
+    const layoutRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    const sizeWrap = createElement('label', { className: 'kuro-recipe-dialog__field' })
+    sizeWrap.appendChild(createElement('span', {
+      className: 'kuro-recipe-dialog__label', html: '表示サイズ',
+    }))
+    this._sizeSelect = createElement('select', {
+      className: 'kuro-recipe-dialog__input', attrs: { 'aria-label': '表示サイズ' },
+    })
+    for (const w of RECIPE_WIDTHS) {
+      const opt = document.createElement('option')
+      opt.value = w; opt.textContent = w
+      this._sizeSelect.appendChild(opt)
+    }
+    sizeWrap.appendChild(this._sizeSelect)
+    layoutRow.appendChild(sizeWrap)
+
+    const alignWrap = createElement('div', { className: 'kuro-recipe-dialog__field' })
+    alignWrap.appendChild(createElement('span', {
+      className: 'kuro-recipe-dialog__label', html: '寄せ（左右は本文が回り込む）',
+    }))
+    const aligns = createElement('div', { className: 'kuro-recipe-dialog__aligns' })
+    this._alignBtns = []
+    for (const [align, icon, title] of [
+      ['left',   ICON.alignLeft,   '左寄せ（回り込み）'],
+      ['center', ICON.alignCenter, '中央'],
+      ['right',  ICON.alignRight,  '右寄せ（回り込み）'],
+    ]) {
+      const btn = createElement('button', {
+        html: icon,
+        attrs: { type: 'button', title, 'aria-label': title, 'data-align': align },
+      })
+      btn.addEventListener('click', () => this._setAlign(align))
+      aligns.appendChild(btn)
+      this._alignBtns.push(btn)
+    }
+    alignWrap.appendChild(aligns)
+    layoutRow.appendChild(alignWrap)
+    this._box.appendChild(layoutRow)
+
     // ── 材料 / 手順（可変行）────────────────────────────────────────────
     this._ingList = this._listSection('材料', '材料を追加', () => this._addIngredient())
     this._insList = this._listSection('手順', '手順を追加', () => this._addInstruction())
@@ -4892,6 +4940,14 @@ export class RecipeDialog {
     this._box.appendChild(this._errors)
 
     const footer = createElement('div', { className: 'kuro-recipe-dialog__footer' })
+    // 削除は左端（保存の隣に置くと押し間違える）。新規挿入中は出さない
+    this._deleteBtn = createElement('button', {
+      className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--danger',
+      html: 'このレシピカードを削除', attrs: { type: 'button' },
+    })
+    this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
+    footer.appendChild(this._deleteBtn)
+    footer.appendChild(createElement('div', { className: 'kuro-recipe-dialog__spacer' }))
     this._cancelBtn = createElement('button', {
       className: 'kuro-recipe-dialog__btn', html: 'キャンセル', attrs: { type: 'button' },
     })
@@ -4985,6 +5041,13 @@ export class RecipeDialog {
     return row
   }
 
+  _setAlign(align) {
+    this._layout = normalizeRecipeLayout({ ...this._layout, align })
+    for (const b of this._alignBtns) {
+      b.classList.toggle('active', b.dataset.align === this._layout.align)
+    }
+  }
+
   get isVisible() { return this.el.classList.contains('kuro-recipe-dialog--visible') }
 
   /** フォームの現在値をレシピ形（未正規化）で読む。 */
@@ -5018,14 +5081,21 @@ export class RecipeDialog {
     const errors = validateRecipe(recipe)
     this._showErrors(errors)
     if (errors.length) return          // 閉じない（入力を失わせない）
-    this.onSave(recipe)
+    this.onSave(recipe, normalizeRecipeLayout({
+      ...this._layout, width: this._sizeSelect.value,
+    }))
     this.hide()
   }
 
   /**
    * @param {object|null} recipe 既存カードの内容（null = 新規）
+   * @param {{layout?: object, canDelete?: boolean}} [opts]
    */
-  open(recipe = null) {
+  open(recipe = null, { layout = null, canDelete = false } = {}) {
+    this._layout = normalizeRecipeLayout(layout ?? RECIPE_LAYOUT_DEFAULT)
+    this._sizeSelect.value = this._layout.width
+    this._setAlign(this._layout.align)
+    this._deleteBtn.hidden = !canDelete    // 新規挿入中は「削除」を出さない
     const r = normalizeRecipe(recipe ?? emptyRecipe())
     this._yieldInput.value = r.yield
     this._prepInput.value = r.prepTimeMinutes === undefined ? '' : String(r.prepTimeMinutes)
@@ -6072,7 +6142,10 @@ export class KuroEditor {
     this.roundboxMenu  = new RoundboxMenu(this)
     // RecipeCard の編集モーダル。recipeUi が off なら作らない（DOM を汚さない）
     this.recipeDialog = this.options.recipeUi
-      ? new RecipeDialog((recipe) => this._applyRecipe(recipe))
+      ? new RecipeDialog({
+          onSave: (recipe, layout) => this._applyRecipe(recipe, layout),
+          onDelete: () => this._deleteRecipeCard(),
+        })
       : null
     this.tableManager  = new TableManager(this)
     this.tableInserter = new TableInserter(this.wysiwyg, {
@@ -6608,18 +6681,8 @@ export class KuroEditor {
       if (this._mode !== 'wysiwyg' || !this.recipeDialog) return
       const card = e.target?.closest?.(RECIPE_CARD_SEL)
       if (!card || !this.wysiwyg.contains(card)) return
-      if (e.target.closest('.kuro-recipe__del')) {
-        e.preventDefault()
-        card.remove()
-        this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
-        return
-      }
-      // サイズ / 寄せは各コントロールが自分で処理する。ここで拾うと
-      // 設定を触るたびに編集モーダルが開いてしまう
-      if (e.target.closest('.kuro-recipe__chrome')) return
       e.preventDefault()
-      this._editingRecipeCard = card
-      this.recipeDialog.open(decodeRecipe(card.getAttribute('data-recipe')))
+      this._openRecipeCard(card)
     })
 
     // タブバーの幅が変わるたびに文字カウンターの居場所を測り直す。
@@ -7395,7 +7458,6 @@ export class KuroEditor {
           this._initAllCodeBlocks()
         })
         this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
-        this._suspendDirty(() => this._decorateRecipeCards())
         this.pane.classList.remove('kuro-pane--source')
         this.charCount.classList.remove('kuro-charcount--hidden')
         this._syncCharCountSlot()   // 非表示中は測れないので、戻したここで再判定
@@ -9104,81 +9166,13 @@ export class KuroEditor {
   }
 
   /**
-   * ライブ DOM のカードへ編集用 chrome（右上の 🗑）を足す。冪等。
+   * ⚠ カードの上に編集用ボタンを置かないこと（WYSIWYG）。
    *
-   * ⚠ chrome は **保存されない**。getContent() / ソース表示の直前に
-   *   `_serializeRecipeCards()` がプレビューを data-recipe から作り直すので、
-   *   ボタンごと消える（コードブロックの 🗑 と同じ考え方）。
-   *   保存 HTML に編集用ボタンを混ぜないための決まりごと。
+   * 一度は右上へサイズ / 寄せ / 🗑 を並べたが、**編集画面は公開ページと同じに
+   * 見えていなければならない**という原則に反するので撤去した。カードの操作は
+   * すべて編集モーダル側に置く（サイズ・寄せ・削除）。カードに対する唯一の
+   * 直接操作はクリック＝モーダルを開くこと。
    */
-  _decorateRecipeCards(root = this.wysiwyg) {
-    for (const card of root.querySelectorAll(RECIPE_CARD_SEL)) {
-      if (card.querySelector(':scope > .kuro-recipe__chrome')) continue
-      const layout = normalizeRecipeLayout({
-        width: card.dataset.width, align: card.dataset.align,
-      })
-      const chrome = createElement('div', { className: 'kuro-recipe__chrome' })
-
-      // 表示サイズ。角丸ボックスの BOX設定と同じ「%」の考え方
-      const sizeSel = createElement('select', {
-        className: 'kuro-recipe__size',
-        attrs: { title: '表示サイズ', 'aria-label': '表示サイズ' },
-      })
-      for (const w of RECIPE_WIDTHS) {
-        const opt = document.createElement('option')
-        opt.value = w; opt.textContent = w
-        if (w === layout.width) opt.selected = true
-        sizeSel.appendChild(opt)
-      }
-      sizeSel.addEventListener('change', () => this._setRecipeLayout(card, { width: sizeSel.value }))
-      chrome.appendChild(sizeSel)
-
-      // 寄せ。左右は画像・角丸ボックスと同じ float で本文が回り込む
-      for (const [align, icon, title] of [
-        ['left',   ICON.alignLeft,   '左寄せ（回り込み）'],
-        ['center', ICON.alignCenter, '中央'],
-        ['right',  ICON.alignRight,  '右寄せ（回り込み）'],
-      ]) {
-        const btn = createElement('button', {
-          className: 'kuro-recipe__align',
-          html: icon,
-          attrs: { type: 'button', title, 'aria-label': title, 'data-align': align },
-        })
-        if (align === layout.align) btn.classList.add('kuro-recipe__align--active')
-        btn.addEventListener('click', () => this._setRecipeLayout(card, { align }))
-        chrome.appendChild(btn)
-      }
-
-      chrome.appendChild(createElement('button', {
-        className: 'kuro-recipe__del',
-        html: ICON.trash,
-        attrs: { type: 'button', title: 'レシピカードを削除', 'aria-label': 'レシピカードを削除' },
-      }))
-      card.appendChild(chrome)
-    }
-  }
-
-  /**
-   * カードの表示レイアウト（幅 / 寄せ）を変える。
-   * ⚠ レイアウトは `data-recipe`（Schema.org へ出す内容）ではなく
-   *   `data-width` / `data-align` + インライン style に持つ。公開ページでは
-   *   JS 無しでそのまま再現され、角丸ボックス・画像と同じ回り込みになる。
-   */
-  _setRecipeLayout(card, patch) {
-    const layout = normalizeRecipeLayout({
-      width: patch.width ?? card.dataset.width,
-      align: patch.align ?? card.dataset.align,
-    })
-    card.dataset.width = layout.width
-    card.dataset.align = layout.align
-    card.setAttribute('style', recipeLayoutStyle(layout))
-    for (const b of card.querySelectorAll('.kuro-recipe__align')) {
-      b.classList.toggle('kuro-recipe__align--active', b.dataset.align === layout.align)
-    }
-    const sel = card.querySelector('.kuro-recipe__size')
-    if (sel && sel.value !== layout.width) sel.value = layout.width
-    this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
-  }
 
   /**
    * 保存/ソース表示用のクローンで、各カードの内側を **data-recipe から作り直す**。
@@ -9201,8 +9195,28 @@ export class KuroEditor {
     if (!this.recipeDialog) return          // recipeUi: false
     this._saveRange()
     const card = this._recipeCard()
+    if (card) { this._openRecipeCard(card); return }
+    this._editingRecipeCard = null
+    this.recipeDialog.open(null)
+  }
+
+  /** 既存カードをモーダルで開く（内容 + 表示レイアウト + 削除ボタン付き）。 */
+  _openRecipeCard(card) {
+    if (!this.recipeDialog) return
     this._editingRecipeCard = card
-    this.recipeDialog.open(card ? decodeRecipe(card.getAttribute('data-recipe')) : null)
+    this.recipeDialog.open(decodeRecipe(card.getAttribute('data-recipe')), {
+      layout: { width: card.dataset.width, align: card.dataset.align },
+      canDelete: true,
+    })
+  }
+
+  /** モーダルの「削除」。カードごと消す（Undo で戻せるので確認は挟まない）。 */
+  _deleteRecipeCard() {
+    const card = this._editingRecipeCard ?? this._recipeCard()
+    this._editingRecipeCard = null
+    if (!card?.isConnected) return
+    card.remove()
+    this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
 
   /**
@@ -9211,13 +9225,9 @@ export class KuroEditor {
    *   contenteditable) を必ず正しい形で持たせるため、生成は buildRecipeCardHtml
    *   の 1 箇所に集約する。
    */
-  _applyRecipe(recipe) {
+  _applyRecipe(recipe, layout = RECIPE_LAYOUT_DEFAULT) {
     const current = this._editingRecipeCard
-    // 表示レイアウトは内容の編集で失わない（幅・寄せはカード側の設定）
-    const layout = current?.isConnected
-      ? normalizeRecipeLayout({ width: current.dataset.width, align: current.dataset.align })
-      : RECIPE_LAYOUT_DEFAULT
-    const html = buildRecipeCardHtml(recipe, layout)
+    const html = buildRecipeCardHtml(recipe, normalizeRecipeLayout(layout))
     const holder = document.createElement('div')
     holder.innerHTML = html
     const card = holder.firstElementChild
@@ -9232,7 +9242,6 @@ export class KuroEditor {
       this._insertRecipeCardAtCaret(card)
     }
     this._editingRecipeCard = null
-    this._decorateRecipeCards()
     // 挿入も更新も「ユーザーの編集」なので dirty / undo 履歴へ載せる
     this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
@@ -9383,7 +9392,6 @@ export class KuroEditor {
     this._resetHistory()     // 新しい文書 — それ以前の手には undo で戻さない
     this._resyncBlockShadow() // W2: 新しい文書を shadow の基準に（load は onBlockChange を出さない）
     this._enhanceUrlCards()  // URL カードの豪華表示を後追いで取得（非ブロッキング）
-    this._suspendDirty(() => this._decorateRecipeCards())  // 🗑 は編集ではない
   }
 
   /**

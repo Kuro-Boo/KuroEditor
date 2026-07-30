@@ -120,70 +120,12 @@ describe('挿入と編集', () => {
     expect(ed.recipeDialog._yieldInput.value).toBe('2人分')
   })
 
-  it('右上に 🗑 が出て、押すとカードごと消える（モーダルは開かない）', () => {
+  it('保存 HTML に編集用の痕跡が混ざらない', () => {
     ed.setContent(cardHtml())
-    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
-    const del = card.querySelector('.kuro-recipe__del')
-    expect(del).not.toBeNull()
-
-    del.dispatchEvent(new Event('click', { bubbles: true }))
-    expect(ed.wysiwyg.querySelector(RECIPE_CARD_SEL)).toBeNull()
-    expect(ed.recipeDialog.isVisible).toBe(false)   // 削除ボタンでは編集を開かない
-    expect(ed.isDirty()).toBe(true)                 // undo で戻せる編集として載る
-  })
-
-  it('🗑 の左にサイズ選択と寄せ 3 種が並ぶ', () => {
-    ed.setContent(cardHtml())
-    const chrome = ed.wysiwyg.querySelector('.kuro-recipe__chrome')
-    expect(chrome).not.toBeNull()
-    const kinds = [...chrome.children].map((c) => c.className)
-    expect(kinds[0]).toContain('kuro-recipe__size')          // 表示サイズ
-    expect(kinds.filter((c) => c.includes('kuro-recipe__align')).length).toBe(3)
-    expect(kinds[kinds.length - 1]).toContain('kuro-recipe__del')   // 🗑 は右端
-    expect([...chrome.querySelector('.kuro-recipe__size').options].map((o) => o.value))
-      .toEqual(['25%', '50%', '75%', '100%'])
-  })
-
-  it('サイズ / 寄せを変えると data-* と style が変わる（回り込みは float）', () => {
-    ed.setContent(cardHtml())
-    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
-    const sel = card.querySelector('.kuro-recipe__size')
-    sel.value = '50%'
-    sel.dispatchEvent(new Event('change', { bubbles: true }))
-    card.querySelector('.kuro-recipe__align[data-align="left"]')
-      .dispatchEvent(new Event('click', { bubbles: true }))
-
-    expect(card.dataset.width).toBe('50%')
-    expect(card.dataset.align).toBe('left')
-    expect(card.getAttribute('style')).toBe('width:50%;float:left;margin:0 1em 1em 0')
-    expect(card.querySelector('.kuro-recipe__align[data-align="left"]').className)
-      .toContain('--active')
-    expect(ed.isDirty()).toBe(true)
-    expect(ed.recipeDialog.isVisible).toBe(false)   // 設定操作で編集モーダルは開かない
-  })
-
-  it('レイアウトは保存 HTML に残り、内容を編集しても失われない', () => {
-    ed.setContent(cardHtml())
-    const card = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
-    card.querySelector('.kuro-recipe__align[data-align="right"]')
-      .dispatchEvent(new Event('click', { bubbles: true }))
-    expect(ed.getContent()).toContain('data-align="right"')
-
-    // 内容の編集（モーダル保存）でレイアウトが既定へ戻らない
-    ed._tabActionBtns.recipe.click()
-    ed.recipeDialog._yieldInput.value = '4人分'
-    ed.recipeDialog._saveBtn.click()
-    const after = ed.wysiwyg.querySelector(RECIPE_CARD_SEL)
-    expect(after.dataset.align).toBe('right')
-    expect(after.getAttribute('style')).toContain('float:right')
-  })
-
-  it('🗑（編集用 chrome）は保存 HTML に出ない', () => {
-    ed.setContent(cardHtml())
-    expect(ed.wysiwyg.querySelector('.kuro-recipe__del')).not.toBeNull()  // 画面には出る
-    expect(ed.getContent()).not.toContain('kuro-recipe__del')             // 保存には出ない
-    expect(ed.getContent()).not.toContain('kuro-recipe__chrome')
-    expect(ed.getContent()).toContain('data-kuro-block="recipe-card"')
+    const out = ed.getContent()
+    expect(out).not.toContain('<button')
+    expect(out).not.toContain('<select')
+    expect(out).toContain('data-kuro-block="recipe-card"')
   })
 
   it('保存時にプレビューは正本(data-recipe)から作り直される', () => {
