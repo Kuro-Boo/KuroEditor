@@ -389,7 +389,17 @@ h5[id^='kuro-h-'] {
 
 /* Horizontal rule */
 .kuro-content hr,
-.kuro-hr {
+/* 水平線。**回り込みの終端**でもある。
+   ⚠ `clear: both` と `width: 100%` は必須。float した要素（画像・角丸ボックス・
+     レシピカード）の脇に置かれると、ブロックの幅がその隙間まで縮んで
+     「短い線」になってしまう。水平線は「ここで区切る」ための記号なので、
+     回り込みの途中に半端な長さで出るのは意味が通らない。clear で float の
+     下まで送り、必ず横いっぱいに引く（＝水平線を入れたら回り込みは終わる）。
+   ⚠ class 無しの <hr>（他所から取り込んだ本文）にも同じ扱いを効かせる。 */
+.kuro-hr,
+.kuro-content hr {
+  clear: both;
+  width: 100%;
   border: 0;
   border-top: 2px solid var(--kuro-hr);
   margin: 1.25rem 0;
