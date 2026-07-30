@@ -691,6 +691,35 @@ describe('KuroEditor', () => {
       expect(editor.getContent()).toBe('<p>[[https://example.com/post]]</p>')
     })
 
+    it('「読込みエラー」だったカードは URL を直すと淡色 (--error) が落ちる', () => {
+      // 見た目の状態は【前の URL に対する取得結果】。URL を書き換えたら捨てないと、
+      // .kuro-url-card--error の opacity .6 が貼り付いたまま「暗いカード」が残る。
+      const a = openOn('<p>[[https://gone.example/|]]</p>')
+      // onFetchUrlMeta が {error:'target'} を返した後の状態を再現
+      a.classList.add('kuro-url-card--error')
+      a.dataset.metaState = 'done'
+
+      popup()._urlInput.value = 'https://example.com/post'
+      popup()._urlInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+      const card = editor.wysiwyg.querySelector('.kuro-url-card')
+      expect(card).not.toBeNull()
+      expect(card.classList.contains('kuro-url-card--error')).toBe(false)
+      expect(card.classList.contains('kuro-url-card--rich')).toBe(false)
+      expect(card.dataset.metaState).toBeUndefined()   // 再取得の対象へ戻る
+      expect(editor.getContent()).toBe('<p>[[https://example.com/post|]]</p>')
+    })
+
+    it('カード → テキストリンクへ戻すときも --error は残さない', () => {
+      const a = openOn('<p>[[https://gone.example/|]]</p>')
+      a.classList.add('kuro-url-card--error')
+
+      check(false)   // カード表示 OFF
+      const link = editor.wysiwyg.querySelector('a')
+      expect(link.classList.contains('kuro-url-card--error')).toBe(false)
+      expect(link.classList.contains('kuro-url-card')).toBe(false)
+    })
+
     it('既存カードを開くと、チェック済み + 表示テキスト欄が隠れた状態で開く', () => {
       openOn('<p>[[https://example.com/post|]]</p>')
       expect(popup()._cardToggle.checked).toBe(true)

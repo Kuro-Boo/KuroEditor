@@ -71,7 +71,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.20.5'
+export const VERSION = '2.20.6'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -582,7 +582,11 @@ export function writeLinkParts(a, text, url, resolver = defaultResolver) {
     a.removeAttribute('data-kuro-link')
     a.setAttribute('href', resolver(url))
     a.classList.add('kuro-url-card')
-    a.classList.remove('kuro-url-card--rich')
+    // 見た目の状態は【前の URL に対する取得結果】なので、URL を書き換えたら
+    // 必ず両方落とす。--error を残すと「読込みエラー」の淡色 (opacity .6) が
+    // 貼り付いたままになり、正しい URL に直して豪華表示に戻っても暗いカードが
+    // 残る（実際に発生）。data-meta-state も消して再取得の対象へ戻す。
+    a.classList.remove('kuro-url-card--rich', 'kuro-url-card--error')
     a.removeAttribute('data-meta-state')  // 再度メタ取得の対象にする（往復時）
     a.setAttribute('contenteditable', 'false')
     if (url.startsWith('http')) {
@@ -597,7 +601,7 @@ export function writeLinkParts(a, text, url, resolver = defaultResolver) {
   }
   // カードに表題が入った → カードの内部 DOM を捨てて通常のテキストリンクへ戻す
   if (a.classList.contains('kuro-url-card')) {
-    a.classList.remove('kuro-url-card', 'kuro-url-card--rich')
+    a.classList.remove('kuro-url-card', 'kuro-url-card--rich', 'kuro-url-card--error')
     a.removeAttribute('contenteditable')
     a.removeAttribute('data-meta-state')
     a.textContent = ''
