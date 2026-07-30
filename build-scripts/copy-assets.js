@@ -16,6 +16,7 @@ const files = [
   ['src/kuro-links.d.ts', 'dist/kuro-links.d.ts'],
   ['src/normalize.js', 'dist/kuro-normalize.js'],
   ['src/recipe.js', 'dist/kuro-recipe.js'],
+  ['src/kuro-recipe.d.ts', 'dist/kuro-recipe.d.ts'],
   ['src/kuro-normalize.d.ts', 'dist/kuro-normalize.d.ts'],
 ];
 
