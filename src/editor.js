@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.22.2'
+export const VERSION = '2.22.3'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -2392,8 +2392,8 @@ export class RoundboxMenu {
 
     // Delete button — removes the box, promotes its children to parent
     const delBtn = createElement('button', {
-      className: 'kuro-roundbox-menu__del',
-      html: '× 削除',
+      className: 'kuro-roundbox-menu__del kuro-del-btn',
+      html: `${ICON.trash}<span>削除</span>`,   // 表現はエディタ共通（kuro-del-btn 参照）
       attrs: { type: 'button', title: '角丸ボックスを削除' },
     })
     delBtn.addEventListener('mousedown', e => e.stopPropagation())
@@ -4910,8 +4910,8 @@ export class RecipeDialog {
 
     // 削除（既存カードの編集中だけ出す）。確認は挟まない（Undo で戻せる）
     this._deleteBtn = createElement('button', {
-      className: 'kuro-recipe-dialog__tool kuro-recipe-dialog__tool--danger',
-      html: ICON.trash,
+      className: 'kuro-recipe-dialog__tool kuro-recipe-dialog__tool--danger kuro-del-btn',
+      html: `${ICON.trash}<span>削除</span>`,
       attrs: { type: 'button', title: 'このレシピカードを削除', 'aria-label': 'このレシピカードを削除' },
     })
     this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
@@ -5089,7 +5089,9 @@ export class RecipeDialog {
     this._layout = normalizeRecipeLayout(layout ?? RECIPE_LAYOUT_DEFAULT)
     this._sizeSelect.value = this._layout.width
     this._setAlign(this._layout.align)
-    this._deleteBtn.hidden = !canDelete    // 新規挿入中は「削除」を出さない
+    // 新規挿入中は消す対象がない。隠すとボタンの位置が動いて分かりにくいので
+    // 場所は保ったまま無効化する（「今は押せない」ことが見て分かる）
+    this._deleteBtn.disabled = !canDelete
     const r = normalizeRecipe(recipe ?? emptyRecipe())
     this._yieldInput.value = r.yield
     this._prepInput.value = r.prepTimeMinutes === undefined ? '' : String(r.prepTimeMinutes)
@@ -5348,8 +5350,8 @@ export class ImageMenu {
 
     // Delete button
     const delBtn = createElement('button', {
-      className: 'kuro-image-menu__btn kuro-image-menu__btn--delete',
-      html: '🗑 削除',
+      className: 'kuro-image-menu__btn kuro-image-menu__btn--delete kuro-del-btn',
+      html: `${ICON.trash}<span>削除</span>`,
       attrs: { type: 'button', title: 'メディアを削除' },
     })
     delBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._deleteMedia() })
@@ -5392,10 +5394,12 @@ export class ImageMenu {
       this._hideLinkPanel()
     })
 
+    // ⚠ ここは「リンクを外す」であって画像の削除ではない。同じ『削除』にすると
+    //    ブロック削除と紛らわしいので語を変える（赤にもしない）
     const linkClearBtn = createElement('button', {
-      className: 'kuro-image-menu__btn kuro-image-menu__btn--delete',
-      html: '削除',
-      attrs: { type: 'button' },
+      className: 'kuro-image-menu__btn',
+      html: 'リンクを解除',
+      attrs: { type: 'button', title: '画像からリンクを外す' },
     })
     linkClearBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()

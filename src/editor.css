@@ -1192,6 +1192,20 @@
     @apply text-white bg-indigo-600 hover:bg-indigo-500;
   }
 
+  /* ── 削除ボタンの表現（エディタ共通）──────────────────────────────
+     ブロックを消す操作は【SVG ゴミ箱 + 「削除」】で統一する。
+     ⚠ 絵文字（🗑）は使わない — フォント差で大きさ・ベースラインがずれる。
+     ⚠ アイコンだけの列（テーブルメニュー・リンク編集ポップアップ・コード
+       ブロックの chrome）は例外的にアイコン単独のまま（文字を混ぜると列が崩れる）。
+     ⚠ 「削除」の語はそのブロックを消すとき専用。リンクを外す等は別の語にする。 */
+  .kuro-del-btn {
+    @apply inline-flex items-center gap-1.5;
+  }
+  .kuro-del-btn > svg { @apply flex-none; }
+  .kuro-del-btn:disabled {
+    @apply opacity-40 pointer-events-none cursor-default;
+  }
+
   /* ── Recipe Dialog（RecipeCard の唯一の編集手段）──
      LinkOpenDialog と同じオーバーレイ + ボックス方式。行が増える入力なので
      ボックス自体を縦スクロールさせ、フッターは常に見える位置に置く。 */
@@ -1677,7 +1691,7 @@
   }
 
   .kuro-image-menu__btn--delete {
-    @apply hover:bg-red-900 hover:text-red-300;
+    @apply text-red-400 hover:bg-red-900 hover:text-red-300;
   }
 
   .kuro-image-menu__btn--link {
