@@ -29,6 +29,7 @@ import {
   _urlCardInner,
   _urlCardErrorInner,
   buildBrokenMedia,
+  URL_CARD_ICON,
   _buildIframeFigure,
   parseMediaParams,
   buildMediaAttr,
@@ -70,7 +71,7 @@ export { mediaKindFromSlug } from './kuro-links.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.20.4'
+export const VERSION = '2.20.5'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -6034,6 +6035,38 @@ export class KuroEditor {
     })
   }
 
+  /**
+   * URL カードの画像（サムネイル / favicon）が読めなかったときの後始末。
+   * 画像はどちらも「無くてもカードとして成立する」装飾なので、ブラウザ標準の
+   * 壊れ画像アイコンを晒さずに畳む — サムネは要素ごと削除、favicon は既定の
+   * 🌐 アイコンへ戻す。メディア (`[[…]]`) の壊れ表示（buildBrokenMedia）と違い
+   * 「そこに何かあったはず」と知らせる必要が無い（本体はリンクとして生きている）。
+   *
+   * ⚠ og:image は外部サイトが自由に差し替える他人の資産で、ホストの
+   *   onFetchUrlMeta 経由でしか来ない。落ちるのは日常なので、落ちても
+   *   「サムネなしカード」という決まった見た目に倒す（mediaKinds 非対応記法を
+   *   カードへ倒すのと同じ方針）。
+   * ⚠ dirty 検知は止めること。画像の読込み失敗はユーザーの編集ではないので、
+   *   ここで DOM を触って「未保存」を点灯させてはいけない（保存 UI の誤警告）。
+   *
+   * @param {EventTarget} target error イベントの発生元
+   * @returns {boolean} URL カードの画像として処理したか
+   */
+  _degradeUrlCardImage(target) {
+    const cls = target?.classList
+    if (!cls) return false
+    const isThumb = cls.contains('kuro-url-card__thumb')
+    const isFav   = cls.contains('kuro-url-card__favicon')
+    if (!isThumb && !isFav) return false
+    if (!this.wysiwyg.contains(target)) return false
+    this._suspendDirty(() => {
+      const iconWrap = isFav ? target.closest('.kuro-url-card__icon') : null
+      if (iconWrap) iconWrap.innerHTML = URL_CARD_ICON
+      else          target.remove()
+    })
+    return true
+  }
+
   // ── Image Menu (ipopm) ────────────────────────────────────────────────────
 
   _buildImageMenu() {
@@ -6417,6 +6450,7 @@ export class KuroEditor {
     // user can select it and delete (or fix the URL) via the ImageMenu.
     this.wysiwyg.addEventListener('error', (e) => {
       const target = e.target
+      if (this._degradeUrlCardImage(target)) return
       if (!target.classList?.contains('kuro-media')) return
       const figure = target.closest('.kuro-media-wrap[data-kuro-media]')
       if (!figure || !this.wysiwyg.contains(figure)) return

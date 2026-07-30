@@ -1477,6 +1477,72 @@ describe('KuroEditor', () => {
       expect(card.querySelector('.kuro-url-card__thumb')).toBeNull()
       expect(card.querySelector('.kuro-url-card__icon svg')).not.toBeNull()
     })
+
+    // og:image / favicon は外部サイトの資産で、消える・落ちる・ブロックされるのが
+    // 日常。ブラウザ標準の壊れ画像アイコンを晒さず、決まった見た目に倒す。
+    describe('画像が読めなかったとき (error イベント)', () => {
+      const richCard = async () => {
+        document.body.innerHTML = ''
+        const onFetchUrlMeta = vi.fn(async () => ({
+          title: 'T', description: 'D',
+          favicon: 'https://example.com/favicon.ico',
+          image: 'https://example.com/og.png',
+        }))
+        const ed = new KuroEditor(makeMount(), { onFetchUrlMeta })
+        ed.setContent('<p>[[https://example.com/post|]]</p>')
+        await flush()
+        return ed
+      }
+
+      it('サムネイルは要素ごと消える（カード本体は残る）', async () => {
+        const ed = await richCard()
+        const thumb = ed.wysiwyg.querySelector('.kuro-url-card__thumb')
+        expect(thumb).not.toBeNull()
+        thumb.dispatchEvent(new Event('error'))   // 読込み失敗（bubbles しない → capture で拾う）
+
+        expect(ed.wysiwyg.querySelector('.kuro-url-card__thumb')).toBeNull()
+        const card = ed.wysiwyg.querySelector('.kuro-url-card')
+        expect(card).not.toBeNull()
+        expect(card.querySelector('.kuro-url-card__title').textContent).toBe('T')
+        expect(card.querySelector('.kuro-url-card__arrow')).not.toBeNull()
+      })
+
+      it('favicon は既定の内蔵アイコンへ戻る', async () => {
+        const ed = await richCard()
+        const fav = ed.wysiwyg.querySelector('.kuro-url-card__favicon')
+        fav.dispatchEvent(new Event('error'))
+
+        const icon = ed.wysiwyg.querySelector('.kuro-url-card__icon')
+        expect(icon.querySelector('.kuro-url-card__favicon')).toBeNull()
+        expect(icon.querySelector('svg')).not.toBeNull()
+      })
+
+      it('読込み失敗は編集ではない — 未保存にしない', async () => {
+        const ed = await richCard()
+        ed.wysiwyg.querySelector('.kuro-url-card__thumb').dispatchEvent(new Event('error'))
+        ed.wysiwyg.querySelector('.kuro-url-card__favicon').dispatchEvent(new Event('error'))
+        await flush()   // MutationObserver は非同期配信
+        expect(ed.isDirty()).toBe(false)
+        expect(ed.saveBtn.disabled).toBe(true)
+      })
+
+      it('保存フォーマットは変わらない（[[slug|]] のまま）', async () => {
+        const ed = await richCard()
+        ed.wysiwyg.querySelector('.kuro-url-card__thumb').dispatchEvent(new Event('error'))
+        expect(ed.getContent()).toBe('<p>[[https://example.com/post|]]</p>')
+      })
+
+      it('メディア (`[[…]]`) の壊れ表示は従来どおり（カードの扱いに巻き込まれない）', async () => {
+        document.body.innerHTML = ''
+        const ed = new KuroEditor(makeMount())
+        ed.setContent('<p>[[https://example.com/a.png]]</p>')
+        await flush()
+        const media = ed.wysiwyg.querySelector('.kuro-media')
+        expect(media).not.toBeNull()
+        media.dispatchEvent(new Event('error'))
+        expect(ed.wysiwyg.querySelector('.kuro-media-broken')).not.toBeNull()
+      })
+    })
   })
 
   // ── テーブルの結合/分割 (rowspan/colspan を跨いだ論理列マッピング) ──────────────

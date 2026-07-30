@@ -7,6 +7,29 @@
 document.execCommand = vi.fn(() => true)
 document.queryCommandState = vi.fn(() => false)
 
+// ── 作った editor を必ず destroy する（全テストファイル共通） ───────────────
+// destroy し忘れた editor は dirty 検知の setTimeout(_histTimer, 400ms) を抱えた
+// まま生き延び、happy-dom の teardown 後に発火して「document is not defined」の
+// 未処理例外になる。テスト自体は pass しているのに vitest が非ゼロ終了するので
+// リリーススクリプトが止まる（実際に v2.20.5 のリリースが blockids.test.js の
+// 残タイマーで中断した）。個々のテストに afterEach を書かせるのは漏れるので、
+// 生成を prototype 側で捕まえて一括で片付ける。
+//   _build() を使うのは「必ず 1 度だけ通るコンストラクタ経路」だから。
+//   destroy() は既に destroy 済み / DOM を消された editor では投げうるので握る。
+import { KuroEditor } from '../src/editor.js'
+
+const _liveEditors = []
+const _origBuild = KuroEditor.prototype._build
+KuroEditor.prototype._build = function (...args) {
+  _liveEditors.push(this)
+  return _origBuild.apply(this, args)
+}
+afterEach(() => {
+  while (_liveEditors.length) {
+    try { _liveEditors.pop().destroy() } catch { /* 既に片付いた／DOM が無い */ }
+  }
+})
+
 // Stub localStorage — happy-dom の window.localStorage は getItem 等が未実装。
 // エディタ本体は try/catch で握り潰すが、テストから設定の保存/非保存を
 // 検証できるよう in-memory 実装を差し込む。
