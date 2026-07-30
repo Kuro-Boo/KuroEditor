@@ -272,6 +272,75 @@ h5[id^='kuro-h-'] {
   opacity: 0.6;
 }
 
+/* ── RecipeCard（data-kuro-block="recipe-card"）──────────────────────────────
+   レシピの構造化ブロック。**編集画面のプレビュー**としての最低限の体裁を持たせる。
+   公開ページの本番デザインはテンプレート側の責務（仕様 §8）なので、ここでは
+   サイト固有の色を持ち込まず --kuro-* 変数だけで組む。
+   ⚠ contenteditable="false" なので、選択時の見え方（outline）だけ整えて
+     カーソルが中に入ったように見えないようにする。 */
+.kuro-content [data-kuro-block="recipe-card"] {
+  margin: 1.25rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--kuro-box-border);
+  border-radius: 0.625rem;
+  background: var(--kuro-box-bg);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  user-select: none;
+}
+.kuro-content .kuro-recipe__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--kuro-box-border);
+}
+.kuro-content .kuro-recipe__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.15em 0.6em;
+  border-radius: 9999px;
+  border: 1px solid var(--kuro-box-border);
+  opacity: 0.85;
+}
+.kuro-content .kuro-recipe__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+}
+.kuro-content .kuro-recipe__yield { font-weight: 600; }
+.kuro-content .kuro-recipe__time { opacity: 0.75; }
+/* 材料と手順は 2 列。狭いときは 1 列へ落とす */
+.kuro-content .kuro-recipe__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 0.75rem 1.25rem;
+}
+@media (max-width: 640px) {
+  .kuro-content .kuro-recipe__body { grid-template-columns: minmax(0, 1fr); }
+}
+.kuro-content .kuro-recipe__h {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  opacity: 0.7;
+}
+.kuro-content .kuro-recipe__ings,
+.kuro-content .kuro-recipe__steps { margin: 0; padding-left: 1.2em; }
+.kuro-content .kuro-recipe__ings { list-style: none; padding-left: 0; }
+.kuro-content .kuro-recipe__ings li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.15rem 0;
+  border-bottom: 1px dotted var(--kuro-box-border);
+}
+.kuro-content .kuro-recipe__ing-amount { opacity: 0.75; white-space: nowrap; }
+.kuro-content .kuro-recipe__steps li { padding: 0.1rem 0; }
+
 /* Blockquote — left vertical accent bar */
 .kuro-content blockquote {
   margin: 1rem 0;

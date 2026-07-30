@@ -6,8 +6,8 @@
   <title>KuroEditor — Sample</title>
 
   <!-- KuroEditor 本体 -->
-  <link rel="stylesheet" href="../kuro-editor.css?v=2.20.6" />
-  <script src="../kuro-editor.js?v=2.20.6" defer></script>
+  <link rel="stylesheet" href="../kuro-editor.css?v=2.21.0" />
+  <script src="../kuro-editor.js?v=2.21.0" defer></script>
 
   <!-- 動作確認用 Web フォント (5 種類):
        ホストが <link> を増やせば、 KuroEditor の Web-Fonts ピッカーに
@@ -270,6 +270,9 @@
       if (!mount || !window.KuroEditor) return
 
       window._kuroEditor = new window.KuroEditor(mount, {
+        // レシピカード（🔗 リンクの右に鍋ボタン）。レシピを扱うホストだけが on にする
+        recipeUi: true,
+
         initialContent: [
           '<p>KuroEditor サンプルへようこそ 🐰</p>',
           '<p>このページで実際の動作を試せます。テキストを選ぶとポップアップが、',
