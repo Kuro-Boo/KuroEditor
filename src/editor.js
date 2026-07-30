@@ -44,12 +44,17 @@ import { normalizeContentHtml, inspectContentHtml } from './normalize.js'
 import {
   RECIPE_BLOCK,
   RECIPE_CARD_SEL,
+  RECIPE_LAYOUT_DEFAULT,
   RECIPE_LIMITS,
   RECIPE_VERSION,
+  RECIPE_ALIGNS,
+  RECIPE_WIDTHS,
   buildRecipeCardHtml,
   decodeRecipe,
   emptyRecipe,
   normalizeRecipe,
+  normalizeRecipeLayout,
+  recipeLayoutStyle,
   renderRecipePreview,
   validateRecipe,
 } from './recipe.js'
@@ -85,12 +90,17 @@ export {
   RECIPE_CARD_SEL,
   RECIPE_LIMITS,
   RECIPE_VERSION,
+  RECIPE_ALIGNS,
+  RECIPE_WIDTHS,
+  RECIPE_LAYOUT_DEFAULT,
   buildRecipeCardHtml,
   decodeRecipe,
   encodeRecipe,
   emptyRecipe,
   formatMinutes,
   normalizeRecipe,
+  normalizeRecipeLayout,
+  recipeLayoutStyle,
   renderRecipePreview,
   totalMinutes,
   validateRecipe,
@@ -100,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.21.1'
+export const VERSION = '2.22.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -6598,12 +6608,16 @@ export class KuroEditor {
       if (this._mode !== 'wysiwyg' || !this.recipeDialog) return
       const card = e.target?.closest?.(RECIPE_CARD_SEL)
       if (!card || !this.wysiwyg.contains(card)) return
-      e.preventDefault()
       if (e.target.closest('.kuro-recipe__del')) {
+        e.preventDefault()
         card.remove()
         this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
         return
       }
+      // サイズ / 寄せは各コントロールが自分で処理する。ここで拾うと
+      // 設定を触るたびに編集モーダルが開いてしまう
+      if (e.target.closest('.kuro-recipe__chrome')) return
+      e.preventDefault()
       this._editingRecipeCard = card
       this.recipeDialog.open(decodeRecipe(card.getAttribute('data-recipe')))
     })
@@ -9099,14 +9113,71 @@ export class KuroEditor {
    */
   _decorateRecipeCards(root = this.wysiwyg) {
     for (const card of root.querySelectorAll(RECIPE_CARD_SEL)) {
-      if (card.querySelector(':scope > .kuro-recipe__del')) continue
-      const del = createElement('button', {
+      if (card.querySelector(':scope > .kuro-recipe__chrome')) continue
+      const layout = normalizeRecipeLayout({
+        width: card.dataset.width, align: card.dataset.align,
+      })
+      const chrome = createElement('div', { className: 'kuro-recipe__chrome' })
+
+      // 表示サイズ。角丸ボックスの BOX設定と同じ「%」の考え方
+      const sizeSel = createElement('select', {
+        className: 'kuro-recipe__size',
+        attrs: { title: '表示サイズ', 'aria-label': '表示サイズ' },
+      })
+      for (const w of RECIPE_WIDTHS) {
+        const opt = document.createElement('option')
+        opt.value = w; opt.textContent = w
+        if (w === layout.width) opt.selected = true
+        sizeSel.appendChild(opt)
+      }
+      sizeSel.addEventListener('change', () => this._setRecipeLayout(card, { width: sizeSel.value }))
+      chrome.appendChild(sizeSel)
+
+      // 寄せ。左右は画像・角丸ボックスと同じ float で本文が回り込む
+      for (const [align, icon, title] of [
+        ['left',   ICON.alignLeft,   '左寄せ（回り込み）'],
+        ['center', ICON.alignCenter, '中央'],
+        ['right',  ICON.alignRight,  '右寄せ（回り込み）'],
+      ]) {
+        const btn = createElement('button', {
+          className: 'kuro-recipe__align',
+          html: icon,
+          attrs: { type: 'button', title, 'aria-label': title, 'data-align': align },
+        })
+        if (align === layout.align) btn.classList.add('kuro-recipe__align--active')
+        btn.addEventListener('click', () => this._setRecipeLayout(card, { align }))
+        chrome.appendChild(btn)
+      }
+
+      chrome.appendChild(createElement('button', {
         className: 'kuro-recipe__del',
         html: ICON.trash,
         attrs: { type: 'button', title: 'レシピカードを削除', 'aria-label': 'レシピカードを削除' },
-      })
-      card.appendChild(del)
+      }))
+      card.appendChild(chrome)
     }
+  }
+
+  /**
+   * カードの表示レイアウト（幅 / 寄せ）を変える。
+   * ⚠ レイアウトは `data-recipe`（Schema.org へ出す内容）ではなく
+   *   `data-width` / `data-align` + インライン style に持つ。公開ページでは
+   *   JS 無しでそのまま再現され、角丸ボックス・画像と同じ回り込みになる。
+   */
+  _setRecipeLayout(card, patch) {
+    const layout = normalizeRecipeLayout({
+      width: patch.width ?? card.dataset.width,
+      align: patch.align ?? card.dataset.align,
+    })
+    card.dataset.width = layout.width
+    card.dataset.align = layout.align
+    card.setAttribute('style', recipeLayoutStyle(layout))
+    for (const b of card.querySelectorAll('.kuro-recipe__align')) {
+      b.classList.toggle('kuro-recipe__align--active', b.dataset.align === layout.align)
+    }
+    const sel = card.querySelector('.kuro-recipe__size')
+    if (sel && sel.value !== layout.width) sel.value = layout.width
+    this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
 
   /**
@@ -9141,13 +9212,17 @@ export class KuroEditor {
    *   の 1 箇所に集約する。
    */
   _applyRecipe(recipe) {
-    const html = buildRecipeCardHtml(recipe)
+    const current = this._editingRecipeCard
+    // 表示レイアウトは内容の編集で失わない（幅・寄せはカード側の設定）
+    const layout = current?.isConnected
+      ? normalizeRecipeLayout({ width: current.dataset.width, align: current.dataset.align })
+      : RECIPE_LAYOUT_DEFAULT
+    const html = buildRecipeCardHtml(recipe, layout)
     const holder = document.createElement('div')
     holder.innerHTML = html
     const card = holder.firstElementChild
     if (!card) return
 
-    const current = this._editingRecipeCard
     if (current?.isConnected) {
       // 既存カードの更新。data-bid は同一ブロックの同一性なので引き継ぐ
       const bid = current.getAttribute('data-bid')

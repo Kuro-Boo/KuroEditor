@@ -4,7 +4,9 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
+  RECIPE_ALIGNS,
   RECIPE_BLOCK,
+  RECIPE_WIDTHS,
   RECIPE_LIMITS,
   RECIPE_VERSION,
   buildRecipeCardHtml,
@@ -12,6 +14,8 @@ import {
   encodeRecipe,
   formatMinutes,
   normalizeRecipe,
+  normalizeRecipeLayout,
+  recipeLayoutStyle,
   renderRecipePreview,
   totalMinutes,
   validateRecipe,
@@ -167,6 +171,11 @@ describe('buildRecipeCardHtml', () => {
     expect(decodeRecipe(attr)).toEqual(normalizeRecipe(valid()))
   })
 
+  it('人数には見出し語（人数）が付く（「2」だけでも意味が分かる）', () => {
+    const h = buildRecipeCardHtml(normalizeRecipe({ ...valid(), yield: '2' }))
+    expect(h).toContain('kuro-recipe__k">人数</span>2')
+  })
+
   it('プレビューに材料・手順・時間が出る', () => {
     const h = html()
     expect(h).toContain('生しいたけ')
@@ -188,5 +197,44 @@ describe('buildRecipeCardHtml', () => {
   it('プレビューは data-recipe から毎回同じものが再生成される（冪等）', () => {
     const r = normalizeRecipe(valid())
     expect(renderRecipePreview(r)).toBe(renderRecipePreview(decodeRecipe(encodeRecipe(r))))
+  })
+})
+
+describe('表示レイアウト（幅 / 寄せ）', () => {
+  it('既定は 100% / center（中央・float なし）', () => {
+    expect(normalizeRecipeLayout(undefined)).toEqual({ width: '100%', align: 'center' })
+    expect(recipeLayoutStyle({})).toBe('width:100%;display:block;margin:0 auto')
+  })
+
+  it('左右寄せは float で回り込む（画像・角丸ボックスと同じ）', () => {
+    expect(recipeLayoutStyle({ width: '50%', align: 'left' }))
+      .toBe('width:50%;float:left;margin:0 1em 1em 0')
+    expect(recipeLayoutStyle({ width: '25%', align: 'right' }))
+      .toBe('width:25%;float:right;margin:0 0 1em 1em')
+  })
+
+  it('未知の値は既定へ丸める（壊れた HTML を信用しない）', () => {
+    expect(normalizeRecipeLayout({ width: '33%', align: 'justify' }))
+      .toEqual({ width: '100%', align: 'center' })
+  })
+
+  it('選べる幅は 25/50/75/100%、寄せは left/center/right', () => {
+    expect(RECIPE_WIDTHS).toEqual(['25%', '50%', '75%', '100%'])
+    expect(RECIPE_ALIGNS).toEqual(['left', 'center', 'right'])
+  })
+
+  it('カード HTML に data-width / data-align / style が載る（保存で往復する）', () => {
+    const h = buildRecipeCardHtml(normalizeRecipe(valid()), { width: '50%', align: 'left' })
+    expect(h).toContain('data-width="50%"')
+    expect(h).toContain('data-align="left"')
+    expect(h).toContain('style="width:50%;float:left;margin:0 1em 1em 0"')
+  })
+
+  it('レイアウトは data-recipe（Schema.org へ出す内容）に混ぜない', () => {
+    const h = buildRecipeCardHtml(normalizeRecipe(valid()), { width: '25%', align: 'right' })
+    const r = decodeRecipe(/data-recipe="([^"]+)"/.exec(h)[1])
+    expect(r.width).toBeUndefined()
+    expect(r.align).toBeUndefined()
+    expect(r).toEqual(normalizeRecipe(valid()))
   })
 })

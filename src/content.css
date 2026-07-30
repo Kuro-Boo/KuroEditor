@@ -314,6 +314,13 @@ h5[id^='kuro-h-'] {
   gap: 0.25rem 0.9rem;
 }
 .kuro-content .kuro-recipe__yield { font-weight: 600; }
+/* 「人数」「下準備」等の見出し語。値より一段弱く見せる */
+.kuro-content .kuro-recipe__k {
+  margin-right: 0.35em;
+  font-weight: 400;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
 .kuro-content .kuro-recipe__time { opacity: 0.75; }
 /* 材料と手順は 2 列。狭いときは 1 列へ落とす */
 .kuro-content .kuro-recipe__body {
@@ -343,13 +350,36 @@ h5[id^='kuro-h-'] {
 .kuro-content .kuro-recipe__ing-amount { opacity: 0.75; white-space: nowrap; }
 .kuro-content .kuro-recipe__steps li { padding: 0.1rem 0; }
 
-/* 削除ボタン（編集用 chrome）。**保存 HTML には出ない** —
-   getContent()/ソース表示の直前に、カードの内側は data-recipe から作り直される。
-   位置は右上固定。押し間違いを避けるため通常は淡く、hover で赤く出す。 */
-.kuro-content .kuro-recipe__del {
+/* 編集用 chrome（右上に一列: 表示サイズ → 寄せ 3 種 → 🗑）。
+   **保存 HTML には出ない** — getContent()/ソース表示の直前に、カードの内側は
+   data-recipe から作り直される。押し間違いを避けるため通常は淡く、
+   カードに触れている間だけはっきり出す。 */
+.kuro-content .kuro-recipe__chrome {
   position: absolute;
-  top: 0.45rem;
-  right: 0.5rem;
+  top: 0.4rem;
+  right: 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  opacity: 0.4;
+  transition: opacity 0.12s;
+}
+.kuro-content [data-kuro-block="recipe-card"]:hover .kuro-recipe__chrome,
+.kuro-content .kuro-recipe__chrome:focus-within { opacity: 1; }
+.kuro-content .kuro-recipe__size {
+  height: 1.5rem;
+  padding: 0 0.2rem;
+  border: 1px solid var(--kuro-box-border);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.kuro-content .kuro-recipe__align,
+.kuro-content .kuro-recipe__del {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -359,15 +389,22 @@ h5[id^='kuro-h-'] {
   border: 0;
   border-radius: 0.375rem;
   background: transparent;
-  color: #ef4444;
-  opacity: 0.55;
+  color: inherit;
   cursor: pointer;
-  transition: opacity 0.12s, background 0.12s;
+  transition: background 0.12s, color 0.12s;
 }
-.kuro-content .kuro-recipe__del:hover {
-  opacity: 1;
-  background: rgba(239, 68, 68, 0.14);
+.kuro-content .kuro-recipe__align:hover { background: var(--kuro-box-border); }
+.kuro-content .kuro-recipe__align--active {
+  background: var(--kuro-box-border);
+  color: var(--kuro-link);
 }
+.kuro-content .kuro-recipe__del { color: #ef4444; }
+.kuro-content .kuro-recipe__del:hover { background: rgba(239, 68, 68, 0.14); }
+
+/* 左右寄せ時は本文が回り込む（画像・角丸ボックスと同じ float）。
+   幅・float・margin は data-width / data-align からインライン style で入る
+   ので、公開ページでも JS 無しに同じ見え方になる。 */
+.kuro-content [data-kuro-block="recipe-card"] { max-width: 100%; }
 
 /* Blockquote — left vertical accent bar */
 .kuro-content blockquote {

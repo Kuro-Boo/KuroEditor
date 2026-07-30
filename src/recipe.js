@@ -44,6 +44,38 @@ export const RECIPE_BLOCK = 'recipe-card'
 /** DOM/HTML から RecipeCard を見つけるためのセレクタ。 */
 export const RECIPE_CARD_SEL = `div[data-kuro-block="${RECIPE_BLOCK}"]`
 
+/**
+ * カードの表示レイアウト（本文中での見せ方）。
+ * ⚠ これは **レシピの内容ではない**ので `data-recipe`(正本 JSON) には入れない。
+ *   Schema.org へ出すのは材料・時間・手順であって、幅や回り込みではないため。
+ *   角丸ボックスと同じ `data-width` / `data-align` + インライン style で持たせ、
+ *   公開ページでは JS 無しでそのまま再現できるようにする。
+ */
+export const RECIPE_WIDTHS = ['25%', '50%', '75%', '100%']
+export const RECIPE_ALIGNS = ['left', 'center', 'right']
+export const RECIPE_LAYOUT_DEFAULT = { width: '100%', align: 'center' }
+
+/** 受け取ったレイアウトを既知の値へ丸める（不正値は既定へ）。 */
+export function normalizeRecipeLayout(layout) {
+  const w = String(layout?.width ?? '').trim()
+  const a = String(layout?.align ?? '').trim()
+  return {
+    width: RECIPE_WIDTHS.includes(w) ? w : RECIPE_LAYOUT_DEFAULT.width,
+    align: RECIPE_ALIGNS.includes(a) ? a : RECIPE_LAYOUT_DEFAULT.align,
+  }
+}
+
+/**
+ * インライン style 文字列。左右寄せは **画像・角丸ボックスと同じ float** で、
+ * 周囲の本文が回り込む。中央は float せず margin auto。
+ */
+export function recipeLayoutStyle(layout) {
+  const { width, align } = normalizeRecipeLayout(layout)
+  if (align === 'left')  return `width:${width};float:left;margin:0 1em 1em 0`
+  if (align === 'right') return `width:${width};float:right;margin:0 0 1em 1em`
+  return `width:${width};display:block;margin:0 auto`
+}
+
 /** 仕様 §4「必須フィールド」の制約値。検証もプレビューもここだけを見る。 */
 export const RECIPE_LIMITS = {
   yieldMax: 80,
@@ -199,7 +231,13 @@ export function renderRecipePreview(r) {
   const total = totalMinutes(r)
   if (total && time.length === 2) time.push(`合計 ${formatMinutes(total)}`)
 
-  const meta = [`<span class="kuro-recipe__yield">${_escapeHtml(r.yield)}</span>`]
+  // 「2」とだけ書かれても何の数字か分かるようにラベルを添える
+  // （時間側が「下準備 10 分」と読めるのと同じ扱い）
+  const meta = [
+    `<span class="kuro-recipe__yield">` +
+      `<span class="kuro-recipe__k">人数</span>${_escapeHtml(r.yield)}` +
+    `</span>`,
+  ]
   if (time.length) {
     meta.push(`<span class="kuro-recipe__time">${_escapeHtml(time.join(' / '))}</span>`)
   }
@@ -227,11 +265,15 @@ export function renderRecipePreview(r) {
 /**
  * RecipeCard ブロック 1 個ぶんの HTML（仕様 §4 の保存形式）。
  * @param {object} r 正規化済みレシピ
+ * @param {{width?:string, align?:string}} [layout] 表示レイアウト（既定 100% / center）
  */
-export function buildRecipeCardHtml(r) {
+export function buildRecipeCardHtml(r, layout = RECIPE_LAYOUT_DEFAULT) {
+  const l = normalizeRecipeLayout(layout)
   return `<div data-kuro-block="${RECIPE_BLOCK}"` +
     ` data-recipe-version="${RECIPE_VERSION}"` +
     ` data-recipe="${encodeRecipe(r)}"` +
+    ` data-width="${l.width}" data-align="${l.align}"` +
+    ` style="${recipeLayoutStyle(l)}"` +
     ` contenteditable="false" role="group" aria-label="レシピカード">` +
     renderRecipePreview(r) +
     `</div>`

@@ -438,8 +438,9 @@
   .kuro-pane--view .kuro-pane__wysiwyg:empty::before { content: none; }
   /* コードブロックの 🗑 は編集用なので隠す（📋 コピーは閲覧でも使うので残す） */
   .kuro-pane--view .kuro-code__del { display: none; }
-  /* レシピカードの 🗑 も同様。閲覧モードではカードのクリック導線も切る */
-  .kuro-pane--view .kuro-recipe__del { display: none; }
+  /* レシピカードの編集用 chrome（サイズ / 寄せ / 🗑）も同様。
+     閲覧モードではカードのクリック導線も切る */
+  .kuro-pane--view .kuro-recipe__chrome { display: none; }
   .kuro-pane--view [data-kuro-block="recipe-card"] { cursor: default; }
   .kuro-pane--view a { cursor: pointer; }
 
