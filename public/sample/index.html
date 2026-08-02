@@ -6,8 +6,8 @@
   <title>KuroEditor — Sample</title>
 
   <!-- KuroEditor 本体 -->
-  <link rel="stylesheet" href="../kuro-editor.css?v=2.23.1" />
-  <script src="../kuro-editor.js?v=2.23.1" defer></script>
+  <link rel="stylesheet" href="../kuro-editor.css?v=2.24.0" />
+  <script src="../kuro-editor.js?v=2.24.0" defer></script>
 
   <!-- 動作確認用 Web フォント (5 種類):
        ホストが <link> を増やせば、 KuroEditor の Web-Fonts ピッカーに
@@ -248,6 +248,7 @@
           <li>テーブルメニューで罫線・セル背景色も試せます</li>
           <li>画像のドラッグ&amp;ドロップ、貼り付けも対応</li>
           <li>右上の <strong>HTML表示</strong> でソースも確認できます</li>
+          <li>行頭で <code>[]</code> ＋スペースでチェックリスト（<code>[x]</code> ならチェック済み）</li>
         </ol>
         <div class="sample-help-tip">
           💡 URL 欄に <code>https://placehold.co/400x300</code> や YouTube URL を入れて埋め込みもテストできます
@@ -277,6 +278,10 @@
           '<p>KuroEditor サンプルへようこそ 🐰</p>',
           '<p>このページで実際の動作を試せます。テキストを選ぶとポップアップが、',
           '画像はドラッグ&amp;ドロップで挿入できます。</p>',
+          '<ul class="kuro-ul-check">',
+          '<li data-checked="1">チェックリスト（箱をタップでトグル）</li>',
+          '<li>行頭で <strong>[]</strong> ＋スペースでも作れます</li>',
+          '</ul>',
         ].join(''),
 
         urlResolver(slug) {

@@ -40,6 +40,11 @@
   --kuro-quote-border: #6366f1;
   --kuro-hr: rgba(128, 128, 128, 0.4);
   --kuro-list-color: inherit;
+  /* checklist (ul.kuro-ul-check) — 箱の枠 / 地 / チェック時の塗り / 鉤の色 */
+  --kuro-check-border: rgba(128, 128, 128, 0.55);
+  --kuro-check-bg: transparent;
+  --kuro-check-on: #4f46e5;
+  --kuro-check-mark: #ffffff;
   /* kbd */
   --kuro-kbd-bg: #f3f4f6;
   --kuro-kbd-text: #1f2937;
@@ -790,6 +795,74 @@ ul.kuro-ul-tri {
 ul.kuro-ul-tri-open {
   list-style-type: '▷ ';
 }
+/* ── チェックリスト（記号リストのマーカーの一種）───────────────────────────────
+   状態は <li data-checked="1"> という【属性】で持つ。<input type="checkbox"> は
+   使わない — checked はプロパティなので innerHTML に出ず、保存した瞬間に
+   チェックが全部消えるため（editor.js の CHECKLIST_CLASS のコメントが正本）。
+
+   ⚠ 箱は CSS で描く。☐/☑ の【文字】は環境によって絵文字として別サイズで
+     描画され、チェックした瞬間に行がガタつく（🗑 を使わないのと同じ理由）。
+     ここでは箱と鉤（チェックマーク）を border だけで描くので、状態が変わっても
+     占める面積は 1px も変わらない。
+   ⚠ マーカーの色ボタン（--kuro-marker-color）は list-style を消した以上
+     ::marker には効かない。箱の色として引き受けて、押しても何も起きない
+     ボタンにしない。 */
+ul.kuro-ul-check {
+  list-style: none;
+  padding-left: 0;
+}
+ul.kuro-ul-check > li {
+  position: relative;
+  /* 箱はこのパディングの中に描く。タップ判定（_checklistMarkerHit）も
+     「パディングの幅の内側」で行うので、両者は必ず一致する。 */
+  padding-left: 2em;
+  min-height: 1.5em;
+}
+/* 箱 */
+ul.kuro-ul-check > li::before {
+  content: '';
+  position: absolute;
+  left: 0.15em;
+  /* 1 行目の行送り(1.625em)の中で縦センター */
+  top: calc((1.625em - 1.3em) / 2);
+  width: 1.3em;
+  height: 1.3em;
+  box-sizing: border-box;
+  border: 2px solid var(--kuro-marker-color, var(--kuro-check-border));
+  border-radius: 0.25em;
+  background: var(--kuro-check-bg);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+ul.kuro-ul-check > li[data-checked="1"]::before {
+  background: var(--kuro-marker-color, var(--kuro-check-on));
+  border-color: var(--kuro-marker-color, var(--kuro-check-on));
+}
+/* 鉤（チェックマーク）— 常に置いて透明度だけ切り替える。要素を出し入れすると
+   行が一瞬詰まって見えるため。 */
+ul.kuro-ul-check > li::after {
+  content: '';
+  position: absolute;
+  /* 箱の中央に置く: 箱は left .15em / 幅 1.3em なので中心は .8em。
+     鉤は幅 .36em / 高さ .7em なので left .62em・top は箱の中心 -.35em。 */
+  left: 0.62em;
+  top: calc((1.625em - 1.3em) / 2 + 0.3em);
+  width: 0.36em;
+  height: 0.7em;
+  box-sizing: border-box;
+  border: solid var(--kuro-check-mark);
+  border-width: 0 0.17em 0.17em 0;
+  transform: rotate(43deg);
+  opacity: 0;
+  pointer-events: none;
+}
+ul.kuro-ul-check > li[data-checked="1"]::after {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  ul.kuro-ul-check > li::before { transition: none; }
+}
+
 ol.kuro-list-decimal {
   list-style-type: decimal;
 }

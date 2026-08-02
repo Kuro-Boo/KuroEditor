@@ -1418,6 +1418,9 @@
     --kuro-quote-border: theme('colors.indigo.500');
     --kuro-hr: theme('colors.neutral.600');
     --kuro-list-color: theme('colors.neutral.200');
+    --kuro-check-border: theme('colors.neutral.500');
+    --kuro-check-on: theme('colors.indigo.400');
+    --kuro-check-mark: theme('colors.neutral.900');
     --kuro-kbd-bg: theme('colors.neutral.800');
     --kuro-kbd-text: theme('colors.neutral.100');
     --kuro-kbd-border: theme('colors.neutral.500');

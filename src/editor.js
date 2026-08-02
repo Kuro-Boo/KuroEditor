@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.23.1'
+export const VERSION = '2.24.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -209,6 +209,31 @@ const OL_STYLE_OPTIONS = [
 ]
 
 /**
+ * チェックリスト — 「記号リストのマーカーの一種」として実装する。
+ *
+ * なぜ UL のバリアントなのか:
+ *   Enter で次項目 / Tab でネスト / 「解除」で段落へ戻す、が既存の UL 機構
+ *   （_insertList / _toggleListOff / _applyULStyle）にそのまま乗る。項目の本文は
+ *   ただのテキストなので、太字・リンク・[[…]] 記法も普通に使える。クラス名を
+ *   `kuro-ul-` 接頭辞に揃えてあるので、_applyULStyle のマーカー総入れ替えと
+ *   _updateULStyleLabel の点灯判定にも追加コード無しで乗る。
+ *
+ * ⚠ <input type="checkbox"> は使わない。checked は【プロパティであって属性では
+ *   ない】ため innerHTML に出ず、getContent() した瞬間にチェック状態が全部消える。
+ *   状態は <li data-checked="1"> という【属性】で持つ ＝ innerHTML で往復する。
+ *   ついでに dirty 検知の MutationObserver が attributes: true で見ている
+ *   （_observeDirty）ので、チェックのトグルが保存ボタン点灯と undo 履歴に自動で
+ *   載る（専用の配線が要らない）。
+ *
+ * ⚠ 箱は CSS で描く（content.css の ul.kuro-ul-check）。☐/☑ の文字は環境により
+ *   絵文字として別サイズで描かれ、チェックすると行がガタつく。これは 🗑 を使わない
+ *   のと同じ理由（フォント差でずれる）。
+ */
+const CHECKLIST_CLASS = 'kuro-ul-check'
+/** チェック済みを表す <li> の属性。値は '1' 固定（属性の有無で判定しない）。 */
+const CHECKED_ATTR = 'data-checked'
+
+/**
  * Unordered-list style presets — applied as CSS class on <ul>.
  * Standard CSS keywords (disc/circle/square) + string-literal list-style-type values.
  * base:true marks the default (disc) style.
@@ -226,6 +251,7 @@ const UL_STYLE_OPTIONS = [
   { label: '☆',  value: 'kuro-ul-star-open'           },   // full-width ☆
   { label: '▶',  value: 'kuro-ul-tri'                 },   // full-width ▶
   { label: '▷',  value: 'kuro-ul-tri-open'            },   // full-width ▷
+  { label: '☑︎', value: CHECKLIST_CLASS                },   // チェックリスト
 ]
 
 // ─── SVG icon helpers ─────────────────────────────────────────────────────────
@@ -6717,11 +6743,30 @@ export class KuroEditor {
       this._detectAutoList(e)
       this._detectSpecialLink(e)
       this._detectEmojiShortcode(e)
+      this._resetSplitCheckItems(e)   // Enter で生まれた空項目のチェックを落とす
       this._updateCharCount()
       this._syncRecipeBtn()   // 貼付・削除・undo/redo でカードの有無が変わる
       if (this.imageMenu.isVisible) this.imageMenu.deactivate()
       // Code blocks are <textarea>-based now; their own input listener handles
       // gutter sync. Nothing to do at the wysiwyg level.
+    })
+
+    // チェックリストの箱をタップ → チェックのトグル。
+    //  ⚠ pointerdown で拾って preventDefault する。click まで待つとブラウザが
+    //    先にキャレットを箱の位置へ動かしてしまい、「チェックしただけなのに
+    //    カーソルが飛ぶ」ことになる。
+    //  ⚠ 箱は ::before（疑似要素）なのでイベントの target になれない。<li> 自身で
+    //    受けて、押された座標がマーカー領域かを _checklistMarkerHit で判定する。
+    //    箱の外＝文字の上を押したときは何もしない（＝普通にキャレットが立つ）ので
+    //    本文の編集を邪魔しない。
+    //  閲覧モードではトグルしない（チェックは本文の変更 ＝ 編集不可の原則どおり。
+    //  「読者がチェックできる Todo」は保存が絡むのでホスト側の責務）。
+    this.wysiwyg.addEventListener('pointerdown', (e) => {
+      if (this._mode !== 'wysiwyg') return
+      const li = this._checklistItemAt(e.target)
+      if (!li || !this._checklistMarkerHit(li, e)) return
+      e.preventDefault()
+      this._toggleCheckItem(li)
     })
 
     // リンククリックの扱いはモードで分かれる。
@@ -7148,7 +7193,7 @@ export class KuroEditor {
     else   this.linkEditPopup.close()
   }
 
-  /** Auto-detect "1. " and "- " / "* " list starters at line beginning. */
+  /** Auto-detect "1. " / "- " / "* " / "[] " list starters at line beginning. */
   _detectAutoList(e) {
     if (e.inputType && !e.inputType.startsWith('insert')) return
     const sel = window.getSelection()
@@ -7176,7 +7221,19 @@ export class KuroEditor {
       // e.g. "2. " → <ol start="2"> so the first visible item shows "2."
       const startNum = parseInt(olMatch[1], 10)
       this._replaceLinePrefix(node, lineText, offset, () => this._insertList('OL', startNum))
-    } else if (/^[-*]\s$/.test(lineText)) {
+      return
+    }
+    // "[] " / "[ ] " / "[x] " → チェックリスト。
+    // 「- [ ] 」を丸ごと待ち受けはしない: "- " の時点で下の分岐が箇条書きへ
+    // 変えてしまうので、続きの "[ ] " は【項目の中で】打たれる。項目の中でも
+    // 段落でも同じように効かせるのが _startChecklist の役目。
+    const ckMatch = lineText.match(/^\[([ xX]?)\]\s$/)
+    if (ckMatch) {
+      const checked = /[xX]/.test(ckMatch[1])
+      this._replaceLinePrefix(node, lineText, offset, () => this._startChecklist(checked))
+      return
+    }
+    if (/^[-*]\s$/.test(lineText)) {
       this._replaceLinePrefix(node, lineText, offset, () => this._insertList('UL'))
     }
   }
@@ -7302,6 +7359,113 @@ export class KuroEditor {
     sel.removeAllRanges()
     sel.addRange(range)
     insertCmd()
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CHECKLIST — 記号リストのマーカー ☑（CHECKLIST_CLASS / CHECKED_ATTR 参照）
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * 与えられたノードを含む「チェックリストの項目」を返す。無ければ null。
+   *
+   * ⚠ 最も近い <li> の【直接の親】が checklist であることを見る。チェックリストの
+   *   項目の中に普通の箇条書きを入れ子にしたとき、内側のマーカー位置を押しても
+   *   外側の項目がトグルされない（closest('.kuro-ul-check') だと誤爆する）。
+   */
+  _checklistItemAt(node) {
+    const el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node
+    const li = el?.closest?.('li')
+    if (!li || !this.wysiwyg.contains(li)) return null
+    return li.parentElement?.classList.contains(CHECKLIST_CLASS) ? li : null
+  }
+
+  /**
+   * ポインタ座標がその項目の「箱」の領域かどうか。
+   *
+   * 箱は <li> の行頭側パディングの中に描かれる（content.css）ので、判定は
+   * 「行頭側パディングの幅の内側」×「1 行目の高さの内側」。2 行目以降の行頭を
+   * 押してもトグルしない（そこに箱は描かれていないため）。
+   */
+  _checklistMarkerHit(li, e) {
+    const rect = li.getBoundingClientRect()
+    if (!rect.width && !rect.height) return false   // 非表示 / 計測不能
+    const cs   = getComputedStyle(li)
+    const pad  = parseFloat(cs.paddingInlineStart || cs.paddingLeft) || 0
+    if (!pad) return false
+    // 行頭は書字方向で左右が入れ替わる（padding-inline-start と同じ側で測る）
+    const x = cs.direction === 'rtl' ? rect.right - e.clientX : e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const firstLine = parseFloat(cs.lineHeight) || rect.height
+    return x >= 0 && x < pad && y >= 0 && y < Math.max(firstLine, pad)
+  }
+
+  /**
+   * 1 項目のチェックを反転する。
+   * dirty 点灯・undo 履歴・onBlockChange への通知は属性変化として
+   * _dirtyObserver が拾うので、ここでは何も呼ばなくてよい。
+   */
+  _toggleCheckItem(li) {
+    if (li.getAttribute(CHECKED_ATTR) === '1') li.removeAttribute(CHECKED_ATTR)
+    else li.setAttribute(CHECKED_ATTR, '1')
+  }
+
+  /**
+   * Enter で生まれた【空の】項目からチェックを外す。
+   *
+   * ⚠ ブラウザは Enter で <li> を属性ごと複製する。チェック済みの項目の末尾で
+   *   Enter を押すと、次の項目が最初からチェック済みで生まれてしまう。
+   * ⚠ 「キャレットのある項目のチェックを外す」では駄目。項目の【先頭】で Enter を
+   *   押したときブラウザは空の項目を手前に挿し、キャレットは元の項目に残るので、
+   *   本文のある項目のチェックが外れてしまう。空かどうかで判定すれば、末尾
+   *   Enter（新しい空項目が後ろ）も先頭 Enter（空項目が前）も正しく処理でき、
+   *   本文を持つ項目のチェックには絶対に触れない。
+   */
+  _resetSplitCheckItems(e) {
+    if (this._mode !== 'wysiwyg') return
+    if (!e.inputType?.startsWith('insertParagraph')) return   // Shift+Enter は対象外
+    const li = this._checklistItemAt(window.getSelection()?.anchorNode)
+    const ul = li?.parentElement
+    if (!ul) return
+    // 直下の <li> だけを見る（入れ子の箇条書きの項目には触らない）
+    for (const item of ul.children) {
+      if (item.tagName !== 'LI' || !item.hasAttribute(CHECKED_ATTR)) continue
+      if (this._isBlankItem(item)) item.removeAttribute(CHECKED_ATTR)
+    }
+  }
+
+  /**
+   * 「Enter で生まれたばかりの空項目」か。
+   * ⚠ textContent だけで見ない。画像やメディアだけを置いた項目は文字が無くても
+   *   中身があるので、そこのチェックを外してはいけない（改行の巻き添えになる）。
+   */
+  _isBlankItem(li) {
+    if (li.textContent.trim() !== '') return false
+    return !Array.from(li.children).some((c) => c.tagName !== 'BR')
+  }
+
+  /**
+   * 行頭の "[] " / "[ ] " / "[x] " をチェックリストに変える（_detectAutoList から）。
+   * 既に箇条書きの中ならその <ul> をチェックリストへ変え、そうでなければ
+   * <ul> を作ってから変える。
+   * @param {boolean} checked  "[x]" で始めたときは最初からチェック済みにする
+   */
+  _startChecklist(checked) {
+    const sel = window.getSelection()
+    const inList = () => {
+      let n = sel?.rangeCount ? sel.getRangeAt(0).startContainer : null
+      if (n?.nodeType === Node.TEXT_NODE) n = n.parentElement
+      const li = n?.closest?.('li')
+      return li && this.wysiwyg.contains(li) ? li : null
+    }
+    // 箇条書きの外なら先に <ul> を作る（キャレットは最初の <li> の末尾に置かれる）
+    if (!inList()) this._insertList('UL')
+    const li = inList()
+    const ul = li?.parentElement
+    if (!ul || ul.tagName !== 'UL') return
+    // マーカー系クラスは排他（_applyULStyle と同じ扱い）
+    Array.from(ul.classList).filter(c => c.startsWith('kuro-ul-')).forEach(c => ul.classList.remove(c))
+    ul.classList.add(CHECKLIST_CLASS)
+    if (checked) li.setAttribute(CHECKED_ATTR, '1')
   }
 
   _onKeydown(e) {
