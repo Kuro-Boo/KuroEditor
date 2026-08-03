@@ -12,7 +12,7 @@
 
 Zero external JS libraries — an embeddable WYSIWYG editor that runs by loading a single `kuro-editor.js` file.
 
-### 🌐 [Showcase](https://kuro.boo/kuroeditor/) &nbsp;·&nbsp; 🎮 [Live sample](https://kuro.boo/kuroeditor/sample/) &nbsp;·&nbsp; 🏠 [Author: Kuro.Boo](https://kuro.boo/)
+### 🌐 [Showcase](https://kuro.boo/kuroeditor/) &nbsp;·&nbsp; 🎮 [Live sample](https://kuro.boo/kuroeditor/sample/) &nbsp;·&nbsp; 📖 [User guide (JA)](https://kuro.boo/kuroeditor/guide/) &nbsp;·&nbsp; 🏠 [Author: Kuro.Boo](https://kuro.boo/)
 
 </div>
 

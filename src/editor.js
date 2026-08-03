@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.25.2'
+export const VERSION = '2.26.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -387,6 +387,12 @@ const ICON = {
   link: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">` +
     `<path d="M6.5 9.5 a2.6 2.6 0 0 1 0-3.7l2.1-2.1 a2.6 2.6 0 0 1 3.7 3.7l-1 1"/>` +
     `<path d="M9.5 6.5 a2.6 2.6 0 0 1 0 3.7l-2.1 2.1 a2.6 2.6 0 0 1-3.7-3.7l1-1"/>` +
+  `</svg>`,
+  // Help — 円の中の「？」（タブバー上段、目次ボタンの左。操作ガイドを別タブで開く）
+  help: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<circle cx="8" cy="8" r="6.6"/>` +
+    `<path d="M6.1 6.1 a1.95 1.95 0 0 1 3.8 .6 c0 1.3-1.9 1.6-1.9 2.9"/>` +
+    `<line x1="8" y1="11.7" x2="8" y2="11.8"/>` +
   `</svg>`,
   // Pencil — 編集タブ (閲覧タブ = eye と対になる)
   pencil: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
@@ -5726,6 +5732,11 @@ export class KuroEditor {
    *   versionUi?: boolean,         // false でタブバー左上のバージョンバッジ (vX.Y.Z) を
    *                                // 非表示（既定 true = 表示）。ホスト UI に組み込む際、
    *                                // 内部バージョンをユーザーに見せたくない画面向け。
+   *   helpUi?: boolean,            // false でタブバー上段（目次ボタンの左）の「？」ヘルプ
+   *                                // ボタンを非表示（既定 true = 表示）。
+   *   helpUrl?: string|null,       // ヘルプボタンが別タブで開くガイドの URL。既定は公式の
+   *                                // 操作マニュアル。ホストが独自マニュアルを持つなら差し替え、
+   *                                // null を渡せばボタン自体を出さない（helpUi:false と同じ）。
    *   blockIds?: boolean,          // opt-in: maintain a stable data-bid on each top-level block
    *   canvasColors?: {             // 通常モードのキャンバス配色をホストの実サイト色に合わせる。
    *     bg?: string,               // 各値は CSS color。省略・空はスタイルシート既定
@@ -5798,6 +5809,9 @@ export class KuroEditor {
       canvasDark: null,
       canvasDarkUi: false,
       versionUi: true,
+      helpUi: true,
+      // 公式の操作マニュアル（書く人向け）。ホストが独自マニュアルを持つなら差し替える
+      helpUrl: 'https://kuro.boo/kuroeditor/guide/',
       recipeUi: true,
       blockIds: false,
       canvasColors: null,
@@ -6077,6 +6091,24 @@ export class KuroEditor {
       attrs: { type: 'button' },
     })
 
+    // ── Help button（操作ガイドを別タブで開く）───────────────────────────
+    // 目次ボタンの左。⚠ 編集アクションではないので閲覧モードでも disabled に
+    // しない（読んでいる最中こそ操作を確かめたくなる）。だから .kuro-tabs__action
+    // ではなく専用クラスにしてある（あちらは閲覧モードで一括 disabled になる）。
+    this.tabHelpBtn = createElement('button', {
+      className: 'kuro-tabs__help-btn',
+      html: ICON.help,
+      attrs: {
+        type: 'button',
+        title: 'エディッター操作ガイド',
+        'aria-label': 'エディッター操作ガイド（別タブで開く）',
+      },
+    })
+    this.tabHelpBtn.addEventListener('click', () => {
+      const url = this.options.helpUrl
+      if (url) window.open(url, '_blank', 'noopener')
+    })
+
     // ── ToC toggle button ─────────────────────────────────────────────────
     const tocSep = createElement('div', { className: 'kuro-tabs__sep' })
     this.tabTocBtn = createElement('button', {
@@ -6114,9 +6146,12 @@ export class KuroEditor {
       row1Right.appendChild(this.tabSaveBtn)
     }
     row1Right.appendChild(tocSep)
+    // helpUi: false → ヘルプボタンを載せない（helpUrl を null にしても同じく出ない）
+    if (this.options.helpUi && this.options.helpUrl) row1Right.appendChild(this.tabHelpBtn)
     row1Right.appendChild(this.tabTocBtn)
 
-    // 幅が足りないとき文字カウンターを逃がす先（目次ボタンの左）— _syncCharCountSlot()
+    // 幅が足りないとき文字カウンターを逃がす先（仕切りの手前＝ヘルプ・目次の左）
+    // — _syncCharCountSlot()
     this._row1Right   = row1Right
     this._charCountUp = tocSep
 

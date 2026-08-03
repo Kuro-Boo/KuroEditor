@@ -306,6 +306,14 @@
            hover:text-neutral-300 hover:bg-neutral-700
            transition-colors flex-shrink-0;
   }
+  /* Help（？）— 目次ボタンの左。操作ガイドを別タブで開く。
+     見た目は目次ボタンと揃える（同じ列の同じ大きさのアイコンボタン）が、
+     こちらは常に非アクティブ表示（トグルではなくリンクなので点灯しない）。 */
+  .kuro-tabs__help-btn {
+    @apply px-2 py-1.5 mx-1 my-1 text-neutral-600 cursor-pointer rounded
+           hover:text-neutral-300 hover:bg-neutral-700
+           transition-colors flex-shrink-0;
+  }
   .kuro-tabs__toc-btn--active {
     @apply text-indigo-400;
   }
