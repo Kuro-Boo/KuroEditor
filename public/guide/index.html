@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" class="dark">
+<html lang="ja">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -16,20 +16,19 @@
   <script src="../version.js"></script>
 
   <style>
-    :root { color-scheme: dark; }
-    body {
-      background:
-        radial-gradient(at 20% 0%, rgba(99, 102, 241, 0.14) 0%, transparent 55%),
-        #0a0a0f;
-    }
-    /* 本文の読み物としての基本 */
+    /* マニュアルは【通常カラー（ライト）】。エディタの chrome はダーク固定だが、
+       読み物であるこのページまで暗くする理由はない。ボタンの見本
+       （.kbtn / .toolbar-demo）だけは実際の画面と同じダークで見せる。 */
+    :root { color-scheme: light; }
+    body { background: #fff; color: #3f3f46; }
+
     .doc h2 {
-      font-size: 1.5rem; font-weight: 700; color: #fff;
-      margin: 3.5rem 0 0.75rem; padding-top: 0.5rem;
-      scroll-margin-top: 5rem;
+      font-size: 1.5rem; font-weight: 700; color: #18181b;
+      margin: 3.5rem 0 0.75rem; padding-bottom: 0.4rem;
+      border-bottom: 1px solid #e4e4e7; scroll-margin-top: 5rem;
     }
     .doc h3 {
-      font-size: 1.075rem; font-weight: 600; color: #e4e4e7;
+      font-size: 1.075rem; font-weight: 600; color: #27272a;
       margin: 2rem 0 0.5rem; scroll-margin-top: 5rem;
     }
     .doc p  { margin: 0.75rem 0; line-height: 1.9; }
@@ -37,85 +36,117 @@
     .doc ul { list-style: disc; }
     .doc ol { list-style: decimal; }
     .doc li { margin: 0.2rem 0; }
-    .doc a  { color: #a5b4fc; text-decoration: underline; text-underline-offset: 2px; }
-    .doc a:hover { color: #c7d2fe; }
-    .doc strong { color: #fff; font-weight: 600; }
+    .doc a  { color: #4f46e5; text-decoration: underline; text-underline-offset: 2px; }
+    .doc a:hover { color: #4338ca; }
+    .doc strong { color: #18181b; font-weight: 600; }
 
-    /* 表 */
-    .doc table {
-      width: 100%; border-collapse: collapse; margin: 1rem 0;
-      font-size: 0.925rem;
-    }
+    .doc table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.925rem; }
     .doc th, .doc td {
-      border: 1px solid rgba(99, 102, 241, 0.18);
-      padding: 0.55rem 0.8rem; text-align: left; vertical-align: top;
+      border: 1px solid #e4e4e7; padding: 0.55rem 0.8rem; text-align: left; vertical-align: top;
     }
-    .doc th { background: rgba(99, 102, 241, 0.12); color: #e0e7ff; font-weight: 600; white-space: nowrap; }
-    .doc td { line-height: 1.75; }
+    .doc th { background: #f4f4f5; color: #27272a; font-weight: 600; white-space: nowrap; }
+    .doc td { line-height: 1.8; }
+    /* 1 列目（項目名）は折り返さずに読ませる。狭い画面では表ごと横スクロールする */
+    .doc td:first-child { min-width: 7.5rem; }
     .table-scroll { overflow-x: auto; }
 
-    /* キー表記 */
     kbd {
-      display: inline-block;
-      background: #17171b; border: 1px solid rgba(99, 102, 241, 0.35);
-      border-bottom-width: 2px; border-radius: 0.35em;
+      display: inline-block; background: #fafafa;
+      border: 1px solid #d4d4d8; border-bottom-width: 2px; border-radius: 0.35em;
       padding: 0.1em 0.45em; margin: 0 0.1em;
-      font-family: 'JetBrains Mono', monospace; font-size: 0.85em; color: #c7d2fe;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85em; color: #3f3f46;
       white-space: nowrap;
     }
     code.inline {
-      background: rgba(99, 102, 241, 0.15); color: #a5b4fc;
+      background: #eef2ff; color: #4338ca;
       padding: 0.15em 0.45em; border-radius: 0.3em;
       font-size: 0.9em; font-family: 'JetBrains Mono', monospace;
     }
+
+    /* ── 画面と同じボタン ────────────────────────────────────────────────
+       エディタの chrome（ダーク）と同じ配色で、実物と同じアイコンを出す。
+       文章中でも表の中でも「押すのはこれ」が一目で分かるようにするため。 */
+    .kbtn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 1.9rem; height: 1.75rem; padding: 0 0.4rem;
+      margin: 0 0.15rem; vertical-align: -0.45em;
+      background: #262626; border: 1px solid #404040; border-radius: 0.3rem;
+      color: #a3a3a3; font-size: 0.9rem; line-height: 1;
+    }
+    .kbtn--active { color: #e5e5e5; border-color: #6366f1; }
+    .kbtn--save {
+      background: #4f46e5; border-color: #4f46e5; color: #fff;
+      font-size: 0.75rem; font-weight: 600; padding: 0 0.6rem;
+    }
+
+    /* ツールバーの再現（画面と同じ並び） */
+    .toolbar-demo {
+      background: #262626; border: 1px solid #404040; border-radius: 0.6rem;
+      overflow: hidden; margin: 1.25rem 0; font-size: 0.8rem; color: #a3a3a3;
+    }
+    .toolbar-demo__row {
+      display: flex; align-items: center; gap: 0.15rem;
+      padding: 0.35rem 0.6rem; flex-wrap: wrap;
+    }
+    .toolbar-demo__row + .toolbar-demo__row { border-top: 1px solid #404040; }
+    .toolbar-demo__spacer { flex: 1 1 auto; }
+    .toolbar-demo__ver {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #a5b4fc;
+      background: #27272a; border: 1px solid #312e81; border-radius: 9999px;
+      padding: 0.1rem 0.5rem; margin-right: 0.4rem;
+    }
+    .toolbar-demo__sep { width: 1px; align-self: stretch; background: #404040; margin: 0 0.4rem; }
+    .toolbar-demo__count {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #71717a;
+    }
+    .toolbar-demo__note { font-size: 0.75rem; }
+    .toolbar-demo__canvas {
+      background: #fff; color: #52525b; padding: 0.8rem 0.9rem;
+      border-top: 1px solid #404040; font-size: 0.8rem;
+    }
+    figcaption { font-size: 0.8rem; color: #71717a; margin-top: 0.4rem; }
 
     /* 囲み（このページ自身の注意書き） */
     .box {
       display: flex; gap: 0.85rem; align-items: flex-start;
       border-radius: 0.75rem; padding: 0.9rem 1.1rem; margin: 1.25rem 0;
-      border: 1px solid; line-height: 1.85;
+      border: 1px solid; border-left-width: 4px; line-height: 1.85;
     }
     .box .box-icon { font-size: 1.2rem; line-height: 1.5; flex: none; }
-    .box-tip  { background: rgba(59, 130, 246, 0.1);  border-color: rgba(59, 130, 246, 0.4); }
-    .box-warn { background: rgba(245, 158, 11, 0.1);  border-color: rgba(245, 158, 11, 0.4); }
-    .box-note { background: rgba(148, 163, 184, 0.1); border-color: rgba(148, 163, 184, 0.35); }
+    .box-tip  { background: #eff6ff; border-color: #93c5fd; }
+    .box-warn { background: #fffbeb; border-color: #fcd34d; }
+    .box-note { background: #f4f4f5; border-color: #d4d4d8; }
 
     /* 目次（左） */
     .toc a {
       display: block; padding: 0.3rem 0.7rem; border-left: 2px solid transparent;
-      color: #a1a1aa; font-size: 0.875rem; text-decoration: none; border-radius: 0 0.3rem 0.3rem 0;
+      color: #71717a; font-size: 0.875rem; text-decoration: none; border-radius: 0 0.3rem 0.3rem 0;
     }
-    .toc a:hover { color: #e4e4e7; background: rgba(99, 102, 241, 0.1); }
-    .toc a.active { color: #c7d2fe; border-left-color: #818cf8; background: rgba(99, 102, 241, 0.12); }
-    .toc .toc-group { margin-top: 1rem; padding: 0 0.7rem 0.25rem; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: #52525b; }
+    .toc a:hover { color: #27272a; background: #f4f4f5; }
+    .toc a.active { color: #4f46e5; border-left-color: #4f46e5; background: #eef2ff; }
+    .toc .toc-group {
+      margin-top: 1rem; padding: 0 0.7rem 0.25rem; font-size: 0.7rem;
+      letter-spacing: 0.08em; color: #a1a1aa;
+    }
 
-    .gradient-text {
-      background: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #f472b6 100%);
-      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    .glass {
-      background: rgba(23, 23, 27, 0.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(99, 102, 241, 0.15);
-    }
     html { scroll-behavior: smooth; }
     @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   </style>
 </head>
 
-<body class="text-zinc-300 font-sans antialiased">
+<body class="font-sans antialiased">
 
-  <!-- ヘッダー -->
-  <header class="sticky top-0 z-40 glass border-b border-indigo-500/15">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-      <a href="../" class="flex items-center gap-2 font-bold text-white">
-        <span class="text-lg">🖊</span>
-        <span>KuroEditor</span>
-        <span class="text-xs font-normal text-zinc-500 hidden sm:inline">操作マニュアル</span>
+  <!-- ヘッダー — ロゴは公式の 2 色構成（黒兎マーク＋Kuro/Editor） -->
+  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-zinc-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <a href="../" class="flex items-center gap-3">
+        <img src="../assets/kuroeditor_logo_plus_mark.png" alt="KuroEditor" class="h-8 w-auto select-none" />
+        <span class="text-sm text-zinc-500 hidden sm:inline">操作マニュアル</span>
       </a>
       <nav class="flex items-center gap-4 text-sm">
-        <span id="ke-version" class="hidden sm:inline text-xs text-zinc-500"></span>
-        <a href="../sample/" class="text-amber-50 hover:text-white transition-colors">サンプル</a>
-        <a href="../" class="text-amber-50 hover:text-white transition-colors">トップ</a>
+        <span id="ke-version" class="hidden sm:inline text-xs text-zinc-400 font-mono"></span>
+        <a href="../sample/" class="text-zinc-600 hover:text-zinc-900 transition-colors">サンプル</a>
+        <a href="../" class="text-zinc-600 hover:text-zinc-900 transition-colors">トップ</a>
       </nav>
     </div>
   </header>
@@ -124,7 +155,7 @@
 
     <!-- 目次 -->
     <aside class="toc hidden lg:block w-56 flex-none py-10">
-      <div class="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pb-10">
+      <div class="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pb-10">
         <div class="toc-group">はじめに</div>
         <a href="#start">画面の見かた</a>
         <a href="#mode">3 つのモード</a>
@@ -155,10 +186,8 @@
     <!-- 本文 -->
     <main class="doc flex-1 min-w-0 py-10 max-w-3xl">
 
-      <h1 class="text-3xl sm:text-4xl font-bold text-white leading-tight">
-        KuroEditor <span class="gradient-text">操作マニュアル</span>
-      </h1>
-      <p class="text-zinc-400">
+      <h1 class="text-3xl sm:text-4xl font-bold text-zinc-900 leading-tight">KuroEditor 操作マニュアル</h1>
+      <p class="text-zinc-500">
         記事を書く人のためのガイドです。ボタンの場所だけでなく、
         <strong>知らないと戸惑うところ</strong>（<a href="#enter">改行と段落の違い</a>や
         <a href="#indent">Tab がどこに効くか</a>など）を中心にまとめています。
@@ -176,15 +205,80 @@
 
       <!-- ══════════ はじめに ══════════ -->
       <h2 id="start">画面の見かた</h2>
-      <p>画面は大きく 4 つです。</p>
+      <p>画面の上に、下の図と同じ 2 段のツールバーがあります。</p>
+
+      <!-- ⚠ ここと本文中の .kbtn に入っている SVG は、エディタ本体のボタンから
+           取り出した markup そのもの（似せて描き直したものではない）。
+           tests/guide-icons.test.js が本体と一致し続けているかを見張っているので、
+           アイコンを差し替えるときは src/editor.js の ICON を直してからここへ反映する。 -->
+      <figure>
+        <div class="toolbar-demo">
+          <div class="toolbar-demo__row">
+            <span class="toolbar-demo__ver">v0.0.0</span>
+            <span class="kbtn kbtn--active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.2 1.8 a1.7 1.7 0 0 1 2.4 2.4 L5 12.8 l-3.2 .9 .9 -3.2 z"></path><line x1="10.2" y1="2.8" x2="12.6" y2="5.2"></line></svg></span>
+            <span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 8 c2,-4 5,-5 7,-5 s5,1 7,5 c-2,4 -5,5 -7,5 s-5,-1 -7,-5z"></path><circle cx="8" cy="8" r="2"></circle></svg></span>
+            <span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="2" width="13" height="12" rx="1.5"></rect><polyline points="6,6.5 4.2,9 6,11.5"></polyline><polyline points="10,6.5 11.8,9 10,11.5"></polyline><line x1="8.6" y1="5.5" x2="7.4" y2="12.5" opacity="0.7"></line></svg></span>
+            <span class="toolbar-demo__spacer"></span>
+            <span class="toolbar-demo__note">☑ 自動保存</span>
+            <span class="kbtn kbtn--save">保存</span>
+            <span class="toolbar-demo__sep"></span>
+            <span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.6"></circle><path d="M6.1 6.1 a1.95 1.95 0 0 1 3.8 .6 c0 1.3-1.9 1.6-1.9 2.9"></path><line x1="8" y1="11.7" x2="8" y2="11.8"></line></svg></span>
+            <span class="kbtn"><svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="10" height="12" rx="1.5" opacity="0.4"></rect><rect x="11.5" y="0" width="4.5" height="12" rx="1.5"></rect></svg></span>
+          </div>
+          <div class="toolbar-demo__row">
+            <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,4 2,4 2,1"></polyline><path d="M2 4 a5 5 0 0 1 5 -1 h2 a4 4 0 0 1 0 8 h-3"></path></svg></span>
+            <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9,4 12,4 12,1"></polyline><path d="M12 4 a5 5 0 0 0 -5 -1 h-2 a4 4 0 0 0 0 8 h3"></path></svg></span>
+            <span class="kbtn">😊</span>
+            <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="0.5" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"></rect><line x1="0.5" y1="5" x2="13.5" y2="5" stroke="currentColor" stroke-width="1"></line><line x1="0.5" y1="9" x2="13.5" y2="9" stroke="currentColor" stroke-width="1"></line><line x1="5" y1="5" x2="5" y2="13.5" stroke="currentColor" stroke-width="1"></line></svg></span>
+            <span class="kbtn">🖼</span>
+            <span class="kbtn"><svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,1 1,7 5,13"></polyline><polyline points="11,1 15,7 11,13"></polyline></svg></span>
+            <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0" y="6" width="14" height="2" rx="1"></rect></svg></span>
+            <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="1" width="13" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect><rect x="2.5" y="4" width="9" height="1.8" rx="0.9"></rect><rect x="2.5" y="7" width="6" height="1.8" rx="0.9"></rect><rect x="2.5" y="10" width="7.5" height="1.8" rx="0.9"></rect></svg></span>
+            <span class="kbtn"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6.5 9.5 a2.6 2.6 0 0 1 0-3.7l2.1-2.1 a2.6 2.6 0 0 1 3.7 3.7l-1 1"></path><path d="M9.5 6.5 a2.6 2.6 0 0 1 0 3.7l-2.1 2.1 a2.6 2.6 0 0 1-3.7-3.7l1-1"></path></svg></span>
+            <span class="kbtn"><svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 5.5h10.8v3.2a3 3 0 0 1-3 3H5.6a3 3 0 0 1-3-3z"></path><path d="M1 5.5h14"></path><path d="M2.6 6.6H1.2a.9.9 0 0 1 0-1.8h1.4M13.4 6.6h1.4a.9.9 0 0 0 0-1.8h-1.4"></path><path d="M6 3.2c0-.9.9-.9.9-1.8M9.1 3.2c0-.9.9-.9.9-1.8"></path></svg></span>
+            <span class="toolbar-demo__spacer"></span>
+            <span class="toolbar-demo__count">1,234</span>
+          </div>
+          <div class="toolbar-demo__canvas">ここが本文（キャンバス）です。公開ページとほぼ同じ見た目で書けます。</div>
+        </div>
+        <figcaption>上段＝モードと保存、下段＝挿入するもの。実際の画面と同じ並びです（右端は文字数）。</figcaption>
+      </figure>
+
       <div class="table-scroll">
         <table>
           <thead><tr><th>場所</th><th>役割</th></tr></thead>
           <tbody>
-            <tr><td>上のタブバー</td><td>モード切替（✏️ 編集 / 👁 閲覧 / <code class="inline">&lt;/&gt;</code> HTML）・自動保存・保存・目次の開閉。</td></tr>
-            <tr><td>その下の段</td><td>元に戻す ↶ / やり直し ↷・😀 絵文字・▦ 表・🖼 メディア・<code class="inline">&lt;/&gt;</code> コード・─ 水平線・角丸ボックス・🔗 リンク。右端に文字数。</td></tr>
+            <tr>
+              <td>上のタブバー</td>
+              <td>
+                モード切替（<span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.2 1.8 a1.7 1.7 0 0 1 2.4 2.4 L5 12.8 l-3.2 .9 .9 -3.2 z"></path><line x1="10.2" y1="2.8" x2="12.6" y2="5.2"></line></svg></span> 編集 /
+                <span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 8 c2,-4 5,-5 7,-5 s5,1 7,5 c-2,4 -5,5 -7,5 s-5,-1 -7,-5z"></path><circle cx="8" cy="8" r="2"></circle></svg></span> 閲覧 /
+                <span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="2" width="13" height="12" rx="1.5"></rect><polyline points="6,6.5 4.2,9 6,11.5"></polyline><polyline points="10,6.5 11.8,9 10,11.5"></polyline><line x1="8.6" y1="5.5" x2="7.4" y2="12.5" opacity="0.7"></line></svg></span> HTML）・自動保存・
+                <span class="kbtn kbtn--save">保存</span>・
+                <span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.6"></circle><path d="M6.1 6.1 a1.95 1.95 0 0 1 3.8 .6 c0 1.3-1.9 1.6-1.9 2.9"></path><line x1="8" y1="11.7" x2="8" y2="11.8"></line></svg></span> このマニュアル・
+                <span class="kbtn"><svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="10" height="12" rx="1.5" opacity="0.4"></rect><rect x="11.5" y="0" width="4.5" height="12" rx="1.5"></rect></svg></span> 目次の開閉。
+              </td>
+            </tr>
+            <tr>
+              <td>その下の段</td>
+              <td>
+                <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,4 2,4 2,1"></polyline><path d="M2 4 a5 5 0 0 1 5 -1 h2 a4 4 0 0 1 0 8 h-3"></path></svg></span> 元に戻す・
+                <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9,4 12,4 12,1"></polyline><path d="M12 4 a5 5 0 0 0 -5 -1 h-2 a4 4 0 0 0 0 8 h3"></path></svg></span> やり直し・
+                <span class="kbtn">😊</span> 絵文字・
+                <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="0.5" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"></rect><line x1="0.5" y1="5" x2="13.5" y2="5" stroke="currentColor" stroke-width="1"></line><line x1="0.5" y1="9" x2="13.5" y2="9" stroke="currentColor" stroke-width="1"></line><line x1="5" y1="5" x2="5" y2="13.5" stroke="currentColor" stroke-width="1"></line></svg></span> 表・
+                <span class="kbtn">🖼</span> 画像や動画・
+                <span class="kbtn"><svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,1 1,7 5,13"></polyline><polyline points="11,1 15,7 11,13"></polyline></svg></span> コード・
+                <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0" y="6" width="14" height="2" rx="1"></rect></svg></span> 水平線・
+                <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="1" width="13" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect><rect x="2.5" y="4" width="9" height="1.8" rx="0.9"></rect><rect x="2.5" y="7" width="6" height="1.8" rx="0.9"></rect><rect x="2.5" y="10" width="7.5" height="1.8" rx="0.9"></rect></svg></span> 角丸ボックス・
+                <span class="kbtn"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6.5 9.5 a2.6 2.6 0 0 1 0-3.7l2.1-2.1 a2.6 2.6 0 0 1 3.7 3.7l-1 1"></path><path d="M9.5 6.5 a2.6 2.6 0 0 1 0 3.7l-2.1 2.1 a2.6 2.6 0 0 1-3.7-3.7l1-1"></path></svg></span> リンク・
+                <span class="kbtn"><svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 5.5h10.8v3.2a3 3 0 0 1-3 3H5.6a3 3 0 0 1-3-3z"></path><path d="M1 5.5h14"></path><path d="M2.6 6.6H1.2a.9.9 0 0 1 0-1.8h1.4M13.4 6.6h1.4a.9.9 0 0 0 0-1.8h-1.4"></path><path d="M6 3.2c0-.9.9-.9.9-1.8M9.1 3.2c0-.9.9-.9.9-1.8"></path></svg></span> レシピカード。右端に文字数。
+              </td>
+            </tr>
             <tr><td>本文（キャンバス）</td><td>書くところ。表示は公開ページとほぼ同じ見た目です。</td></tr>
-            <tr><td>下に浮くメニュー</td><td>上の段と同じ並びのメニュー。スマホでも指の届く位置に出ます。</td></tr>
+            <tr>
+              <td>下に浮くメニュー</td>
+              <td>上の段と同じ並びのメニュー。スマホでも指の届く位置に出ます。スクロール方式によっては表示されない事も多いモーダルメニューです。</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -202,9 +296,9 @@
         <table>
           <thead><tr><th>タブ</th><th>できること</th></tr></thead>
           <tbody>
-            <tr><td>✏️ 編集</td><td>通常の執筆モード。すべての機能が使えます。</td></tr>
-            <tr><td>👁 閲覧</td><td><strong>編集できない</strong>読むためのモード。カーソルも編集メニューも出ません。書きあがった記事を読み返すときに。</td></tr>
-            <tr><td><code class="inline">&lt;/&gt;</code> HTML</td><td>HTML を直接編集します。慣れている方向け。</td></tr>
+            <tr><td><span class="kbtn kbtn--active"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.2 1.8 a1.7 1.7 0 0 1 2.4 2.4 L5 12.8 l-3.2 .9 .9 -3.2 z"></path><line x1="10.2" y1="2.8" x2="12.6" y2="5.2"></line></svg></span> 編集</td><td>通常の執筆モード。すべての機能が使えます。</td></tr>
+            <tr><td><span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 8 c2,-4 5,-5 7,-5 s5,1 7,5 c-2,4 -5,5 -7,5 s-5,-1 -7,-5z"></path><circle cx="8" cy="8" r="2"></circle></svg></span> 閲覧</td><td><strong>編集しない</strong>読むためのモード。カーソルも編集メニューも出ません。編集モードだとポップアップメニューが邪魔になるので、書きあがった記事を読み返すときに。</td></tr>
+            <tr><td><span class="kbtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="2" width="13" height="12" rx="1.5"></rect><polyline points="6,6.5 4.2,9 6,11.5"></polyline><polyline points="10,6.5 11.8,9 10,11.5"></polyline><line x1="8.6" y1="5.5" x2="7.4" y2="12.5" opacity="0.7"></line></svg></span> HTML</td><td>HTML を直接編集します。慣れている方向け。</td></tr>
           </tbody>
         </table>
       </div>
@@ -216,9 +310,9 @@
 
       <h2 id="save">保存と元に戻す</h2>
       <ul>
-        <li><strong>保存</strong> — タブバー右上の保存ボタン。未保存の変更があるときだけ光ります。</li>
+        <li><strong>保存</strong> — タブバー右上の <span class="kbtn kbtn--save">保存</span>。未保存の変更があるときだけ光ります。</li>
         <li><strong>自動保存</strong> — チェックを入れておくと、編集が落ち着いたタイミングで自動的に保存されます。</li>
-        <li><strong>元に戻す / やり直し</strong> — <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> と <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>（または <kbd>Ctrl</kbd>+<kbd>Y</kbd>）。連続して打った文字はまとめて 1 手として戻ります（最大 200 手）。</li>
+        <li><strong>元に戻す <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,4 2,4 2,1"></polyline><path d="M2 4 a5 5 0 0 1 5 -1 h2 a4 4 0 0 1 0 8 h-3"></path></svg></span> / やり直し <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9,4 12,4 12,1"></polyline><path d="M12 4 a5 5 0 0 0 -5 -1 h-2 a4 4 0 0 0 0 8 h3"></path></svg></span></strong> — <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> と <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>（または <kbd>Ctrl</kbd>+<kbd>Y</kbd>）。連続して打った文字はまとめて 1 手として戻ります（最大 200 手）。</li>
       </ul>
       <div class="box box-tip">
         <div class="box-icon">💡</div>
@@ -373,7 +467,7 @@
 
       <h2 id="roundbox">角丸ボックス</h2>
       <p>
-        下部メニューの「角丸」ボタンで挿入します。中には普通に文章・画像・表などを入れられます。
+        <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="1" width="13" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect><rect x="2.5" y="4" width="9" height="1.8" rx="0.9"></rect><rect x="2.5" y="7" width="6" height="1.8" rx="0.9"></rect><rect x="2.5" y="10" width="7.5" height="1.8" rx="0.9"></rect></svg></span> で挿入します。中には普通に文章・画像・表などを入れられます。
         カーソルがボックスの中にある間だけ、専用の BOX 設定メニューが浮きます。
       </p>
       <div class="table-scroll">
@@ -390,7 +484,7 @@
 
       <h2 id="code">コードブロック</h2>
       <ul>
-        <li>下部メニューの <code class="inline">&lt;/&gt;</code> で挿入。行番号付きで、高さは中身に合わせて伸びます。</li>
+        <li><span class="kbtn"><svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,1 1,7 5,13"></polyline><polyline points="11,1 15,7 11,13"></polyline></svg></span> で挿入。行番号付きで、高さは中身に合わせて伸びます。</li>
         <li>中では <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> がそのままインデントとして使えます。</li>
         <li>右上の 📋 でコピー、その左の 🗑 で削除。</li>
         <li><strong>行番号の部分をドラッグ</strong>すると、ブロックごと上下に移動できます。</li>
@@ -398,13 +492,13 @@
 
       <h2 id="hr">水平線</h2>
       <p>
-        下部メニューの ─ で挿入します。太さや点線を選べます。
+        <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0" y="6" width="14" height="2" rx="1"></rect></svg></span> で挿入します。太さや点線を選べます。
         水平線は「ここで区切る」ための線なので、画像や角丸ボックスの回り込みがあっても
         <strong>その下まで送られて、必ず横いっぱいに引かれます</strong>（＝水平線を入れると回り込みは終わります）。
       </p>
 
       <h2 id="table">表</h2>
-      <p>下部メニューの ▦ から挿入します。KuroEditor の表はかなり細かく調整できます。</p>
+      <p><span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="0.5" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"></rect><line x1="0.5" y1="5" x2="13.5" y2="5" stroke="currentColor" stroke-width="1"></line><line x1="0.5" y1="9" x2="13.5" y2="9" stroke="currentColor" stroke-width="1"></line><line x1="5" y1="5" x2="5" y2="13.5" stroke="currentColor" stroke-width="1"></line></svg></span> から挿入します。KuroEditor の表はかなり細かく調整できます。</p>
       <div class="table-scroll">
         <table>
           <thead><tr><th>操作</th><th>やり方</th></tr></thead>
@@ -430,7 +524,7 @@
       <h2 id="media">画像・動画・音声</h2>
       <p>入れ方は 3 通りです。</p>
       <ol>
-        <li>下部メニューの 🖼 からファイルを選ぶ、または URL を入力する</li>
+        <li><span class="kbtn">🖼</span> からファイルを選ぶ、または URL を入力する</li>
         <li>本文に<strong>ドラッグ＆ドロップ</strong>する</li>
         <li>クリップボードの画像を<strong>そのまま貼り付ける</strong></li>
       </ol>
@@ -454,7 +548,7 @@
       <h2 id="link">リンクと URL カード</h2>
       <h3>リンクを作る</h3>
       <p>
-        下部メニューの <strong>🔗</strong> を押すとリンク入力のポップアップが開きます。
+        <span class="kbtn"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6.5 9.5 a2.6 2.6 0 0 1 0-3.7l2.1-2.1 a2.6 2.6 0 0 1 3.7 3.7l-1 1"></path><path d="M9.5 6.5 a2.6 2.6 0 0 1 0 3.7l-2.1 2.1 a2.6 2.6 0 0 1-3.7-3.7l1-1"></path></svg></span> を押すとリンク入力のポップアップが開きます。
         先に文字を選択しておくと、その文字が表示テキストの初期値になります。
         URL を入れずに閉じれば、本文には何も残りません。
       </p>
@@ -479,25 +573,26 @@
 
       <h2 id="emoji">絵文字</h2>
       <ul>
-        <li>下部メニューの 😀 からピッカーを開いて選びます。</li>
+        <li><span class="kbtn">😊</span> からピッカーを開いて選びます。</li>
         <li><code class="inline">:smile:</code> <code class="inline">:fire:</code> <code class="inline">:+1:</code> のような<strong>ショートコード</strong>を打つと自動で絵文字に変わります。</li>
       </ul>
 
       <h2 id="recipe">レシピカード</h2>
       <p>
-        料理レシピを扱うサイト向けの機能です（サイト側で有効にしている場合だけ 🍲 ボタンが出ます）。
+        料理レシピを扱うサイト向けの機能です（サイト側で有効にしている場合だけ
+        <span class="kbtn"><svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 5.5h10.8v3.2a3 3 0 0 1-3 3H5.6a3 3 0 0 1-3-3z"></path><path d="M1 5.5h14"></path><path d="M2.6 6.6H1.2a.9.9 0 0 1 0-1.8h1.4M13.4 6.6h1.4a.9.9 0 0 0 0-1.8h-1.4"></path><path d="M6 3.2c0-.9.9-.9.9-1.8M9.1 3.2c0-.9.9-.9.9-1.8"></path></svg></span> が出ます）。
         人数・調理時間・材料・手順をまとめた 1 枚のカードとして本文に置けます。
       </p>
       <ul>
         <li>編集はカードをクリックして開くモーダルから行います。</li>
-        <li><strong>1 記事に 1 枚だけ</strong>です。すでに 1 枚あると 🍲 ボタンは灰色になり、理由が説明として出ます。</li>
+        <li><strong>1 記事に 1 枚だけ</strong>です。すでに 1 枚あるとボタンは灰色になり、理由が説明として出ます。</li>
       </ul>
 
       <!-- ══════════ 仕上げ ══════════ -->
       <h2 id="toc">目次（見出しから自動生成）</h2>
       <p>
         本文に付けた見出しから、右側のパネルに目次が自動で作られます。
-        タブバー右上のボタンか <kbd>Alt</kbd>+<kbd>T</kbd> で開閉、境目のドラッグで幅を変えられます。
+        タブバー右上の <span class="kbtn"><svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="10" height="12" rx="1.5" opacity="0.4"></rect><rect x="11.5" y="0" width="4.5" height="12" rx="1.5"></rect></svg></span> か <kbd>Alt</kbd>+<kbd>T</kbd> で開閉、境目のドラッグで幅を変えられます。
         見出しが 1 つも無い記事では自動的に隠れます。
       </p>
 
@@ -535,6 +630,12 @@
         その行を <kbd>Enter</kbd> で作り直すと字下げできるようになります。囲みそのものは <kbd>Tab</kbd> では動きません。
       </p>
 
+      <h3>下に浮くメニューが出てこない</h3>
+      <p>
+        埋め込み方によっては、ページのスクロールに合わせて隠れることがあります。
+        同じ並びのボタンは<strong>上のツールバーの下段</strong>にもあるので、そちらから操作できます。
+      </p>
+
       <h3>日本語の変換確定で <kbd>Enter</kbd> を押したら、変なことが起きる</h3>
       <p>
         変換確定の <kbd>Enter</kbd> は「文字の確定」として扱われ、改行やダイアログの確定には使われないようになっています。
@@ -559,8 +660,8 @@
         ボタンで行った操作もすべて履歴に残っています。
       </p>
 
-      <div class="glass rounded-2xl p-6 mt-14">
-        <p class="m-0 text-sm text-zinc-400">
+      <div class="rounded-2xl p-6 mt-14 bg-zinc-50 border border-zinc-200">
+        <p class="m-0 text-sm text-zinc-500">
           このページで解決しないことがあれば、
           <a href="https://github.com/Kuro-Boo/KuroEditor/issues" target="_blank" rel="noopener">GitHub の Issues</a>
           でお知らせください。実際に触って試したい場合は<a href="../sample/">サンプルページ</a>が便利です。
@@ -569,13 +670,13 @@
     </main>
   </div>
 
-  <footer class="border-t border-indigo-500/15 mt-10">
+  <footer class="border-t border-zinc-200 mt-10 bg-zinc-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 text-sm text-zinc-500 flex flex-wrap gap-x-6 gap-y-2 justify-between">
       <span>© KuroEditor — Powered by Kuro-Boo</span>
       <span class="flex gap-6">
-        <a href="../" class="hover:text-white transition-colors">トップ</a>
-        <a href="../sample/" class="hover:text-white transition-colors">サンプル</a>
-        <a href="https://github.com/Kuro-Boo/KuroEditor" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a>
+        <a href="../" class="hover:text-zinc-900 transition-colors">トップ</a>
+        <a href="../sample/" class="hover:text-zinc-900 transition-colors">サンプル</a>
+        <a href="https://github.com/Kuro-Boo/KuroEditor" target="_blank" rel="noopener" class="hover:text-zinc-900 transition-colors">GitHub</a>
       </span>
     </div>
   </footer>
@@ -583,7 +684,11 @@
   <script>
     // バージョン表示（dist/version.js が window.KUROEDITOR_VERSION を入れる）
     const vEl = document.getElementById('ke-version')
-    if (vEl && window.KUROEDITOR_VERSION) vEl.textContent = 'v' + window.KUROEDITOR_VERSION
+    if (vEl && window.KUROEDITOR_VERSION) {
+      vEl.textContent = 'v' + window.KUROEDITOR_VERSION
+      const demo = document.querySelector('.toolbar-demo__ver')
+      if (demo) demo.textContent = 'v' + window.KUROEDITOR_VERSION
+    }
 
     // 目次のハイライト（いま読んでいる見出し）
     const links = [...document.querySelectorAll('.toc a')]
@@ -601,7 +706,7 @@
         for (const a of links) {
           a.classList.toggle('active', !!current && a.getAttribute('href') === '#' + current.id)
         }
-      }, { rootMargin: '-70px 0px -70% 0px' })
+      }, { rootMargin: '-80px 0px -70% 0px' })
       targets.forEach((t) => io.observe(t))
     }
   </script>
