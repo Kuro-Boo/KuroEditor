@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { KuroEditor } from '../src/editor.js'
+import { buildRecipeCardHtml, decodeRecipe } from '../src/recipe.js'
 
 /** 属性順・空白の揺れを均して比べる（innerHTML はブラウザ実装で整形が違う） */
 const norm = (html) => html.replace(/\s+/g, ' ').replace(/> </g, '><').trim()
@@ -40,6 +41,45 @@ describe('マニュアルのボタン見本', () => {
       expect(norm(guide)).toContain(norm(btn.innerHTML))
     })
   }
+
+  // 「実際の表示」の例は、本物の公開ページ用スタイルで描く（似せて書き直さない）。
+  // クラス名が変わると例だけ素の HTML に戻って静かに嘘になるので、ここで見張る。
+  it('表示例は kuro-content.css を読んで描いている', () => {
+    expect(guide).toContain('href="../kuro-content.css"')
+    // 自前の <style> より後に読むこと（どちらも unlayered ＝ 後勝ち）
+    expect(guide.indexOf('href="../kuro-content.css"'))
+      .toBeGreaterThan(guide.indexOf('</style>'))
+  })
+
+  it('表示例で使っているクラスはすべて content.css に実在する', () => {
+    const content = readFileSync(join(here, '..', 'src', 'content.css'), 'utf8')
+    const used = new Set()
+    for (const block of guide.match(/<div class="demo[^]*?<\/div>\s*<\/div>/g) ?? []) {
+      for (const attr of block.match(/class="[^"]*"/g) ?? []) {
+        for (const cls of attr.slice(7, -1).split(/\s+/)) {
+          // kuro-recipe__* はカードの markup ごと下のテストで照合するので除く
+          // （grid の子など、CSS を持たない構造上のクラスも含まれるため）
+          if (cls.startsWith('kuro-') && cls !== 'kuro-content' &&
+              !cls.startsWith('kuro-recipe__')) used.add(cls)
+        }
+      }
+    }
+    expect(used.size).toBeGreaterThan(5)   // 例が消えていないことの確認も兼ねる
+    for (const cls of used) expect(content, `${cls} が content.css に無い`).toContain(cls)
+  })
+
+  it('レシピカードの例は、いまの生成器が吐く markup と同じ', () => {
+    // data-recipe（＝カードの正本）を取り出して作り直し、丸ごと突き合わせる。
+    // プレビューの構造が変わったらここで気づける。
+    const card = guide.match(/<div data-kuro-block="recipe-card"[^]*?<\/div><\/div><\/div>/)?.[0]
+    expect(card, 'マニュアルにレシピカードの例が無い').toBeTruthy()
+    const data = card.match(/data-recipe="([^"]*)"/)[1]
+    const layout = {
+      width: card.match(/data-width="([^"]*)"/)[1],
+      align: card.match(/data-align="([^"]*)"/)[1],
+    }
+    expect(norm(card)).toBe(norm(buildRecipeCardHtml(decodeRecipe(data), layout)))
+  })
 
   it('マニュアルは通常カラー（ライト）で、ロゴは公式の 2 色構成', () => {
     expect(guide).toContain('color-scheme: light')
