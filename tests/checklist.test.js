@@ -180,6 +180,13 @@ describe('チェックリスト', () => {
     expect(btn).toBeTruthy()
   })
 
+  it('☑ のツールチップは記号ではなく「何になるか」を説明する', () => {
+    const ed = new KuroEditor(makeMount(), { initialContent: '<p>x</p>' })
+    const check = ed.popm.el.querySelector('[data-ul-style="kuro-ul-check"]')
+    expect(check.getAttribute('title')).toBe('チェックボックス（[]+スペースでも作れる）')
+  })
+
+
   it('● ⇔ ☑ は排他（マーカークラスは 1 つだけ残る）', () => {
     const ed = new KuroEditor(makeMount(), { initialContent: '<ul class="kuro-ul-star"><li>a</li></ul>' })
     const ul = ed.wysiwyg.querySelector('ul')

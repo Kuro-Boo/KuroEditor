@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.24.0'
+export const VERSION = '2.25.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -199,13 +199,14 @@ const LINE_HEIGHT_OPTIONS = [
  * base:true marks the default (decimal) style.
  */
 const OL_STYLE_OPTIONS = [
-  { label: '1.',   value: 'kuro-list-decimal'    },
-  { label: '①',   value: 'kuro-list-circled'    },
-  { label: '(1)', value: 'kuro-list-paren-num'             },
-  { label: 'A.',   value: 'kuro-list-alpha'                 },
-  { label: '(A)', value: 'kuro-list-paren-alpha'           },
-  { label: 'ア',  value: 'kuro-list-kata'                  },
-  { label: '(ア)',value: 'kuro-list-paren-kata'            },
+  //          ボタンの見た目        適用するクラス            ホバーの説明（title）
+  { label: '1.',   value: 'kuro-list-decimal',     title: '番号リスト（十進数）'           },
+  { label: '①',   value: 'kuro-list-circled',     title: '番号リスト（丸数字）'           },
+  { label: '(1)', value: 'kuro-list-paren-num',   title: '番号リスト（括弧付き数字）'      },
+  { label: 'A.',   value: 'kuro-list-alpha',       title: '番号リスト（英大文字）'         },
+  { label: '(A)', value: 'kuro-list-paren-alpha', title: '番号リスト（括弧付き英大文字）'   },
+  { label: 'ア',  value: 'kuro-list-kata',        title: '番号リスト（カタカナ）'         },
+  { label: '(ア)',value: 'kuro-list-paren-kata',  title: '番号リスト（括弧付きカタカナ）'   },
 ]
 
 /**
@@ -234,24 +235,53 @@ const CHECKLIST_CLASS = 'kuro-ul-check'
 const CHECKED_ATTR = 'data-checked'
 
 /**
+ * 「記号なしリスト」— 「解除」の 1 段目（v2.25.0〜）。
+ *
+ * 「解除」は 2 段階:
+ *   1 回目 … マーカーだけ消す（このクラス）。<li> のままなので**位置も入れ子も保たれる**
+ *   2 回目 … リストから抜けて段落 <p> に戻す（_toggleListOff）
+ *
+ * なぜ 1 段目が要るか: 入れ子にした子項目で「解除」を押したとき、いきなり <p> に
+ * すると階層から飛び出して行が左端まで戻ってしまう。「マークだけ要らない」ときに
+ * 位置まで動かされるのは編集として乱暴なので、まず見た目だけ落とす。
+ * OL でもカウンタは進み続けるので、後でマーカーを戻せば正しい番号が復活する。
+ *
+ * ⚠ クラス名は各リストのマーカー接頭辞（kuro-ul- / kuro-list-）に合わせてある。
+ *   マーカーを選び直したときの総入れ替えで自動的に外れる。
+ */
+const UL_NONE_CLASS = 'kuro-ul-none'
+const OL_NONE_CLASS = 'kuro-list-none'
+
+/**
+ * 「解除」ボタンのホバー説明。同じボタンが 2 段階で違う動きをするので、
+ * 今押すと何が起きるかを出す（ボタンの見た目だけでは段階が分からないため）。
+ * @param {string} kind  '記号' | '番号'
+ */
+const removeBtnTitle = (kind, inList, markerless) =>
+  !inList     ? `${kind}リストを解除`
+  : markerless ? 'リストから抜けて段落に戻す'
+  :              `${kind}を消す（もう一度押すと段落に戻る）`
+
+/**
  * Unordered-list style presets — applied as CSS class on <ul>.
  * Standard CSS keywords (disc/circle/square) + string-literal list-style-type values.
  * base:true marks the default (disc) style.
  */
 const UL_STYLE_OPTIONS = [
-  { label: '●',  value: 'kuro-ul-disc'     },   // CSS disc
-  { label: '○',  value: 'kuro-ul-circle'   },   // CSS circle
-  { label: '■',  value: 'kuro-ul-square'              },   // CSS square
-  { label: '-',  value: 'kuro-ul-dash'                },   // half-width -
-  { label: '#',  value: 'kuro-ul-hash'                },   // half-width #
-  { label: '*',  value: 'kuro-ul-asterisk'            },   // half-width *
-  { label: '>',  value: 'kuro-ul-arrow'               },   // half-width >
-  { label: '◎',  value: 'kuro-ul-bullseye'            },   // full-width ◎
-  { label: '★',  value: 'kuro-ul-star'                },   // full-width ★
-  { label: '☆',  value: 'kuro-ul-star-open'           },   // full-width ☆
-  { label: '▶',  value: 'kuro-ul-tri'                 },   // full-width ▶
-  { label: '▷',  value: 'kuro-ul-tri-open'            },   // full-width ▷
-  { label: '☑︎', value: CHECKLIST_CLASS                },   // チェックリスト
+  //         ボタンの見た目          適用するクラス              ホバーの説明（title）
+  { label: '●',  value: 'kuro-ul-disc',       title: '記号リスト（黒丸）'         },   // CSS disc
+  { label: '○',  value: 'kuro-ul-circle',     title: '記号リスト（白丸）'         },   // CSS circle
+  { label: '■',  value: 'kuro-ul-square',     title: '記号リスト（黒四角）'       },   // CSS square
+  { label: '-',  value: 'kuro-ul-dash',       title: '記号リスト（半角ハイフン）'   },   // half-width -
+  { label: '#',  value: 'kuro-ul-hash',       title: '記号リスト（半角シャープ）'   },   // half-width #
+  { label: '*',  value: 'kuro-ul-asterisk',   title: '記号リスト（半角アスタリスク）' },   // half-width *
+  { label: '>',  value: 'kuro-ul-arrow',      title: '記号リスト（半角の大なり）'   },   // half-width >
+  { label: '◎',  value: 'kuro-ul-bullseye',   title: '記号リスト（二重丸）'       },   // full-width ◎
+  { label: '★',  value: 'kuro-ul-star',       title: '記号リスト（黒星）'         },   // full-width ★
+  { label: '☆',  value: 'kuro-ul-star-open',  title: '記号リスト（白星）'         },   // full-width ☆
+  { label: '▶',  value: 'kuro-ul-tri',        title: '記号リスト（黒三角）'       },   // full-width ▶
+  { label: '▷',  value: 'kuro-ul-tri-open',   title: '記号リスト（白三角）'       },   // full-width ▷
+  { label: '☑︎', value: CHECKLIST_CLASS,      title: 'チェックボックス（[]+スペースでも作れる）' },
 ]
 
 // ─── SVG icon helpers ─────────────────────────────────────────────────────────
@@ -1956,11 +1986,13 @@ export class PopupMenu {
     // button (which appears after a list is created) remains accessible in the
     // same panel opening.  The panel closes via the UL icon toggle, 解除, or
     // when another toolbar section opens (colors, sizes, etc.).
-    for (const { label, value } of OL_STYLE_OPTIONS) {
+    // ⚠ title は記号の【説明】であること（UL 側と同じ約束）。ボタンに見えている
+    //   「(ア)」を title でもう一度「(ア)」と言ってもホバーする意味がない。
+    for (const { label, value, title } of OL_STYLE_OPTIONS) {
       const sb = createElement('button', {
         className: 'kuro-size-btn',
         html: label,
-        attrs: { type: 'button', title: label, 'data-ol-style': value },
+        attrs: { type: 'button', title: title ?? label, 'data-ol-style': value },
       })
       this._bindSubBtn(sb, () => applyFn(value))
       this._listStyleBtns.push({ el: sb, value })
@@ -2029,12 +2061,16 @@ export class PopupMenu {
     this._activeOLNode = olNode   // store for direct marker-color access
 
     const inOL = olNode !== null
+    // 「解除」1 段目を済ませた状態（記号なし）。どの記号ボタンも点かない
+    const markerless = inOL && olNode.classList.contains(OL_NONE_CLASS)
     // Style buttons: active only when inside an OL and class matches
     for (const { el, value } of this._listStyleBtns) {
-      el.classList.toggle('kuro-size-btn--active', inOL && value === activeValue)
+      el.classList.toggle('kuro-size-btn--active', inOL && !markerless && value === activeValue)
     }
-    // "解除" is active when the cursor is NOT inside any OL
-    this._olRemoveBtn?.classList.toggle('kuro-size-btn--active', !inOL)
+    // "解除" is active when the cursor is NOT inside any OL, or already markerless
+    this._olRemoveBtn?.classList.toggle('kuro-size-btn--active', !inOL || markerless)
+    // 同じボタンが 2 段階で違う動きをするので、title で今どちらかを示す
+    if (this._olRemoveBtn) this._olRemoveBtn.title = removeBtnTitle('番号', inOL, markerless)
 
     // Marker color button: only visible when inside an OL (no list = nothing to color)
     if (this._olMarkerColorBtn) {
@@ -2095,11 +2131,14 @@ export class PopupMenu {
 
     // ── Symbol option buttons ──────────────────────────────────────────────
     // NOTE: Selecting a style does NOT close the panel — same rationale as OL.
-    for (const { label, value } of UL_STYLE_OPTIONS) {
+    // ⚠ title は記号の【説明】であること（記号そのものを入れない）。ボタンの中に
+    //   既に見えている「★」を title でもう一度「★」と言っても何の情報も足さない。
+    //   何になるボタンなのか（記号リストなのか、チェックボックスなのか）を出す。
+    for (const { label, value, title } of UL_STYLE_OPTIONS) {
       const sb = createElement('button', {
         className: 'kuro-size-btn',
         html: label,
-        attrs: { type: 'button', title: label, 'data-ul-style': value },
+        attrs: { type: 'button', title: title ?? label, 'data-ul-style': value },
       })
       this._bindSubBtn(sb, () => applyFn(value))
       this._ulStyleBtns.push({ el: sb, value })
@@ -2166,12 +2205,16 @@ export class PopupMenu {
     this._activeULNode = ulNode   // store for direct marker-color access
 
     const inUL = ulNode !== null
+    // 「解除」1 段目を済ませた状態（記号なし）。どの記号ボタンも点かない
+    const markerless = inUL && ulNode.classList.contains(UL_NONE_CLASS)
     // Style buttons: active only when inside a UL and class matches
     for (const { el, value } of this._ulStyleBtns) {
-      el.classList.toggle('kuro-size-btn--active', inUL && value === activeValue)
+      el.classList.toggle('kuro-size-btn--active', inUL && !markerless && value === activeValue)
     }
-    // "解除" is active when the cursor is NOT inside any UL
-    this._ulRemoveBtn?.classList.toggle('kuro-size-btn--active', !inUL)
+    // "解除" is active when the cursor is NOT inside any UL, or already markerless
+    this._ulRemoveBtn?.classList.toggle('kuro-size-btn--active', !inUL || markerless)
+    // 同じボタンが 2 段階で違う動きをするので、title で今どちらかを示す
+    if (this._ulRemoveBtn) this._ulRemoveBtn.title = removeBtnTitle('記号', inUL, markerless)
 
     // Marker color button: only visible when inside a UL (no list = nothing to color)
     if (this._ulMarkerColorBtn) {
@@ -5604,6 +5647,50 @@ export class ImageMenu {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 「行」と「枠」— Tab / Shift+Tab の対象を決める語彙
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Tab は【行】に効く。行 = 文章がそのまま乗っている末端のブロック（段落・見出し・
+// リスト項目・セル）。リスト項目だけは字下げではなく入れ子の出し入れ（_shiftListNesting）。
+//
+// ⚠ 【枠】は対象にしない。引用・コールアウト・角丸ボックス・figure・表・原子ブロックは
+//   「中身を包む器」であって行ではない。位置や幅は枠自身の設定（BOX 設定の幅・寄せ）で
+//   決めるものなので、Tab で動かす余地は無い。しかも枠は自前の内側余白を CSS で持って
+//   いる（コールアウト = padding-left:3rem のアイコン列、角丸ボックス = padding:1rem、
+//   引用 = padding:.5rem 1rem）ので、インラインの padding-left を足すとそれを【上書きして
+//   潰し】、アイコンに文字が重なる。字下げは枠の中の行に効かせるのが正しい。
+
+/** 「行」になり得るタグ。裸の <div>（正規化前の段落）は isLineBlock() で拾う。 */
+const LINE_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TD', 'TH'])
+
+/** 「枠」= 行を包む器。字下げ対象にしないもの。 */
+const FRAME_SELECTOR =
+  'blockquote, figure, table, ul, ol, pre, .kuro-callout, .kuro-roundbox, ' +
+  '.kuro-code-wrap, [data-kuro-block], [data-kuro-media]'
+
+/** その要素は「行」か（枠は false）。 */
+export function isLineBlock(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false
+  if (el.matches?.(FRAME_SELECTOR)) return false
+  return LINE_TAGS.has(el.tagName) || el.tagName === 'DIV'
+}
+
+/**
+ * 行が <li> の中身そのものなら、その項目自身を返す。
+ * 貼り付け由来の <li><p>…</p></li> を「段落の字下げ」ではなく「項目の入れ子」として
+ * 扱うため。⚠ 途中に枠（表など）を挟んだら別物なので打ち切る。
+ */
+function ownerListItem(el, root) {
+  let p = el.parentElement
+  while (p && p !== root) {
+    if (p.tagName === 'LI') return p
+    if (p.matches?.(FRAME_SELECTOR)) return null
+    p = p.parentElement
+  }
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // KURO EDITOR — main class
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -7510,13 +7597,24 @@ export class KuroEditor {
     // Code-block handling is no longer needed here — code is now a real
     // <textarea> inside a non-editable wrapper, so Enter/Tab work natively.
 
-    // ── Tab → block indent / Shift+Tab → outdent ──────────────────────────
-    // Per spec §段落1: Tab indents the containing block element by one level
-    // (2 em), Shift+Tab outdents.  We use padding-left on the block rather than
-    // <blockquote> so headings, lists, etc. all respond uniformly.
+    // ── Tab → 字下げ / Shift+Tab → 戻す ───────────────────────────────────
+    // Tab は【行】に効く（_linesInSelection）。段落・見出し・セルは padding-left で
+    // 1 段（2em）、リスト項目は入れ子の出し入れ。
+    // ⚠ 項目の中にいるのに padding へ落とさないこと。字下げは <li> の位置をずらす
+    //   だけで階層にならず、チェックリストでは箱だけ取り残される（箱は
+    //   position:absolute で padding の影響を受けない）。
+    // ⚠ 枠（引用・コールアウト・角丸ボックス・表・原子ブロック）は行ではないので
+    //   動かさない。位置と幅は枠自身の設定の担当で、padding を足すと枠が CSS で
+    //   確保している内側余白（コールアウトのアイコン列など）を潰す。
     if (e.key === 'Tab') {
       e.preventDefault()
-      this._shiftBlockIndent(e.shiftKey ? -1 : 1)
+      const dir   = e.shiftKey ? -1 : 1
+      const lines = this._linesInSelection()
+      const items = lines.filter((el) => el.tagName === 'LI')
+      const rest  = lines.filter((el) => el.tagName !== 'LI')
+      // 混在選択（段落 + リスト項目）は行ごとに振り分けて【両方】処理する
+      if (items.length) this._shiftListNesting(items, dir)
+      if (rest.length)  this._shiftBlockIndent(dir, rest)
       return
     }
 
@@ -7558,12 +7656,13 @@ export class KuroEditor {
       if (sel?.rangeCount) {
         const range = sel.getRangeAt(0)
         if (range.collapsed && range.startOffset === 0) {
-          const block = this._nearestBlock(range.startContainer)
-          if (block && block !== this.wysiwyg) {
-            const cur = parseFloat(block.style.paddingLeft) || 0
+          // Tab と同じ土俵（行のみ）。枠やリスト項目の padding は触らない
+          const line = this._nearestLine(range.startContainer)
+          if (line && line.tagName !== 'LI') {
+            const cur = parseFloat(line.style.paddingLeft) || 0
             if (cur > 0) {
               e.preventDefault()
-              this._shiftBlockIndent(-1)
+              this._shiftBlockIndent(-1, [line])
               return
             }
           }
@@ -8233,41 +8332,109 @@ export class KuroEditor {
   }
 
   /**
-   * Shift the indent level of all block elements in the current selection.
-   * Each level = 2 em (padding-left).  Minimum = 0 (cannot go negative).
-   * @param {number} dir  +1 = indent, -1 = outdent
+   * キャレットの居る「行」（枠は返さない）。枠に先に当たったら null。
+   * ⚠ 枠に当たった時点で打ち切ること。祖先を辿り続けると、コールアウトの中の
+   *   テキストで押した Tab が【枠の外のセルや段落】に効いてしまう。
    */
-  _shiftBlockIndent(dir) {
+  _nearestLine(node) {
+    let el = node instanceof Element ? node : node?.parentElement
+    while (el && el !== this.wysiwyg) {
+      if (isLineBlock(el)) return ownerListItem(el, this.wysiwyg) ?? el
+      if (el.matches?.(FRAME_SELECTOR)) return null
+      el = el.parentElement
+    }
+    return null
+  }
+
+  /**
+   * 選択がかかっている「行」を文書順で。Tab / Shift+Tab の対象そのもの。
+   *
+   * ⚠ 対象は【選択がかかっている行すべて】。キャレット 1 点で書くと「3 行選んで
+   *   押したのに 1 行しか変わらない」壊れ方をする。
+   * ⚠ `range.intersectsNode(el)` だけで拾ってはいけない。選択は【祖先とも交差する】
+   *   ので、コールアウトの中の段落を選んだだけで枠まで、入れ子の子項目を選んだだけで
+   *   親項目まで対象になる。判定は「その要素【自身の行】＝子ブロック以外の中身が
+   *   選択に触れているか」で行い、そのうえで祖先も選ばれている要素は落とす
+   *   （親を動かせば中身は一緒に動くので、両方処理すると二重に動く）。
+   */
+  _linesInSelection() {
     const sel = window.getSelection()
-    if (!sel?.rangeCount) return
-    const range      = sel.getRangeAt(0)
-    const savedRange = range.cloneRange()
-    const STEP       = 2  // em per indent level
+    if (!sel?.rangeCount) return []
+    const range = sel.getRangeAt(0)
+    const hit = (node) => { try { return range.intersectsNode(node) } catch { return false } }
+    const ownLineSelected = (el) => {
+      for (const c of el.childNodes) {
+        if (c.nodeType === Node.ELEMENT_NODE &&
+            (isLineBlock(c) || c.matches?.(FRAME_SELECTOR))) continue
+        if (hit(c)) return true
+      }
+      return false
+    }
 
-    const BLOCKS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5',
-                             'LI', 'TD', 'TH', 'BLOCKQUOTE', 'PRE'])
-    const blocks = []
-
+    const all = []
     const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_ELEMENT, null)
-    let node = walker.nextNode()
-    while (node) {
-      if (BLOCKS.has(node.tagName) && range.intersectsNode(node)) blocks.push(node)
-      node = walker.nextNode()
+    let n = walker.nextNode()
+    while (n) {
+      if (isLineBlock(n) && hit(n) && ownLineSelected(n)) {
+        all.push(ownerListItem(n, this.wysiwyg) ?? n)
+      }
+      n = walker.nextNode()
     }
 
-    if (blocks.length === 0) {
-      const b = this._nearestBlock(range.startContainer)
-      if (b) blocks.push(b)
+    if (all.length === 0) {
+      // 空行など、交差判定が空振りする位置。キャレットの行だけを対象にする
+      const line = this._nearestLine(range.startContainer)
+      if (line) all.push(line)
     }
 
-    for (const b of blocks) {
+    return all.filter((el, i) =>
+      all.indexOf(el) === i && !all.some((o) => o !== el && o.contains(el)))
+  }
+
+  /**
+   * 枠に付いてしまった字下げ（インライン padding-left）を読込み時に落とす。
+   *
+   * v2.24.0 以前の Tab は枠にも padding-left を足していた。枠は自前の内側余白を
+   * CSS で持っているのでこれは【上書きして潰す】不具合（コールアウトなら
+   * padding-left:3rem のアイコン列が 2em に縮んで文字がアイコンに重なる）。
+   * いま Tab は枠を対象にしないので、残っていると UI から二度と外せない。
+   * 枠のインライン padding-left は正当な出どころが無いので、読み込んだ時点で掃除する。
+   * ⚠ 呼ぶのは _suspendDirty の中（過去の不具合の後始末であって編集ではないので、
+   *   開いただけで保存ボタンを点けない）。
+   */
+  _dropStaleFrameIndent(root) {
+    for (const el of root.querySelectorAll(FRAME_SELECTOR)) {
+      if (el.style.paddingLeft) el.style.removeProperty('padding-left')
+    }
+  }
+
+  /**
+   * 選択中の【行】の字下げを 1 段（2em の padding-left）動かす。最小 0。
+   *
+   * ⚠ 枠（引用・コールアウト・角丸ボックス…）とリスト項目は対象外。枠は行では
+   *   ないので `_linesInSelection()` が最初から返さず、リスト項目は字下げでなく
+   *   入れ子（`_shiftListNesting`）が担当する。
+   *
+   * @param {number} dir  +1 = indent, -1 = outdent
+   * @param {HTMLElement[]} [lines]  対象行（省略時は現在の選択から求める）
+   */
+  _shiftBlockIndent(dir, lines = null) {
+    const sel = window.getSelection()
+    const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null
+    const STEP = 2  // em per indent level
+
+    const targets = (lines ?? this._linesInSelection()).filter((el) => el.tagName !== 'LI')
+
+    for (const b of targets) {
       const cur  = parseFloat(b.style.paddingLeft) || 0
       const next = Math.max(0, cur + dir * STEP)
       b.style.paddingLeft = next > 0 ? `${next}em` : ''
     }
 
     // Restore caret / selection
-    try { sel.removeAllRanges(); sel.addRange(savedRange) } catch (_) {}
+    if (savedRange) {
+      try { sel.removeAllRanges(); sel.addRange(savedRange) } catch (_) {}
+    }
   }
 
   /**
@@ -8461,10 +8628,9 @@ export class KuroEditor {
    * @param {string} value
    */
   _applyListStyle(value) {
-    // ── "解除": delegate to the same toggle-off logic ────────────────────────
-    // _toggleListOff saves and restores the selection internally.
+    // ── "解除" は 2 段階（UL_NONE_CLASS のコメント参照）────────────────────────
     if (value === 'kuro-list-remove') {
-      this._toggleListOff('OL')
+      this._removeListStyle('OL', 'kuro-list-', OL_NONE_CLASS)
       return
     }
 
@@ -8524,6 +8690,159 @@ export class KuroEditor {
     this._restoreListRange(sel, savedRange, ol)
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LIST — 選択範囲を対象にした共通処理
+  //
+  // ⚠ リスト操作の入口は popm（範囲選択中しか出ない）なので、対象は「キャレットの
+  //   1 行」ではなく【選択がかかっている行すべて】。1 点だけ見て処理を書くと、
+  //   3 行選んで押したのに 1 行しか変わらない、という壊れ方をする。
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** 選択範囲に交差する <ul> / <ol> をすべて（文書順で）。 */
+  _listsInSelection(tag) {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return []
+    const range = sel.getRangeAt(0)
+    const out = []
+    const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_ELEMENT, null)
+    let n = walker.nextNode()
+    while (n) {
+      if (n.tagName === tag && range.intersectsNode(n)) out.push(n)
+      n = walker.nextNode()
+    }
+    // 折りたたみキャレット等で拾えなければ、上へ辿って最も近い 1 つ
+    if (out.length === 0) {
+      let x = range.startContainer
+      if (x.nodeType === Node.TEXT_NODE) x = x.parentElement
+      while (x && x !== this.wysiwyg) {
+        if (x.tagName === tag) { out.push(x); break }
+        x = x.parentElement
+      }
+    }
+    return out
+  }
+
+  /**
+   * 選択範囲に含まれる <li> を（文書順で）。
+   * 拾い方の規約は `_linesInSelection()` と同じ（＝そこから <li> だけ抜く）。
+   * 段落・見出しと同じ土俵で選ぶので、リストと段落が混ざった選択でも取りこぼさない。
+   */
+  _listItemsInSelection() {
+    return this._linesInSelection().filter((el) => el.tagName === 'LI')
+  }
+
+  /**
+   * Tab / Shift+Tab で選択中の項目の入れ子を 1 段深く / 浅くする。
+   *
+   * @param {HTMLElement[]} items  _listItemsInSelection() の結果
+   * @param {1|-1} dir  1 = ネスト, -1 = アウトデント
+   */
+  _shiftListNesting(items, dir) {
+    const sel = window.getSelection()
+    const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null
+
+    // ⚠ アウトデントは【逆順】に処理する。手前から出すと、まだ中に残っている
+    //   後続の項目を「出した項目の下」へぶら下げ直すことになり、同じ項目を
+    //   二度動かして順序が入れ替わる。後ろから出せば各項目は 1 回で済む。
+    const order = dir > 0 ? items : [...items].reverse()
+    for (const li of order) {
+      if (dir > 0) this._nestListItem(li)
+      else         this._outdentListItem(li)
+    }
+
+    // 項目ごと動かしただけなので中のテキストノードは生きている = 選択は有効
+    if (savedRange) {
+      try {
+        sel.setBaseAndExtent(savedRange.startContainer, savedRange.startOffset,
+                             savedRange.endContainer,   savedRange.endOffset)
+      } catch (_) {}
+    }
+  }
+
+  /** 親リストと同じ種類・同じマーカーの子リストを <li> の末尾に用意して返す。 */
+  _subListFor(parentLi, sourceList) {
+    let sub = parentLi.lastElementChild
+    if (sub && sub.tagName === sourceList.tagName) return sub
+    sub = document.createElement(sourceList.tagName)
+    // マーカーは親から継承する（チェックリストの中は全部チェックリスト）。
+    // 子だけ既定の ● に戻ると、同じ意味の行が階層で別の記号になってしまう。
+    for (const c of sourceList.classList) {
+      if (c.startsWith('kuro-ul-') || c.startsWith('kuro-list-')) sub.classList.add(c)
+    }
+    parentLi.appendChild(sub)
+    return sub
+  }
+
+  /**
+   * 1 項目を 1 段深くする（前の項目の子リストへ移す）。
+   * ⚠ 先頭の項目は入れ子にできない（親になる項目が無い）。何もしないのが正解で、
+   *   ここで無理に親を作ると「1 行だけのリストが入れ子になる」意味のない構造になる。
+   */
+  _nestListItem(li) {
+    const list = li.parentElement
+    const prev = li.previousElementSibling
+    if (!list || !prev || prev.tagName !== 'LI') return false
+    this._subListFor(prev, list).appendChild(li)
+    // 旧仕様（padding-left による字下げ）の名残があれば、階層に置き換わるので落とす
+    li.style.removeProperty('padding-left')
+    return true
+  }
+
+  /**
+   * 1 項目を 1 段浅くする（親項目の直後へ出す）。
+   * ⚠ 最上位の項目では何もしない（リストから抜けるのは「解除」2 回の仕事）。
+   */
+  _outdentListItem(li) {
+    const list = li.parentElement
+    const parentLi = list?.parentElement
+    if (!parentLi || parentLi.tagName !== 'LI') return false
+
+    // 後続の兄弟は自分にぶら下げて、見た目の順序を保つ
+    const following = []
+    for (let n = li.nextElementSibling; n; n = n.nextElementSibling) following.push(n)
+
+    parentLi.after(li)
+    if (following.length) {
+      const sub = this._subListFor(li, list)
+      for (const f of following) sub.appendChild(f)
+    }
+    if (list.children.length === 0) list.remove()
+    return true
+  }
+
+  /**
+   * 「解除」— 2 段階（UL_NONE_CLASS のコメントが正本）。
+   *   選択中のリストに 1 つでもマーカーが残っていれば → 全部マーカーなしにする
+   *   全部マーカーなしなら                          → リストから抜けて段落に戻す
+   *
+   * ⚠ 「1 つでも残っていれば 1 段目」にすること。マーカー有りと無しが混ざった選択で
+   *   段落へ飛ばすと、まだマークを見ている行まで巻き添えで階層から出てしまう。
+   *   押すたびに必ず一方向へ進むので、2 回押せば必ず段落に戻る。
+   */
+  _removeListStyle(tag, prefix, noneClass) {
+    const lists = this._listsInSelection(tag)
+    const hasMarker = lists.some((l) => !l.classList.contains(noneClass))
+    if (lists.length === 0 || !hasMarker) {
+      this._toggleListOff(tag)   // 2 段目（選択の保存・復元は内部で行う）
+      return
+    }
+    const sel = window.getSelection()
+    const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null
+    for (const list of lists) {
+      Array.from(list.classList)
+        .filter((c) => c.startsWith(prefix))
+        .forEach((c) => list.classList.remove(c))
+      list.classList.add(noneClass)
+    }
+    // クラスの付け外しだけなのでノードは動かない = 元の選択がそのまま有効
+    if (savedRange) {
+      try {
+        sel.setBaseAndExtent(savedRange.startContainer, savedRange.startOffset,
+                             savedRange.endContainer,   savedRange.endOffset)
+      } catch (_) {}
+    }
+  }
+
   /**
    * Apply an unordered-list bullet symbol to the nearest <ul> containing the caret.
    * Exact mirror of _applyListStyle — no wysiwyg.focus() (selection already restored
@@ -8535,10 +8854,9 @@ export class KuroEditor {
    * @param {string} value
    */
   _applyULStyle(value) {
-    // ── "解除": remove the nearest <ul> ──────────────────────────────────────
-    // _toggleListOff saves and restores the selection internally.
+    // ── "解除" は 2 段階（UL_NONE_CLASS のコメント参照）────────────────────────
     if (value === 'kuro-ul-remove') {
-      this._toggleListOff('UL')
+      this._removeListStyle('UL', 'kuro-ul-', UL_NONE_CLASS)
       return
     }
 
@@ -9567,6 +9885,7 @@ export class KuroEditor {
       // Done before block-id tagging so the wrappers (which never get an id) are
       // in place and the real blocks inside keep their ids.
       this._wrapAtomicBlocks(this.wysiwyg)
+      this._dropStaleFrameIndent(this.wysiwyg)
       if (this._mode === 'source') this.sourceArea.value = html ?? ''
       this.toc._doUpdate()
       this._initAllCodeBlocks()

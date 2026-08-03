@@ -759,6 +759,21 @@ h5[id^='kuro-h-'] {
 }
 
 /* ── List custom markers ── */
+/* 記号なしリスト —「解除」の 1 段目。<li> のままなので位置も入れ子も保たれる。
+   ⚠ OL でもカウンタは進み続ける（list-style-type: none は番号を「隠す」だけで
+     「数えるのをやめる」ではない）ので、あとでマーカーを戻せば正しい番号が復活する。 */
+ul.kuro-ul-none,
+ol.kuro-list-none {
+  list-style-type: none;
+}
+
+/* 入れ子のリストは上下の余白を詰める。トップレベルと同じ 0.5rem を入れると
+   親項目と子リストの間だけ間延びして、階層が読み取りにくくなる。 */
+.kuro-content li > ul,
+.kuro-content li > ol {
+  margin: 0.25rem 0;
+}
+
 ul.kuro-ul-disc {
   list-style-type: disc;
 }
