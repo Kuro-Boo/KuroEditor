@@ -246,7 +246,7 @@ describe('チェックリスト', () => {
   // ── 7. 公開ページでの見せ方 ───────────────────────────────────────────────
   // content.css は公開ページにも当たる。トグルは editor.js のハンドラだけが持つので
   // 読者は押せない ＝ 指マークを出すと「押せそうなのに何も起きない」誤解になる。
-  // 編集画面限定の手触りは editor.css の .kuro-pane__wysiwyg 側に置く（レシピカードと同じ）。
+  // 規約: 編集画面でだけ反応する要素の cursor は editor.css の .kuro-pane__wysiwyg 側に置く。
   it('箱の cursor:pointer は編集画面限定（content.css には書かない）', () => {
     // ⚠ new URL(<文字列リテラル>, import.meta.url) は Vite がアセット URL へ
     //   書き換えてしまう。パスは fileURLToPath から組み立てる。

@@ -849,7 +849,8 @@ ul.kuro-ul-check > li::before {
   /* ⚠ ここに cursor: pointer を書かないこと。content.css は公開ページにも当たるが、
      トグルするのは編集画面の pointerdown ハンドラだけ＝読者は押せない。指マークだけ
      出しても「押せそうなのに何も起きない」誤解になる。編集画面限定の手触りは
-     editor.css の .kuro-pane__wysiwyg 側に置く（レシピカードと同じ扱い）。 */
+     editor.css の .kuro-pane__wysiwyg 側に置く。
+     （規約: 編集画面でだけ反応する要素の cursor は content.css に書かない） */
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 ul.kuro-ul-check > li[data-checked="1"]::before {

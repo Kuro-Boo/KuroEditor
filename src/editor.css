@@ -438,13 +438,17 @@
   .kuro-pane--view .kuro-pane__wysiwyg:empty::before { content: none; }
   /* コードブロックの 🗑 は編集用なので隠す（📋 コピーは閲覧でも使うので残す） */
   .kuro-pane--view .kuro-code__del { display: none; }
-  /* レシピカードは【編集画面でだけ】クリックで開く手触りにする。
-     カードの上にボタン類は一切置かない（WYSIWYG＝公開ページと同じ見た目）。 */
+  /* ── 編集画面でだけ反応する要素の cursor はここに置く ────────────────────
+     規約: 反応させているのは editor.js のハンドラなので、公開ページでは同じ要素も
+     ただの静的な表示。content.css（公開ページにも当たる）に cursor: pointer を
+     書くと、読者に「押せそうなのに何も起きない」と見せてしまう。閲覧モードも
+     操作できないので default に戻す。要素ごとに機能は別物で、共通なのはこの
+     置き場所の規約だけ。 */
+  /* レシピカード — クリックで編集モーダルが開く。カードの上にボタン類は一切
+     置かない（WYSIWYG＝公開ページと同じ見た目）ので、手触りは cursor だけ。 */
   .kuro-pane__wysiwyg [data-kuro-block="recipe-card"] { cursor: pointer; }
   .kuro-pane--view [data-kuro-block="recipe-card"] { cursor: default; }
-  /* チェックリストの箱も同じ扱い — 押せるのは【編集画面だけ】。content.css は
-     公開ページにも当たるので、あちらに cursor を書くと読者に「押せそう」と
-     見せてしまう（トグルは editor.js のハンドラ＝公開ページには無い）。 */
+  /* チェックリストの箱 — タップで data-checked をトグルする */
   .kuro-pane__wysiwyg ul.kuro-ul-check > li::before { cursor: pointer; }
   .kuro-pane--view .kuro-pane__wysiwyg ul.kuro-ul-check > li::before { cursor: default; }
   .kuro-pane--view a { cursor: pointer; }
