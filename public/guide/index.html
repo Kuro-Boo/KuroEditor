@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KuroEditor 操作マニュアル — 記事を書く人のためのガイド</title>
+  <meta name="description" content="KuroEditor で記事を書く人のための操作マニュアル。文字装飾・リスト・表・画像・リンク・コールアウトの使い方から、Enter と Shift+Enter の違いのような「知らないと戸惑う」作法まで日本語で解説します。" />
+
+  <meta property="og:title" content="KuroEditor 操作マニュアル" />
+  <meta property="og:description" content="記事を書く人のための KuroEditor 操作マニュアル（日本語）。" />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://kuro.boo/kuroeditor/guide/" />
+
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../assets/compiled_tailwind_4_1_7.css" />
+  <script src="../version.js"></script>
+
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      background:
+        radial-gradient(at 20% 0%, rgba(99, 102, 241, 0.14) 0%, transparent 55%),
+        #0a0a0f;
+    }
+    /* 本文の読み物としての基本 */
+    .doc h2 {
+      font-size: 1.5rem; font-weight: 700; color: #fff;
+      margin: 3.5rem 0 0.75rem; padding-top: 0.5rem;
+      scroll-margin-top: 5rem;
+    }
+    .doc h3 {
+      font-size: 1.075rem; font-weight: 600; color: #e4e4e7;
+      margin: 2rem 0 0.5rem; scroll-margin-top: 5rem;
+    }
+    .doc p  { margin: 0.75rem 0; line-height: 1.9; }
+    .doc ul, .doc ol { margin: 0.75rem 0; padding-left: 1.4rem; line-height: 1.9; }
+    .doc ul { list-style: disc; }
+    .doc ol { list-style: decimal; }
+    .doc li { margin: 0.2rem 0; }
+    .doc a  { color: #a5b4fc; text-decoration: underline; text-underline-offset: 2px; }
+    .doc a:hover { color: #c7d2fe; }
+    .doc strong { color: #fff; font-weight: 600; }
+
+    /* 表 */
+    .doc table {
+      width: 100%; border-collapse: collapse; margin: 1rem 0;
+      font-size: 0.925rem;
+    }
+    .doc th, .doc td {
+      border: 1px solid rgba(99, 102, 241, 0.18);
+      padding: 0.55rem 0.8rem; text-align: left; vertical-align: top;
+    }
+    .doc th { background: rgba(99, 102, 241, 0.12); color: #e0e7ff; font-weight: 600; white-space: nowrap; }
+    .doc td { line-height: 1.75; }
+    .table-scroll { overflow-x: auto; }
+
+    /* キー表記 */
+    kbd {
+      display: inline-block;
+      background: #17171b; border: 1px solid rgba(99, 102, 241, 0.35);
+      border-bottom-width: 2px; border-radius: 0.35em;
+      padding: 0.1em 0.45em; margin: 0 0.1em;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85em; color: #c7d2fe;
+      white-space: nowrap;
+    }
+    code.inline {
+      background: rgba(99, 102, 241, 0.15); color: #a5b4fc;
+      padding: 0.15em 0.45em; border-radius: 0.3em;
+      font-size: 0.9em; font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* 囲み（このページ自身の注意書き） */
+    .box {
+      display: flex; gap: 0.85rem; align-items: flex-start;
+      border-radius: 0.75rem; padding: 0.9rem 1.1rem; margin: 1.25rem 0;
+      border: 1px solid; line-height: 1.85;
+    }
+    .box .box-icon { font-size: 1.2rem; line-height: 1.5; flex: none; }
+    .box-tip  { background: rgba(59, 130, 246, 0.1);  border-color: rgba(59, 130, 246, 0.4); }
+    .box-warn { background: rgba(245, 158, 11, 0.1);  border-color: rgba(245, 158, 11, 0.4); }
+    .box-note { background: rgba(148, 163, 184, 0.1); border-color: rgba(148, 163, 184, 0.35); }
+
+    /* 目次（左） */
+    .toc a {
+      display: block; padding: 0.3rem 0.7rem; border-left: 2px solid transparent;
+      color: #a1a1aa; font-size: 0.875rem; text-decoration: none; border-radius: 0 0.3rem 0.3rem 0;
+    }
+    .toc a:hover { color: #e4e4e7; background: rgba(99, 102, 241, 0.1); }
+    .toc a.active { color: #c7d2fe; border-left-color: #818cf8; background: rgba(99, 102, 241, 0.12); }
+    .toc .toc-group { margin-top: 1rem; padding: 0 0.7rem 0.25rem; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: #52525b; }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #f472b6 100%);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .glass {
+      background: rgba(23, 23, 27, 0.6); backdrop-filter: blur(12px);
+      border: 1px solid rgba(99, 102, 241, 0.15);
+    }
+    html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+
+<body class="text-zinc-300 font-sans antialiased">
+
+  <!-- ヘッダー -->
+  <header class="sticky top-0 z-40 glass border-b border-indigo-500/15">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+      <a href="../" class="flex items-center gap-2 font-bold text-white">
+        <span class="text-lg">🖊</span>
+        <span>KuroEditor</span>
+        <span class="text-xs font-normal text-zinc-500 hidden sm:inline">操作マニュアル</span>
+      </a>
+      <nav class="flex items-center gap-4 text-sm">
+        <span id="ke-version" class="hidden sm:inline text-xs text-zinc-500"></span>
+        <a href="../sample/" class="text-amber-50 hover:text-white transition-colors">サンプル</a>
+        <a href="../" class="text-amber-50 hover:text-white transition-colors">トップ</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-10">
+
+    <!-- 目次 -->
+    <aside class="toc hidden lg:block w-56 flex-none py-10">
+      <div class="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pb-10">
+        <div class="toc-group">はじめに</div>
+        <a href="#start">画面の見かた</a>
+        <a href="#mode">3 つのモード</a>
+        <a href="#save">保存と元に戻す</a>
+        <div class="toc-group">文章を書く</div>
+        <a href="#enter">改行と段落</a>
+        <a href="#decorate">文字の装飾</a>
+        <a href="#indent">字下げ（Tab）</a>
+        <a href="#list">箇条書き・番号</a>
+        <a href="#check">チェックリスト</a>
+        <div class="toc-group">要素を置く</div>
+        <a href="#callout">コールアウト</a>
+        <a href="#roundbox">角丸ボックス</a>
+        <a href="#code">コードブロック</a>
+        <a href="#hr">水平線</a>
+        <a href="#table">表</a>
+        <a href="#media">画像・動画・音声</a>
+        <a href="#link">リンク・URL カード</a>
+        <a href="#emoji">絵文字</a>
+        <a href="#recipe">レシピカード</a>
+        <div class="toc-group">仕上げ</div>
+        <a href="#toc">目次（見出し）</a>
+        <a href="#shortcut">ショートカット一覧</a>
+        <a href="#faq">困ったときは</a>
+      </div>
+    </aside>
+
+    <!-- 本文 -->
+    <main class="doc flex-1 min-w-0 py-10 max-w-3xl">
+
+      <h1 class="text-3xl sm:text-4xl font-bold text-white leading-tight">
+        KuroEditor <span class="gradient-text">操作マニュアル</span>
+      </h1>
+      <p class="text-zinc-400">
+        記事を書く人のためのガイドです。ボタンの場所だけでなく、
+        <strong>知らないと戸惑うところ</strong>（<a href="#enter">改行と段落の違い</a>や
+        <a href="#indent">Tab がどこに効くか</a>など）を中心にまとめています。
+        組み込み方や API については<a href="../">トップページ</a>と GitHub の README をご覧ください。
+      </p>
+
+      <div class="box box-note">
+        <div class="box-icon">📝</div>
+        <div>
+          KuroEditor は<strong>組み込んで使うエディター</strong>です。設置したサイト側の設定で、
+          保存ボタン・下部メニュー・レシピカードなどが<strong>出ていないことがあります</strong>。
+          このページに載っていてお使いの画面に無い機能は、サイト側で無効にされていると考えてください。
+        </div>
+      </div>
+
+      <!-- ══════════ はじめに ══════════ -->
+      <h2 id="start">画面の見かた</h2>
+      <p>画面は大きく 4 つです。</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>場所</th><th>役割</th></tr></thead>
+          <tbody>
+            <tr><td>上のタブバー</td><td>モード切替（✏️ 編集 / 👁 閲覧 / <code class="inline">&lt;/&gt;</code> HTML）・自動保存・保存・目次の開閉。</td></tr>
+            <tr><td>その下の段</td><td>元に戻す ↶ / やり直し ↷・😀 絵文字・▦ 表・🖼 メディア・<code class="inline">&lt;/&gt;</code> コード・─ 水平線・角丸ボックス・🔗 リンク。右端に文字数。</td></tr>
+            <tr><td>本文（キャンバス）</td><td>書くところ。表示は公開ページとほぼ同じ見た目です。</td></tr>
+            <tr><td>下に浮くメニュー</td><td>上の段と同じ並びのメニュー。スマホでも指の届く位置に出ます。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        このほかに、<strong>文字を選択したときだけ</strong>選択範囲の上（または下）に浮かぶメニューがあります。
+        文字装飾・見出し・リスト・コールアウトなどは、ここから使います。
+      </p>
+      <div class="box box-tip">
+        <div class="box-icon">💡</div>
+        <div>ボタンは押した瞬間に一瞬光ります。スマホで指に隠れても「どれを押したか」が分かるようにするためです。</div>
+      </div>
+
+      <h2 id="mode">3 つのモード</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>タブ</th><th>できること</th></tr></thead>
+          <tbody>
+            <tr><td>✏️ 編集</td><td>通常の執筆モード。すべての機能が使えます。</td></tr>
+            <tr><td>👁 閲覧</td><td><strong>編集できない</strong>読むためのモード。カーソルも編集メニューも出ません。書きあがった記事を読み返すときに。</td></tr>
+            <tr><td><code class="inline">&lt;/&gt;</code> HTML</td><td>HTML を直接編集します。慣れている方向け。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        閲覧モードでリンクをクリックすると、いきなり移動せず
+        <strong>「このリンクを新しいタブで開きますか？」</strong>と確認が出ます。
+        読んでいる途中で記事から飛ばされないための動きです。
+      </p>
+
+      <h2 id="save">保存と元に戻す</h2>
+      <ul>
+        <li><strong>保存</strong> — タブバー右上の保存ボタン。未保存の変更があるときだけ光ります。</li>
+        <li><strong>自動保存</strong> — チェックを入れておくと、編集が落ち着いたタイミングで自動的に保存されます。</li>
+        <li><strong>元に戻す / やり直し</strong> — <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> と <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>（または <kbd>Ctrl</kbd>+<kbd>Y</kbd>）。連続して打った文字はまとめて 1 手として戻ります（最大 200 手）。</li>
+      </ul>
+      <div class="box box-tip">
+        <div class="box-icon">💡</div>
+        <div>
+          表の挿入やリンクの削除など、ボタン操作で起きた変更も<strong>すべて元に戻せます</strong>。
+          コードブロックの中だけは、そのブロック自身の履歴で戻ります（本文全体が巻き戻らないように）。
+        </div>
+      </div>
+
+      <!-- ══════════ 文章を書く ══════════ -->
+      <h2 id="enter">改行と段落 — <kbd>Enter</kbd> と <kbd>Shift</kbd>+<kbd>Enter</kbd> の違い</h2>
+      <p>
+        見た目はどちらも「次の行に移る」ですが、<strong>中身は別物</strong>です。
+        ここを知っておくと、後の字下げや装飾で戸惑わなくなります。
+      </p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>キー</th><th>結果</th><th>意味</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><kbd>Enter</kbd></td>
+              <td><strong>段落が分かれる</strong></td>
+              <td>別々のかたまりになる。行ごとに字下げ・寄せ・見出し化ができる。</td>
+            </tr>
+            <tr>
+              <td><kbd>Shift</kbd>+<kbd>Enter</kbd></td>
+              <td><strong>同じ段落の中で改行する</strong></td>
+              <td>見た目は 2 行でも、エディターからは<strong>1 かたまり</strong>。行間が詰まる。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="box box-warn">
+        <div class="box-icon">⚠️</div>
+        <div>
+          <strong><kbd>Shift</kbd>+<kbd>Enter</kbd> で改行した行は、単独では動かせません。</strong>
+          字下げ（<kbd>Tab</kbd>）・寄せ・見出し・引用などは「段落」単位で効くので、
+          <kbd>Shift</kbd>+<kbd>Enter</kbd> で連ねた行はすべて道連れになります。
+          行ごとに扱いたいときは <kbd>Enter</kbd> で段落を分けてください。
+        </div>
+      </div>
+      <p>
+        使い分けの目安は「<strong>意味のまとまりが変わるなら <kbd>Enter</kbd>、
+        同じ文の中で見た目を折り返したいだけなら <kbd>Shift</kbd>+<kbd>Enter</kbd></strong>」です。
+        住所や詩のように「詰めて並べたい数行」は <kbd>Shift</kbd>+<kbd>Enter</kbd> が向いています。
+      </p>
+
+      <h2 id="decorate">文字の装飾</h2>
+      <p>文字を選択すると出るポップアップメニューから操作します。</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>機能</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>太字・斜体・下線・打ち消し線</td><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> でも。</td></tr>
+            <tr><td>文字色</td><td>パレットから選択（背景色はありません）。</td></tr>
+            <tr><td>見出し</td><td>H1〜H4。付けた見出しは<a href="#toc">右の目次</a>に自動で並びます。</td></tr>
+            <tr><td>文字サイズ</td><td>75 / 85 / <strong>100（基準）</strong> / 120 / 150 / 175 / 200%。</td></tr>
+            <tr><td>行間</td><td>詰め 1.2 / 狭め 1.4 / <strong>標準 1.6</strong> / 広め 1.8 / 2 倍 / 2.5 倍。</td></tr>
+            <tr><td>寄せ</td><td>左・中央・右・均等割り。</td></tr>
+            <tr><td>フォント</td><td>ゴシック（初期）／明朝。サイト側が Web フォントを読み込んでいれば、それも選べます。</td></tr>
+            <tr><td>引用</td><td>選んだ段落を引用にします。引用の中の<strong>空行で <kbd>Enter</kbd></strong> を押すと引用から抜けます。</td></tr>
+            <tr><td>キー表記</td><td>選んだ文字を <kbd>Ctrl</kbd> のようなキー風の表示にします。もう一度押すと戻ります。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="indent">字下げ — <kbd>Tab</kbd> と <kbd>Shift</kbd>+<kbd>Tab</kbd></h2>
+      <p>
+        <kbd>Tab</kbd> で 1 段（約 2 文字分）下げ、<kbd>Shift</kbd>+<kbd>Tab</kbd> で戻します。
+        行頭で <kbd>Backspace</kbd> を押しても 1 段戻ります。
+        複数行を選択していれば、<strong>選択にかかっている行すべて</strong>が動きます。
+      </p>
+      <p>効く相手は決まっています。</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>対象</th><th><kbd>Tab</kbd> の動き</th></tr></thead>
+          <tbody>
+            <tr><td>段落・見出し・表のセル</td><td>その行が 1 段下がる</td></tr>
+            <tr><td>リストの項目</td><td>字下げではなく<strong>階層が 1 段深くなる</strong>（<a href="#list">箇条書き</a>参照）</td></tr>
+            <tr><td>囲み（コールアウト・角丸ボックス・引用・表そのもの）</td><td><strong>動きません。</strong>枠の中の行が動きます</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="box box-note">
+        <div class="box-icon">📦</div>
+        <div>
+          囲みの位置や幅は、<kbd>Tab</kbd> ではなく<strong>その囲み自身の設定</strong>（角丸ボックスなら BOX 設定の幅・寄せ）で決めます。
+          囲みの中で <kbd>Tab</kbd> を押したときに動くのは<strong>カーソルのある行だけ</strong>です。
+          ただし前述のとおり、<kbd>Shift</kbd>+<kbd>Enter</kbd> で連ねた行は 1 つの段落なので全部一緒に動きます。
+        </div>
+      </div>
+
+      <h2 id="list">箇条書き・番号付きリスト</h2>
+      <p>複数行を選択してポップアップメニューのリストボタンから作ります。記号は後から選び直せます。</p>
+      <ul>
+        <li><strong>記号リスト（13 種）</strong> — ● ○ ■ - # * &gt; ◎ ★ ☆ ▶ ▷ と<a href="#check">チェックリスト</a>。</li>
+        <li><strong>番号リスト（7 種）</strong> — 1. ① (1) A. (A) ア (ア)。</li>
+        <li><strong>行頭から作る</strong> — 行の先頭で <code class="inline">1.</code> ＋スペースで番号リスト、記号＋スペースで記号リストになります。</li>
+      </ul>
+
+      <h3>階層（入れ子）にする</h3>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>キー</th><th>動き</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Tab</kbd></td><td>1 つ前の項目の<strong>子</strong>にする（＝ 1 段深くなる）。子リストの記号は親から引き継ぎます。</td></tr>
+            <tr><td><kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>1 段浅くする。下にぶら下がっていた項目は順序を保ったまま付いてきます。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>いちばん上の項目は入れ子にできません</strong>（親になる項目が無いため）。1 つ上に項目を作ってから <kbd>Tab</kbd> してください。</p>
+
+      <h3>リストをやめる（「解除」は 2 段階）</h3>
+      <ol>
+        <li><strong>1 回目</strong> — 記号だけが消えます。項目の位置と階層はそのまま。</li>
+        <li><strong>2 回目</strong> — リストから抜けて普通の段落に戻ります。</li>
+      </ol>
+      <p>
+        深い階層の項目をいきなり段落に戻すと、左端まで飛び出して位置が分からなくなるための 2 段階です。
+        いまどちらの動きになるかは、ボタンにマウスを乗せると説明が出ます。
+      </p>
+
+      <h2 id="check">チェックリスト（Todo）</h2>
+      <p>
+        記号リストの記号のひとつです。マーカー選択パネルの <strong>☑︎</strong>、または
+        行頭で <code class="inline">[]</code> ＋スペース（<code class="inline">[x]</code> ＋スペースなら最初からチェック済み）で作れます。
+      </p>
+      <ul>
+        <li><strong>チェックの切り替え</strong> — 箱をクリック / タップします。文字の上を押したときは普通にカーソルが立つので、編集の邪魔になりません。</li>
+        <li>普通の箇条書きと同じなので、<kbd>Enter</kbd> で次の項目・太字やリンクもそのまま使えます。</li>
+        <li>他の記号に切り替えてもチェックは消えません（見えなくなるだけで、☑︎ に戻せば復活します）。</li>
+      </ul>
+      <div class="box box-warn">
+        <div class="box-icon">⚠️</div>
+        <div>
+          <strong>公開ページのチェックは「見た目だけ」です。</strong>
+          チェックの状態は記事と一緒に保存されるので公開ページにも同じ見た目で出ますが、
+          <strong>読者がクリックしても切り替わりません</strong>（編集画面専用の操作です）。
+        </div>
+      </div>
+
+      <!-- ══════════ 要素を置く ══════════ -->
+      <h2 id="callout">コールアウト（囲み）</h2>
+      <p>
+        段落を選んでポップアップメニューから 💡 ヒント / ⚠️ 注意 / ❗ 警告 / 📌 メモ の 4 種類に変換します。
+        同じ種類をもう一度選ぶと解除、別の種類を選ぶと種類だけ変わります。
+      </p>
+      <ul>
+        <li>囲みの中で行を増やすときは <kbd>Enter</kbd>。行ごとに字下げや寄せをしたいなら必ず <kbd>Enter</kbd> で分けてください。</li>
+        <li>囲みから抜けるには、<strong>空行で <kbd>Enter</kbd></strong>。囲みの下に新しい段落ができます。</li>
+      </ul>
+
+      <h2 id="roundbox">角丸ボックス</h2>
+      <p>
+        下部メニューの「角丸」ボタンで挿入します。中には普通に文章・画像・表などを入れられます。
+        カーソルがボックスの中にある間だけ、専用の BOX 設定メニューが浮きます。
+      </p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>設定</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>横幅</td><td>30〜100%（初期 100%）。</td></tr>
+            <tr><td>配置</td><td>左寄せ / 中央 / 右寄せ。左右に寄せると、続く文章が横に回り込みます。</td></tr>
+            <tr><td>入れ子</td><td>角丸ボックスの中に角丸ボックスを入れられます（中側は背景が少し薄くなります）。</td></tr>
+            <tr><td>削除</td><td>BOX 設定メニューの「🗑 削除」。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="code">コードブロック</h2>
+      <ul>
+        <li>下部メニューの <code class="inline">&lt;/&gt;</code> で挿入。行番号付きで、高さは中身に合わせて伸びます。</li>
+        <li>中では <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> がそのままインデントとして使えます。</li>
+        <li>右上の 📋 でコピー、その左の 🗑 で削除。</li>
+        <li><strong>行番号の部分をドラッグ</strong>すると、ブロックごと上下に移動できます。</li>
+      </ul>
+
+      <h2 id="hr">水平線</h2>
+      <p>
+        下部メニューの ─ で挿入します。太さや点線を選べます。
+        水平線は「ここで区切る」ための線なので、画像や角丸ボックスの回り込みがあっても
+        <strong>その下まで送られて、必ず横いっぱいに引かれます</strong>（＝水平線を入れると回り込みは終わります）。
+      </p>
+
+      <h2 id="table">表</h2>
+      <p>下部メニューの ▦ から挿入します。KuroEditor の表はかなり細かく調整できます。</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>操作</th><th>やり方</th></tr></thead>
+          <tbody>
+            <tr><td>行・列を足す</td><td>セルの境目にカーソルを寄せると出る <strong>＋</strong> をクリック。</td></tr>
+            <tr><td>行・列を消す</td><td>同じ位置に出る <strong>−</strong> をクリック。</td></tr>
+            <tr><td>列の幅</td><td>罫線の上をドラッグ。</td></tr>
+            <tr><td>罫線</td><td>表全体・1 本ずつのどちらも、太さと種類を変えられます。</td></tr>
+            <tr><td>セルの背景・角丸</td><td>セルにカーソルを置くと出るメニューから。</td></tr>
+            <tr><td>セルの連結</td><td>表メニューの「右と連結」「下と連結」。端では押せません。</td></tr>
+            <tr><td>縦位置</td><td>セルの中身を 上 / 中央 / 下 に揃えられます。</td></tr>
+            <tr><td>表ごと削除</td><td>表メニュー右端の 🗑。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="box box-tip">
+        <div class="box-icon">💡</div>
+        <div>
+          Excel やスプレッドシートからコピーした表（タブ区切り）や CSV をそのまま<strong>貼り付けるだけで表になります</strong>。
+        </div>
+      </div>
+
+      <h2 id="media">画像・動画・音声</h2>
+      <p>入れ方は 3 通りです。</p>
+      <ol>
+        <li>下部メニューの 🖼 からファイルを選ぶ、または URL を入力する</li>
+        <li>本文に<strong>ドラッグ＆ドロップ</strong>する</li>
+        <li>クリップボードの画像を<strong>そのまま貼り付ける</strong></li>
+      </ol>
+      <p>
+        画像・動画（mp4 / webm / mov）・音声（mp3 / wav など）に対応し、
+        YouTube や Vimeo の URL を入れると 16:9 の埋め込みになります。
+      </p>
+      <p>挿入したメディアをクリックすると専用メニューが出て、その場で変えられます。</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>項目</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>サイズ</td><td>25 / 33 / 50 / 60 / 75 / 100%。<strong>90% 以下にすると文章が横に回り込みます。</strong></td></tr>
+            <tr><td>配置</td><td>左（回り込み）/ 中央 / 右（回り込み）。</td></tr>
+            <tr><td>クリックリンク</td><td>画像にリンクを付けられます。付けると「↗ 新しいタブで開く」ボタンも出ます。</td></tr>
+            <tr><td>削除</td><td>メニューの「🗑 削除」。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="link">リンクと URL カード</h2>
+      <h3>リンクを作る</h3>
+      <p>
+        下部メニューの <strong>🔗</strong> を押すとリンク入力のポップアップが開きます。
+        先に文字を選択しておくと、その文字が表示テキストの初期値になります。
+        URL を入れずに閉じれば、本文には何も残りません。
+      </p>
+      <h3>リンクを直す</h3>
+      <p>
+        本文のリンクをクリックすると（移動はせずに）編集ポップアップが開き、URL と表示テキストを直せます。
+        右端の 🗑 でリンクを解除できます。
+      </p>
+      <h3>URL カード</h3>
+      <p>
+        リンク編集ポップアップの<strong>「カード表示（表題なし）」</strong>にチェックを入れると、
+        青い文字リンクではなく<strong>カード</strong>（アイコン＋タイトル＋URL）で表示されます。
+        参考リンクを目立たせたいときに便利です。
+      </p>
+      <div class="box box-note">
+        <div class="box-icon">🌐</div>
+        <div>
+          カードのサムネイルやアイコンは相手サイトから取得します。相手側で消えた・取得できないときは、
+          <strong>壊れた画像を出さずに黙って畳みます</strong>（カード自体はリンクとして生きています）。
+        </div>
+      </div>
+
+      <h2 id="emoji">絵文字</h2>
+      <ul>
+        <li>下部メニューの 😀 からピッカーを開いて選びます。</li>
+        <li><code class="inline">:smile:</code> <code class="inline">:fire:</code> <code class="inline">:+1:</code> のような<strong>ショートコード</strong>を打つと自動で絵文字に変わります。</li>
+      </ul>
+
+      <h2 id="recipe">レシピカード</h2>
+      <p>
+        料理レシピを扱うサイト向けの機能です（サイト側で有効にしている場合だけ 🍲 ボタンが出ます）。
+        人数・調理時間・材料・手順をまとめた 1 枚のカードとして本文に置けます。
+      </p>
+      <ul>
+        <li>編集はカードをクリックして開くモーダルから行います。</li>
+        <li><strong>1 記事に 1 枚だけ</strong>です。すでに 1 枚あると 🍲 ボタンは灰色になり、理由が説明として出ます。</li>
+      </ul>
+
+      <!-- ══════════ 仕上げ ══════════ -->
+      <h2 id="toc">目次（見出しから自動生成）</h2>
+      <p>
+        本文に付けた見出しから、右側のパネルに目次が自動で作られます。
+        タブバー右上のボタンか <kbd>Alt</kbd>+<kbd>T</kbd> で開閉、境目のドラッグで幅を変えられます。
+        見出しが 1 つも無い記事では自動的に隠れます。
+      </p>
+
+      <h2 id="shortcut">キーボードショートカット</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>キー</th><th>動作</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd></td><td>太字 / 斜体 / 下線</td></tr>
+            <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd></td><td>元に戻す</td></tr>
+            <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>やり直し</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>段落を分ける</td></tr>
+            <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>同じ段落の中で改行する</td></tr>
+            <tr><td><kbd>Enter</kbd>（空行で）</td><td>引用・コールアウトから抜ける</td></tr>
+            <tr><td><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>字下げ / 戻す（リストの中では階層の出し入れ）</td></tr>
+            <tr><td>行頭で <kbd>Backspace</kbd></td><td>字下げを 1 段戻す</td></tr>
+            <tr><td><kbd>Alt</kbd>+<kbd>T</kbd></td><td>目次の表示 / 非表示</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-zinc-500">閲覧モードでは、装飾と元に戻す系のショートカットは効きません。</p>
+
+      <h2 id="faq">困ったときは</h2>
+
+      <h3>コールアウトの中で <kbd>Tab</kbd> を押したら、全部の行が動いた</h3>
+      <p>
+        その囲みの中身が <kbd>Shift</kbd>+<kbd>Enter</kbd> で改行された<strong>1 つの段落</strong>になっています。
+        字下げは段落ごとに効くので全部動きます。行ごとに動かしたい場所は、改行を <kbd>Enter</kbd> で入れ直して段落に分けてください
+        （<a href="#enter">改行と段落</a>）。
+      </p>
+
+      <h3>囲みの中で <kbd>Tab</kbd> を押しても何も起きない</h3>
+      <p>
+        囲みの中身が段落になっていない（文字が直接置かれている）場合です。
+        その行を <kbd>Enter</kbd> で作り直すと字下げできるようになります。囲みそのものは <kbd>Tab</kbd> では動きません。
+      </p>
+
+      <h3>日本語の変換確定で <kbd>Enter</kbd> を押したら、変なことが起きる</h3>
+      <p>
+        変換確定の <kbd>Enter</kbd> は「文字の確定」として扱われ、改行やダイアログの確定には使われないようになっています。
+        もし変換確定でポップアップが閉じるなどの動きがあれば、それは不具合です。報告してください。
+      </p>
+
+      <h3>公開ページで、編集画面と見た目が違う</h3>
+      <p>
+        本文のスタイルは公開ページと共有しているので、基本的には同じに見えます。
+        違って見える場合は、サイト側のテーマの影響か、記事の保存が済んでいない可能性があります。
+      </p>
+
+      <h3>チェックリストを読者に押してもらいたい</h3>
+      <p>
+        公開ページのチェックは表示だけで、読者が押しても変わりません（<a href="#check">チェックリスト</a>）。
+        読者ごとの状態を保存する仕組みが必要なので、サイト側での対応になります。
+      </p>
+
+      <h3>間違って消してしまった</h3>
+      <p>
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> で戻せます。表の削除・リンクの解除・画像の削除など、
+        ボタンで行った操作もすべて履歴に残っています。
+      </p>
+
+      <div class="glass rounded-2xl p-6 mt-14">
+        <p class="m-0 text-sm text-zinc-400">
+          このページで解決しないことがあれば、
+          <a href="https://github.com/Kuro-Boo/KuroEditor/issues" target="_blank" rel="noopener">GitHub の Issues</a>
+          でお知らせください。実際に触って試したい場合は<a href="../sample/">サンプルページ</a>が便利です。
+        </p>
+      </div>
+    </main>
+  </div>
+
+  <footer class="border-t border-indigo-500/15 mt-10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 text-sm text-zinc-500 flex flex-wrap gap-x-6 gap-y-2 justify-between">
+      <span>© KuroEditor — Powered by Kuro-Boo</span>
+      <span class="flex gap-6">
+        <a href="../" class="hover:text-white transition-colors">トップ</a>
+        <a href="../sample/" class="hover:text-white transition-colors">サンプル</a>
+        <a href="https://github.com/Kuro-Boo/KuroEditor" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a>
+      </span>
+    </div>
+  </footer>
+
+  <script>
+    // バージョン表示（dist/version.js が window.KUROEDITOR_VERSION を入れる）
+    const vEl = document.getElementById('ke-version')
+    if (vEl && window.KUROEDITOR_VERSION) vEl.textContent = 'v' + window.KUROEDITOR_VERSION
+
+    // 目次のハイライト（いま読んでいる見出し）
+    const links = [...document.querySelectorAll('.toc a')]
+    const targets = links
+      .map((a) => document.getElementById(a.getAttribute('href').slice(1)))
+      .filter(Boolean)
+    if (targets.length && 'IntersectionObserver' in window) {
+      const seen = new Set()
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) seen.add(e.target.id)
+          else seen.delete(e.target.id)
+        }
+        const current = targets.find((t) => seen.has(t.id))
+        for (const a of links) {
+          a.classList.toggle('active', !!current && a.getAttribute('href') === '#' + current.id)
+        }
+      }, { rootMargin: '-70px 0px -70% 0px' })
+      targets.forEach((t) => io.observe(t))
+    }
+  </script>
+</body>
+</html>

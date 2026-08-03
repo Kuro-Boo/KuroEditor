@@ -5,8 +5,11 @@
    旧 CDN の inline tailwind.config（fontFamily）をここに移植。 */
 @import "tailwindcss";
 
-/* 使用クラスをスキャンする対象（このファイルからの相対パス） */
+/* 使用クラスをスキャンする対象（このファイルからの相対パス）。
+   ⚠ 同じ CSS を読む静的ページを足したら、ここにも必ず追加すること。
+      スキャン対象外のページはクラスがコンパイル結果に入らず、素の HTML で表示される。 */
 @source "../public/index.html";
+@source "../public/guide/index.html";
 
 @theme {
   --font-sans: "Inter", "Hiragino Sans", "Yu Gothic", sans-serif;
