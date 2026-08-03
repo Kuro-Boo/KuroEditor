@@ -106,6 +106,23 @@
     }
     figcaption { font-size: 0.8rem; color: #71717a; margin-top: 0.4rem; }
 
+    /* ── 実際の表示例 ────────────────────────────────────────────────────
+       中身は kuro-content.css（公開ページと同じスタイル）が描く。
+       このページの .doc 側のルールと衝突しないよう、例の中は触らない。 */
+    .demo {
+      border: 1px solid #e4e4e7; border-radius: 0.75rem;
+      margin: 1rem 0; overflow: hidden; background: #fff;
+    }
+    .demo__label {
+      font-size: 0.7rem; color: #71717a; background: #fafafa;
+      border-bottom: 1px solid #e4e4e7; padding: 0.3rem 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    .demo > .kuro-content { padding: 0.9rem 1.1rem; }
+    .demo > .kuro-content > :first-child { margin-top: 0; }
+    .demo > .kuro-content > :last-child { margin-bottom: 0; }
+    .demo--flow::after { content: ''; display: block; clear: both; }
+
     /* 囲み（このページ自身の注意書き） */
     .box {
       display: flex; gap: 0.85rem; align-items: flex-start;
@@ -132,6 +149,11 @@
     html { scroll-behavior: smooth; }
     @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   </style>
+
+  <!-- ⚠ 実際の表示例（.kuro-content）は【本物の公開ページ用スタイル】で描く。
+       似せて書き直すと本体の変更に置いていかれるため。自前の <style> より
+       後に読むこと（どちらも unlayered ＝ 後勝ちで、例の中だけ本物が効く）。 -->
+  <link rel="stylesheet" href="../kuro-content.css" />
 </head>
 
 <body class="font-sans antialiased">
@@ -379,6 +401,16 @@
           </tbody>
         </table>
       </div>
+      <div class="demo">
+        <div class="demo__label">実際の表示</div>
+        <div class="kuro-content">
+          <p>ふつうの段落です。<strong>太字</strong>・<em>斜体</em>・<u>下線</u>・<s>打ち消し線</s>、
+          <span style="color:#dc2626">文字色</span>、<span style="font-size:150%">大きな文字</span>も使えます。</p>
+          <blockquote><p>引用にすると、左に線が付いて斜体になります。</p></blockquote>
+          <p>キー表記は <kbd>Ctrl</kbd>+<kbd>S</kbd> のように出ます。</p>
+        </div>
+      </div>
+
 
       <h2 id="indent">字下げ — <kbd>Tab</kbd> と <kbd>Shift</kbd>+<kbd>Tab</kbd></h2>
       <p>
@@ -413,6 +445,16 @@
         <li><strong>番号リスト（7 種）</strong> — 1. ① (1) A. (A) ア (ア)。</li>
         <li><strong>行頭から作る</strong> — 行の先頭で <code class="inline">1.</code> ＋スペースで番号リスト、記号＋スペースで記号リストになります。</li>
       </ul>
+      <div class="demo">
+        <div class="demo__label">実際の表示（記号・番号の例）</div>
+        <div class="kuro-content">
+          <ul class="kuro-ul-disc"><li>記号リスト（●）</li><li>初期の記号です</li></ul>
+          <ul class="kuro-ul-star"><li>記号を ★ に変えた例</li><li>13 種から選べます</li></ul>
+          <ol class="kuro-list-decimal"><li>番号リスト（1.）</li><li>自動で番号が振られます</li></ol>
+          <ol class="kuro-list-circled"><li>丸数字（①）にした例</li><li>7 種から選べます</li></ol>
+        </div>
+      </div>
+
 
       <h3>階層（入れ子）にする</h3>
       <div class="table-scroll">
@@ -425,6 +467,18 @@
         </table>
       </div>
       <p><strong>いちばん上の項目は入れ子にできません</strong>（親になる項目が無いため）。1 つ上に項目を作ってから <kbd>Tab</kbd> してください。</p>
+      <div class="demo">
+        <div class="demo__label">実際の表示（入れ子）</div>
+        <div class="kuro-content">
+          <ul class="kuro-ul-disc">
+            <li>親の項目
+              <ul class="kuro-ul-disc"><li>Tab で 1 段深くした子項目</li><li>記号は親から引き継ぎます</li></ul>
+            </li>
+            <li>次の親の項目</li>
+          </ul>
+        </div>
+      </div>
+
 
       <h3>リストをやめる（「解除」は 2 段階）</h3>
       <ol>
@@ -446,6 +500,17 @@
         <li>普通の箇条書きと同じなので、<kbd>Enter</kbd> で次の項目・太字やリンクもそのまま使えます。</li>
         <li>他の記号に切り替えてもチェックは消えません（見えなくなるだけで、☑︎ に戻せば復活します）。</li>
       </ul>
+      <div class="demo">
+        <div class="demo__label">実際の表示</div>
+        <div class="kuro-content">
+          <ul class="kuro-ul-check">
+            <li data-checked="1">牛乳を買う</li>
+            <li>卵を買う</li>
+            <li>パンを買う</li>
+          </ul>
+        </div>
+      </div>
+
       <div class="box box-warn">
         <div class="box-icon">⚠️</div>
         <div>
@@ -466,6 +531,16 @@
         <li>囲みの中で行を増やすときは <kbd>Enter</kbd>。行ごとに字下げや寄せをしたいなら必ず <kbd>Enter</kbd> で分けてください。</li>
         <li>囲みから抜けるには、<strong>空行で <kbd>Enter</kbd></strong>。囲みの下に新しい段落ができます。</li>
       </ul>
+      <div class="demo">
+        <div class="demo__label">実際の表示（4 種類）</div>
+        <div class="kuro-content">
+          <div class="kuro-callout kuro-callout--tip"><p>ヒント — 補足や豆知識を添えるときに。</p></div>
+          <div class="kuro-callout kuro-callout--warn"><p>注意 — 読み飛ばすと困ることに。</p></div>
+          <div class="kuro-callout kuro-callout--danger"><p>警告 — 取り返しがつかない操作の手前に。</p></div>
+          <div class="kuro-callout kuro-callout--note"><p>メモ — 本筋から少し外れる補足に。</p></div>
+        </div>
+      </div>
+
 
       <h2 id="roundbox">角丸ボックス</h2>
       <p>
@@ -483,6 +558,17 @@
           </tbody>
         </table>
       </div>
+      <div class="demo demo--flow">
+        <div class="demo__label">実際の表示（幅と寄せ）</div>
+        <div class="kuro-content">
+          <div class="kuro-roundbox"><p>横幅 100%（初期値）の角丸ボックスです。中には文章も画像も表も入ります。</p>
+            <div class="kuro-roundbox"><p>入れ子にすると、中側は背景が少し薄くなります。</p></div>
+          </div>
+          <div class="kuro-roundbox" data-align="right" style="width:45%"><p>横幅 45%・右寄せ。</p></div>
+          <p>右寄せ・左寄せにすると、続く文章がこのように横へ回り込みます。回り込みを終わらせたいところに水平線を入れると、そこで区切られます。</p>
+        </div>
+      </div>
+
 
       <h2 id="code">コードブロック</h2>
       <ul>
@@ -491,13 +577,31 @@
         <li>右上の 📋 でコピー、その左の 🗑 で削除。</li>
         <li><strong>行番号の部分をドラッグ</strong>すると、ブロックごと上下に移動できます。</li>
       </ul>
+      <div class="demo">
+        <div class="demo__label">実際の表示（公開ページでの見え方）</div>
+        <div class="kuro-content">
+          <pre><code>function hello(name) {
+  return `こんにちは、${name}`
+}</code></pre>
+        </div>
+      </div>
+
 
       <h2 id="hr">水平線</h2>
       <p>
         <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0" y="6" width="14" height="2" rx="1"></rect></svg></span> で挿入します。太さや点線を選べます。
         水平線は「ここで区切る」ための線なので、画像や角丸ボックスの回り込みがあっても
-        <strong>その下まで送られて、必ず横いっぱいに引かれます</strong>（＝水平線を入れると回り込みは終わります）。
+        その下まで送られて、必ず横いっぱいに引かれます（＝<strong>水平線を入れると回り込みは終わります</strong>）。
       </p>
+      <div class="demo">
+        <div class="demo__label">実際の表示</div>
+        <div class="kuro-content">
+          <p>ここまでが前の話。</p>
+          <hr class="kuro-hr">
+          <p>ここから次の話。</p>
+        </div>
+      </div>
+
 
       <h2 id="table">表</h2>
       <p><span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="0.5" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"></rect><line x1="0.5" y1="5" x2="13.5" y2="5" stroke="currentColor" stroke-width="1"></line><line x1="0.5" y1="9" x2="13.5" y2="9" stroke="currentColor" stroke-width="1"></line><line x1="5" y1="5" x2="5" y2="13.5" stroke="currentColor" stroke-width="1"></line></svg></span> から挿入します。KuroEditor の表はかなり細かく調整できます。</p>
@@ -522,6 +626,19 @@
           Excel やスプレッドシートからコピーした表（タブ区切り）や CSV をそのまま<strong>貼り付けるだけで表になります</strong>。
         </div>
       </div>
+      <div class="demo">
+        <div class="demo__label">実際の表示</div>
+        <div class="kuro-content">
+          <table>
+            <tbody>
+              <tr><th>材料</th><th>分量</th></tr>
+              <tr><td>玉ねぎ</td><td>1 個</td></tr>
+              <tr><td style="background:rgba(99,102,241,0.12)">塩</td><td>少々</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
 
       <h2 id="media">画像・動画・音声</h2>
       <p>入れ方は 3 通りです。</p>
@@ -546,6 +663,15 @@
           </tbody>
         </table>
       </div>
+      <div class="demo demo--flow">
+        <div class="demo__label">実際の表示（40%・右寄せ）</div>
+        <div class="kuro-content">
+          <span class="kuro-media-wrap kuro-media-wrap--right" style="width:40%"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22320%22%20height%3D%22200%22%3E%3Crect%20width%3D%22320%22%20height%3D%22200%22%20fill%3D%22%23e0e7ff%22/%3E%3Cpath%20d%3D%22M0%20160%20L90%2090%20L150%20140%20L215%2095%20L320%20165%20Z%22%20fill%3D%22%23a5b4fc%22/%3E%3Ccircle%20cx%3D%22245%22%20cy%3D%2252%22%20r%3D%2224%22%20fill%3D%22%23c7d2fe%22/%3E%3Ctext%20x%3D%22160%22%20y%3D%22192%22%20font-family%3D%22sans-serif%22%20font-size%3D%2213%22%20fill%3D%22%236366f1%22%20text-anchor%3D%22middle%22%3E%E7%94%BB%E5%83%8F%3C/text%3E%3C/svg%3E" alt="サンプル画像"></span>
+          <p>画像を 40%・右寄せにすると、このように文章が左側へ回り込みます。100% のままなら回り込みは起きず、画像の下に文章が続きます。</p>
+          <p>回り込みをここで終わらせたいときは、水平線を入れます。</p>
+        </div>
+      </div>
+
 
       <h2 id="link">リンクと URL カード</h2>
       <h3>リンクを作る</h3>
@@ -565,6 +691,20 @@
         青い文字リンクではなく<strong>カード</strong>（アイコン＋タイトル＋URL）で表示されます。
         参考リンクを目立たせたいときに便利です。
       </p>
+      <div class="demo">
+        <div class="demo__label">実際の表示（リンクとカード）</div>
+        <div class="kuro-content">
+          <p>ふつうのリンクは <a href="#link">このように青い文字</a>で出ます。</p>
+          <a class="kuro-url-card" href="#link">
+            <span class="kuro-url-card__icon">🌐</span>
+            <span class="kuro-url-card__body">
+              <span class="kuro-url-card__title">KuroEditor 操作マニュアル</span>
+              <span class="kuro-url-card__url">kuro.boo/kuroeditor/guide/</span>
+            </span>
+          </a>
+        </div>
+      </div>
+
       <div class="box box-note">
         <div class="box-icon">🌐</div>
         <div>
@@ -589,6 +729,13 @@
         <li>編集はカードをクリックして開くモーダルから行います。</li>
         <li><strong>1 記事に 1 枚だけ</strong>です。すでに 1 枚あるとボタンは灰色になり、理由が説明として出ます。</li>
       </ul>
+      <div class="demo">
+        <div class="demo__label">実際の表示</div>
+        <div class="kuro-content">
+          <div data-kuro-block="recipe-card" data-recipe-version="1" data-recipe="%7B%22version%22%3A1%2C%22yield%22%3A%222%20%E4%BA%BA%E5%88%86%22%2C%22ingredients%22%3A%5B%7B%22name%22%3A%22%E7%8E%89%E3%81%AD%E3%81%8E%22%2C%22amount%22%3A%221%20%E5%80%8B%22%7D%2C%7B%22name%22%3A%22%E3%82%AA%E3%83%AA%E3%83%BC%E3%83%96%E3%82%AA%E3%82%A4%E3%83%AB%22%2C%22amount%22%3A%22%E5%A4%A7%E3%81%95%E3%81%98%201%22%7D%2C%7B%22name%22%3A%22%E5%A1%A9%22%2C%22amount%22%3A%22%E5%B0%91%E3%80%85%22%7D%5D%2C%22instructions%22%3A%5B%7B%22text%22%3A%22%E7%8E%89%E3%81%AD%E3%81%8E%E3%82%92%E8%96%84%E5%88%87%E3%82%8A%E3%81%AB%E3%81%99%E3%82%8B%E3%80%82%22%7D%2C%7B%22text%22%3A%22%E5%BC%B1%E7%81%AB%E3%81%A7%2010%20%E5%88%86%E3%81%BB%E3%81%A9%E3%80%81%E3%81%82%E3%82%81%E8%89%B2%E3%81%AB%E3%81%AA%E3%82%8B%E3%81%BE%E3%81%A7%E7%82%92%E3%82%81%E3%82%8B%E3%80%82%22%7D%2C%7B%22text%22%3A%22%E5%A1%A9%E3%81%A7%E5%91%B3%E3%82%92%E8%AA%BF%E3%81%88%E3%81%A6%E5%AE%8C%E6%88%90%E3%80%82%22%7D%5D%2C%22prepTimeMinutes%22%3A10%2C%22cookTimeMinutes%22%3A15%7D" data-width="100%" data-align="center" style="width:100%;display:block;margin:0 auto" contenteditable="false" role="group" aria-label="レシピカード"><div class="kuro-recipe__head"><span class="kuro-recipe__label">レシピ</span><span class="kuro-recipe__meta"><span class="kuro-recipe__yield"><span class="kuro-recipe__k">人数</span>2 人分</span><span class="kuro-recipe__time">下準備 10 分 / 調理 15 分 / 合計 25 分</span></span></div><div class="kuro-recipe__body"><div class="kuro-recipe__col"><h4 class="kuro-recipe__h">材料</h4><ul class="kuro-recipe__ings"><li><span class="kuro-recipe__ing-name">玉ねぎ</span><span class="kuro-recipe__ing-amount">1 個</span></li><li><span class="kuro-recipe__ing-name">オリーブオイル</span><span class="kuro-recipe__ing-amount">大さじ 1</span></li><li><span class="kuro-recipe__ing-name">塩</span><span class="kuro-recipe__ing-amount">少々</span></li></ul></div><div class="kuro-recipe__col"><h4 class="kuro-recipe__h">手順</h4><ol class="kuro-recipe__steps"><li>玉ねぎを薄切りにする。</li><li>弱火で 10 分ほど、あめ色になるまで炒める。</li><li>塩で味を調えて完成。</li></ol></div></div></div>
+        </div>
+      </div>
+
 
       <!-- ══════════ 仕上げ ══════════ -->
       <h2 id="toc">目次（見出しから自動生成）</h2>
@@ -634,14 +781,14 @@
 
       <h3>下に浮くメニューが出てこない</h3>
       <p>
-        埋め込み方によっては、ページのスクロールに合わせて隠れることがあります。
+        アプリの KuroEditor の設定によって、非表示にすることがあります。
         同じ並びのボタンは<strong>上のツールバーの下段</strong>にもあるので、そちらから操作できます。
       </p>
 
       <h3>日本語の変換確定で <kbd>Enter</kbd> を押したら、変なことが起きる</h3>
       <p>
         変換確定の <kbd>Enter</kbd> は「文字の確定」として扱われ、改行やダイアログの確定には使われないようになっています。
-        もし変換確定でポップアップが閉じるなどの動きがあれば、それは不具合です。報告してください。
+        もし変換確定でポップアップが閉じるなどの動きがあれば、それは不具合です。報告して頂けると助かります。
       </p>
 
       <h3>公開ページで、編集画面と見た目が違う</h3>
