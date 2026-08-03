@@ -846,7 +846,10 @@ ul.kuro-ul-check > li::before {
   border: 2px solid var(--kuro-marker-color, var(--kuro-check-border));
   border-radius: 0.25em;
   background: var(--kuro-check-bg);
-  cursor: pointer;
+  /* ⚠ ここに cursor: pointer を書かないこと。content.css は公開ページにも当たるが、
+     トグルするのは編集画面の pointerdown ハンドラだけ＝読者は押せない。指マークだけ
+     出しても「押せそうなのに何も起きない」誤解になる。編集画面限定の手触りは
+     editor.css の .kuro-pane__wysiwyg 側に置く（レシピカードと同じ扱い）。 */
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 ul.kuro-ul-check > li[data-checked="1"]::before {

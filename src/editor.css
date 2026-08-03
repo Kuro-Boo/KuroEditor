@@ -442,6 +442,11 @@
      カードの上にボタン類は一切置かない（WYSIWYG＝公開ページと同じ見た目）。 */
   .kuro-pane__wysiwyg [data-kuro-block="recipe-card"] { cursor: pointer; }
   .kuro-pane--view [data-kuro-block="recipe-card"] { cursor: default; }
+  /* チェックリストの箱も同じ扱い — 押せるのは【編集画面だけ】。content.css は
+     公開ページにも当たるので、あちらに cursor を書くと読者に「押せそう」と
+     見せてしまう（トグルは editor.js のハンドラ＝公開ページには無い）。 */
+  .kuro-pane__wysiwyg ul.kuro-ul-check > li::before { cursor: pointer; }
+  .kuro-pane--view .kuro-pane__wysiwyg ul.kuro-ul-check > li::before { cursor: default; }
   .kuro-pane--view a { cursor: pointer; }
 
   /* 閲覧モード中は編集アクション (挿入系・Undo/Redo) が disabled になる */

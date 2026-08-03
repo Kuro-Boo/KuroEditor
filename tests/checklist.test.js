@@ -10,6 +10,9 @@
  *   4. 閲覧モードではトグルしない（チェックは本文の変更）
  */
 import { describe, it, expect, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { KuroEditor } from '../src/editor.js'
 
 function makeMount() {
@@ -238,5 +241,31 @@ describe('チェックリスト', () => {
     const ul = ed.wysiwyg.querySelector('ul')
     expect(ul.classList.contains('kuro-ul-check')).toBe(true)
     expect(ul.querySelector('li').getAttribute('data-checked')).toBe('1')
+  })
+
+  // ── 7. 公開ページでの見せ方 ───────────────────────────────────────────────
+  // content.css は公開ページにも当たる。トグルは editor.js のハンドラだけが持つので
+  // 読者は押せない ＝ 指マークを出すと「押せそうなのに何も起きない」誤解になる。
+  // 編集画面限定の手触りは editor.css の .kuro-pane__wysiwyg 側に置く（レシピカードと同じ）。
+  it('箱の cursor:pointer は編集画面限定（content.css には書かない）', () => {
+    // ⚠ new URL(<文字列リテラル>, import.meta.url) は Vite がアセット URL へ
+    //   書き換えてしまう。パスは fileURLToPath から組み立てる。
+    const here = dirname(fileURLToPath(import.meta.url))
+    // コメントは落としてから見る（「cursor を書くな」と書いたコメント自身に引っかかる）
+    const read = (f) =>
+      readFileSync(join(here, '..', 'src', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+
+    // content.css の ul.kuro-ul-check > li::before ブロックに cursor を書かない
+    const box = read('content.css')
+      .match(/ul\.kuro-ul-check > li::before\s*\{[^}]*\}/)?.[0]
+    expect(box).toBeTruthy()
+    expect(box).not.toMatch(/cursor\s*:/)
+
+    // editor.css 側でキャンバス限定に付け、閲覧モードでは戻す
+    const chrome = read('editor.css')
+    expect(chrome).toMatch(
+      /\.kuro-pane__wysiwyg ul\.kuro-ul-check > li::before\s*\{[^}]*cursor:\s*pointer/)
+    expect(chrome).toMatch(
+      /\.kuro-pane--view [^{]*ul\.kuro-ul-check > li::before\s*\{[^}]*cursor:\s*default/)
   })
 })
