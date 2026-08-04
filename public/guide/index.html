@@ -123,6 +123,17 @@
     .demo > .kuro-content > :last-child { margin-bottom: 0; }
     .demo--flow::after { content: ''; display: block; clear: both; }
 
+    /* ── 実際のポップアップの写真 ──────────────────────────────────────────
+       build-scripts/capture-guide-shots.mjs が【実物のエディタ】から撮る。
+       手描きの図に置き換えないこと（本体の変更に置いていかれる）。 */
+    .shot { margin: 1rem 0; }
+    .shot img {
+      display: block; max-width: 100%; height: auto;
+      border-radius: 0.5rem; border: 1px solid #e4e4e7;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+    }
+    .shot figcaption { margin-top: 0.45rem; }
+
     /* 囲み（このページ自身の注意書き） */
     .box {
       display: flex; gap: 0.85rem; align-items: flex-start;
@@ -313,6 +324,17 @@
         <div>ボタンは押した瞬間に一瞬光ります。スマホで指に隠れても「どれを押したか」が分かるようにするためです。</div>
       </div>
 
+      <h3>文字数</h3>
+      <p>
+        本文の文字数が、ツールバー<strong>下段の右端</strong>に出ます。書くにつれて数字がリールのように回ります。
+        画面が狭くて下段に収まらないときだけ、<strong>上段の目次ボタンの左</strong>へ移ります。
+      </p>
+      <ul>
+        <li>数えるのは<strong>本文のテキストだけ</strong>です（見出しやリストの文字も含みます）。</li>
+        <li>連続する空白・改行は<strong>まとめて 1 文字</strong>として数え、前後の空白は数えません。</li>
+        <li>絵文字や結合文字も<strong>見た目どおり 1 文字</strong>として数えます。</li>
+      </ul>
+
       <h3>バージョン表示</h3>
       <p>
         エディターの版（<span class="toolbar-demo__ver" style="display:inline-block">v0.0.0</span>
@@ -394,6 +416,15 @@
 
       <h2 id="decorate">文字の装飾</h2>
       <p>文字を選択すると出るポップアップメニューから操作します。</p>
+      <figure class="shot">
+        <img src="./img/popm.png" alt="文字を選択すると出るポップアップメニュー。左から 太字・斜体・下線・打ち消し線／見出し／引用・囲み・キー表記／文字色・サイズ・フォント・行間／寄せ／リスト。" loading="lazy">
+        <figcaption>文字を選択すると出るポップアップメニュー。左から 太字・斜体・下線・打ち消し線／見出し／引用・囲み・キー表記／文字色・サイズ・フォント・行間／寄せ／リスト。</figcaption>
+      </figure>
+      <figure class="shot" style="max-width:620px">
+        <img src="./img/popm-color.png" alt="「A」を押すと文字色のパレットが開きます（使った色は下に貯まります）。" loading="lazy">
+        <figcaption>「A」を押すと文字色のパレットが開きます（使った色は下に貯まります）。</figcaption>
+      </figure>
+
       <div class="table-scroll">
         <table>
           <thead><tr><th>機能</th><th>内容</th></tr></thead>
@@ -454,6 +485,15 @@
         <li><strong>番号リスト（7 種）</strong> — 1. ① (1) A. (A) ア (ア)。</li>
         <li><strong>行頭から作る</strong> — 行の先頭で <code class="inline">1.</code> ＋スペースで番号リスト、記号＋スペースで記号リストになります。</li>
       </ul>
+      <figure class="shot">
+        <img src="./img/popm-ul.png" alt="リストのボタンを押すと記号のパネルが開きます（左端が「解除」、右端の ☑ がチェックリスト）。" loading="lazy">
+        <figcaption>リストのボタンを押すと記号のパネルが開きます（左端が「解除」、右端の ☑ がチェックリスト）。</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="./img/popm-ol.png" alt="番号付きリストは 7 種類。数字・丸数字・括弧・英字・カタカナから選べます。" loading="lazy">
+        <figcaption>番号付きリストは 7 種類。数字・丸数字・括弧・英字・カタカナから選べます。</figcaption>
+      </figure>
+
       <div class="demo">
         <div class="demo__label">実際の表示（記号・番号の例）</div>
         <div class="kuro-content">
@@ -536,6 +576,11 @@
         段落を選んでポップアップメニューから 💡 ヒント / ⚠️ 注意 / ❗ 警告 / 📌 メモ の 4 種類に変換します。
         同じ種類をもう一度選ぶと解除、別の種類を選ぶと種類だけ変わります。
       </p>
+      <figure class="shot">
+        <img src="./img/popm-callout.png" alt="囲みのボタンを押すと 4 種類が並びます。" loading="lazy">
+        <figcaption>囲みのボタンを押すと 4 種類が並びます。</figcaption>
+      </figure>
+
       <ul>
         <li>囲みの中で行を増やすときは <kbd>Enter</kbd>。行ごとに字下げや寄せをしたいなら必ず <kbd>Enter</kbd> で分けてください。</li>
         <li>囲みから抜けるには、<strong>空行で <kbd>Enter</kbd></strong>。囲みの下に新しい段落ができます。</li>
@@ -556,6 +601,11 @@
         <span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="1" width="13" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"></rect><rect x="2.5" y="4" width="9" height="1.8" rx="0.9"></rect><rect x="2.5" y="7" width="6" height="1.8" rx="0.9"></rect><rect x="2.5" y="10" width="7.5" height="1.8" rx="0.9"></rect></svg></span> で挿入します。中には普通に文章・画像・表などを入れられます。
         カーソルがボックスの中にある間だけ、専用の BOX 設定メニューが浮きます。
       </p>
+      <figure class="shot" style="max-width:460px">
+        <img src="./img/roundbox-menu.png" alt="カーソルがボックスの中にある間だけ浮く BOX 設定。幅・寄せ・削除。" loading="lazy">
+        <figcaption>カーソルがボックスの中にある間だけ浮く BOX 設定。幅・寄せ・削除。</figcaption>
+      </figure>
+
       <div class="table-scroll">
         <table>
           <thead><tr><th>設定</th><th>内容</th></tr></thead>
@@ -614,6 +664,11 @@
 
       <h2 id="table">表</h2>
       <p><span class="kbtn"><svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="0.5" y="0.5" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"></rect><line x1="0.5" y1="5" x2="13.5" y2="5" stroke="currentColor" stroke-width="1"></line><line x1="0.5" y1="9" x2="13.5" y2="9" stroke="currentColor" stroke-width="1"></line><line x1="5" y1="5" x2="5" y2="13.5" stroke="currentColor" stroke-width="1"></line></svg></span> から挿入します。KuroEditor の表はかなり細かく調整できます。</p>
+      <figure class="shot" style="max-width:700px">
+        <img src="./img/table-menu.png" alt="セルにカーソルを置くと出る表メニュー。罫線（TBL設定）・セル背景色・結合と分割・縦位置・表の削除。" loading="lazy">
+        <figcaption>セルにカーソルを置くと出る表メニュー。罫線（TBL設定）・セル背景色・結合と分割・縦位置・表の削除。</figcaption>
+      </figure>
+
       <div class="table-scroll">
         <table>
           <thead><tr><th>操作</th><th>やり方</th></tr></thead>
@@ -661,6 +716,11 @@
         YouTube や Vimeo の URL を入れると 16:9 の埋め込みになります。
       </p>
       <p>挿入したメディアをクリックすると専用メニューが出て、その場で変えられます。</p>
+      <figure class="shot" style="max-width:420px">
+        <img src="./img/image-menu.png" alt="画像をクリックすると出るメニュー。幅・寄せ・リンク・削除。" loading="lazy">
+        <figcaption>画像をクリックすると出るメニュー。幅・寄せ・リンク・削除。</figcaption>
+      </figure>
+
       <div class="table-scroll">
         <table>
           <thead><tr><th>項目</th><th>内容</th></tr></thead>
@@ -694,6 +754,11 @@
         本文のリンクをクリックすると（移動はせずに）編集ポップアップが開き、URL と表示テキストを直せます。
         右端の 🗑 でリンクを解除できます。
       </p>
+      <figure class="shot" style="max-width:420px">
+        <img src="./img/link-edit.png" alt="リンクをクリックすると開く編集ポップアップ。表示テキスト・URL・カード表示の切り替え・解除（🗑）。" loading="lazy">
+        <figcaption>リンクをクリックすると開く編集ポップアップ。表示テキスト・URL・カード表示の切り替え・解除（🗑）。</figcaption>
+      </figure>
+
       <h3>URL カード</h3>
       <p>
         リンク編集ポップアップの<strong>「カード表示（表題なし）」</strong>にチェックを入れると、
@@ -727,6 +792,11 @@
         <li><span class="kbtn">😊</span> からピッカーを開いて選びます。</li>
         <li><code class="inline">:smile:</code> <code class="inline">:fire:</code> <code class="inline">:+1:</code> のような<strong>ショートコード</strong>を打つと自動で絵文字に変わります。</li>
       </ul>
+      <figure class="shot" style="max-width:480px">
+        <img src="./img/emoji.png" alt="絵文字ピッカー。上のタブで種類を切り替えます。" loading="lazy">
+        <figcaption>絵文字ピッカー。上のタブで種類を切り替えます。</figcaption>
+      </figure>
+
 
       <h2 id="recipe">レシピカード</h2>
       <p>
