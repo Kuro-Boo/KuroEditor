@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.28.1'
+export const VERSION = '2.29.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -1994,6 +1994,29 @@ export class PopupMenu {
     this._bindSubBtn(this._olRemoveBtn, () => { applyFn('kuro-list-remove'); this._hideListStyles() })
     this._listStylePanel.appendChild(this._olRemoveBtn)
 
+    // ── 開始番号 — 途中から番号を続ける / 好きな番号から始める ─────────────
+    // 説明の段落を挟んでリストを分けると、後ろのリストは必ず 1 から始まる。
+    // 続きにしたい（3 から等）ときはここで開始番号を指定する。
+    // ⚠ 実体は <ol start="N">。保存 HTML にも公開ページにも効く【標準の属性】
+    //   なので、独自記法も CSS も足さずにこれだけで完結する。1 は属性を外す。
+    // ⚠ この要素だけは mousedown を潰さない（潰すと数字を打てない）。popm は
+    //   「フォーカスが自分の中にある間は閉じない」ので、入力中も出たままになる。
+    this._olStartWrap = createElement('label', { className: 'kuro-ol-start' })
+    this._olStartWrap.appendChild(createElement('span', { html: '開始' }))
+    this._olStartInput = createElement('input', {
+      className: 'kuro-ol-start__input',
+      attrs: {
+        type: 'number', min: '1', step: '1', value: '1',
+        title: 'このリストの開始番号（前のリストの続きにしたいときに）',
+        'aria-label': 'このリストの開始番号',
+      },
+    })
+    const applyStart = () => this._applyOLStart()
+    this._olStartInput.addEventListener('input', applyStart)
+    this._olStartInput.addEventListener('change', applyStart)
+    this._olStartWrap.appendChild(this._olStartInput)
+    this._listStylePanel.appendChild(this._olStartWrap)
+
     // ── Style option buttons ───────────────────────────────────────────────
     // NOTE: Selecting a style does NOT close the panel so the marker-color ●
     // button (which appears after a list is created) remains accessible in the
@@ -2038,6 +2061,18 @@ export class PopupMenu {
    * Called from _updateActiveStates() on every selection change.
    * No indicator text (no separate button) — just updates active class on picker buttons.
    */
+  /**
+   * 入力された開始番号を、いまカーソルがある <ol> に反映する。
+   * 1（既定）のときは属性を外す — 意味の無い start="1" を本文に残さない。
+   */
+  _applyOLStart() {
+    const ol = this._activeOLNode
+    if (!ol || !this._olStartInput) return
+    const n = parseInt(this._olStartInput.value, 10)
+    if (!Number.isFinite(n) || n <= 1) ol.removeAttribute('start')
+    else ol.setAttribute('start', String(n))
+  }
+
   _updateListStyleLabel() {
     if (!this._listStyleBtns) return
     let activeValue = 'kuro-list-decimal'   // default: no explicit class = decimal
@@ -2084,6 +2119,16 @@ export class PopupMenu {
     this._olRemoveBtn?.classList.toggle('kuro-size-btn--active', !inOL || markerless)
     // 同じボタンが 2 段階で違う動きをするので、title で今どちらかを示す
     if (this._olRemoveBtn) this._olRemoveBtn.title = removeBtnTitle('番号', inOL, markerless)
+
+    // 開始番号: リストの中にいるときだけ出す（リストが無ければ指定する先が無い）。
+    // ⚠ 入力中は値を書き戻さない（打っている数字を横から書き換えてしまう）。
+    if (this._olStartWrap) {
+      this._olStartWrap.style.display = inOL ? '' : 'none'
+      if (inOL && document.activeElement !== this._olStartInput) {
+        const n = parseInt(olNode.getAttribute('start') || '1', 10)
+        this._olStartInput.value = String(Number.isFinite(n) && n > 0 ? n : 1)
+      }
+    }
 
     // Marker color button: only visible when inside an OL (no list = nothing to color)
     if (this._olMarkerColorBtn) {

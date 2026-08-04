@@ -763,6 +763,20 @@
   }
 
   /* Marker color toggle button (● circle in list style panel) */
+  /* 開始番号（番号リストのサブパネル）— <ol start="N"> を指定する小さな入力。
+     サブパネルの他のボタンと同じ高さ・同じ角丸で並べる。 */
+  .kuro-ol-start {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs
+           text-neutral-300 bg-neutral-700 select-none;
+  }
+  .kuro-ol-start__input {
+    @apply w-10 px-1 rounded text-xs text-center text-neutral-100
+           bg-neutral-900 border border-neutral-600;
+  }
+  .kuro-ol-start__input:focus {
+    @apply outline-none border-indigo-500;
+  }
+
   .kuro-marker-color-btn {
     color: #ef4444;
     font-size: 1.1em;
