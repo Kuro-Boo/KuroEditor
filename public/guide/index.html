@@ -518,16 +518,17 @@
           </tbody>
         </table>
       </div>
-      <div class="box box-warn">
-        <div class="box-icon">⚠️</div>
+      <div class="box box-tip">
+        <div class="box-icon">💡</div>
         <div>
-          <strong>リストの <kbd>Tab</kbd> は、段落の字下げとは別物です。</strong>
-          段落は押した回数ぶん右へずれますが、リストの項目は
-          <strong>「すぐ上の項目の子になる」</strong>という動きなので、次のようになります。
+          <strong>リストの <kbd>Tab</kbd> は 2 つの意味を持ちます。</strong>
+          まず<strong>「すぐ上の項目の子になる」</strong>（＝入れ子）。
+          子になれないとき — <strong>いちばん上の項目</strong>や、これ以上深くできない位置 — は、
+          代わりに<strong>リストごと右へ 1 段動きます</strong>。
           <ul>
-            <li><strong>いちばん上の項目は動きません</strong>（親になる項目が無いため）。1 つ上に項目を作ってから <kbd>Tab</kbd> してください。</li>
-            <li><strong>続けて押しても、上の項目より深くはなりません。</strong>
-              もう 1 段深くできるのは「すぐ上の項目が同じ深さにいるとき」だけです。</li>
+            <li>どの項目でも、<strong>押した分だけ右へ調整できます</strong>（押しても無反応、にはなりません）。</li>
+            <li>リストごと動くときは<strong>項目の関係（入れ子）は変わりません</strong>。ブロック全体が右へ寄るだけです。</li>
+            <li>戻すのは <kbd>Shift</kbd>+<kbd>Tab</kbd>、または<strong>行頭で <kbd>Backspace</kbd></strong>。1 回で 1 段戻ります。</li>
             <li>カーソルが行のどこにあっても（行頭でも行末でも）結果は同じです。</li>
           </ul>
         </div>
