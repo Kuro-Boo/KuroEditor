@@ -170,6 +170,20 @@ describe('2 段階の「解除」', () => {
     expect(ed.wysiwyg.querySelector('ul').className).toBe('kuro-ul-disc')
   })
 
+  // 入れ子の記号は【子リスト単位】で変えられる。子は作られた時点で親の記号を
+  // 引き継ぐが、その後で子だけ別の記号にしたい（例: 親は ● で子は ▶）ことがある。
+  it('子リストの項目を選んで記号を押すと、その子リストだけ変わる', () => {
+    const ed = makeEditor(
+      '<ul class="kuro-ul-disc"><li>親' +
+      '<ul class="kuro-ul-disc"><li id="c1">子1</li><li>子2</li></ul>' +
+      '</li></ul>')
+    select(ed.wysiwyg.querySelector('#c1'))
+    ed._applyULStyle('kuro-ul-arrow')
+    const [parent, child] = ed.wysiwyg.querySelectorAll('ul')
+    expect(child.classList.contains('kuro-ul-arrow')).toBe(true)
+    expect(parent.classList.contains('kuro-ul-disc')).toBe(true)   // 親は変わらない
+  })
+
   it('マーカー有り／無しが混ざった選択は、まず全部「記号なし」に揃える', () => {
     const ed = makeEditor(
       '<ul class="kuro-ul-none"><li>a</li></ul><ul class="kuro-ul-star"><li>b</li></ul>')
