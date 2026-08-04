@@ -8,7 +8,7 @@
  * 放っておくと「マニュアルにしか無いボタン」が読者を迷わせるため、ここで見張る。
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { KuroEditor } from '../src/editor.js'
@@ -79,6 +79,16 @@ describe('マニュアルのボタン見本', () => {
       align: card.match(/data-align="([^"]*)"/)[1],
     }
     expect(norm(card)).toBe(norm(buildRecipeCardHtml(decodeRecipe(data), layout)))
+  })
+
+  // ポップアップ類は実物のスクリーンショット（build-scripts/capture-guide-shots.mjs）。
+  // 貼り忘れ・パスのずれは「壊れた画像」として読者に見えるので、実在を確かめる。
+  it('貼っているスクリーンショットは実在する', () => {
+    const srcs = [...guide.matchAll(/<img src="\.\/(img\/[^"]+)"/g)].map((m) => m[1])
+    expect(srcs.length).toBeGreaterThan(5)
+    for (const rel of srcs) {
+      expect(existsSync(join(here, '..', 'public', 'guide', rel)), `${rel} が無い`).toBe(true)
+    }
   })
 
   it('マニュアルは通常カラー（ライト）で、ロゴは公式の 2 色構成', () => {
