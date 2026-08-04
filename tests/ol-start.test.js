@@ -30,7 +30,7 @@ function caretIn(ed, node) {
   ed.popm._updateListStyleLabel()
 }
 
-const input = (ed) => ed.popm._olStartInput
+const input = (ed) => ed.popm._olStartSelect
 const wrap  = (ed) => ed.popm._olStartWrap
 
 describe('番号リストの開始番号', () => {
@@ -40,7 +40,7 @@ describe('番号リストの開始番号', () => {
     const ed = makeEditor('<ol class="kuro-list-decimal"><li>う</li></ol>')
     caretIn(ed, ed.wysiwyg.querySelector('li'))
     input(ed).value = '3'
-    input(ed).dispatchEvent(new Event('input', { bubbles: true }))
+    input(ed).dispatchEvent(new Event('change', { bubbles: true }))
     expect(ed.wysiwyg.querySelector('ol').getAttribute('start')).toBe('3')
     // 保存 HTML にも残る（公開ページでもそのまま効く標準属性）
     expect(ed.getContent()).toContain('start="3"')
@@ -52,17 +52,25 @@ describe('番号リストの開始番号', () => {
     caretIn(ed, ed.wysiwyg.querySelector('li'))
     expect(input(ed).value).toBe('5')          // 既存の値を拾って出す
     input(ed).value = '1'
-    input(ed).dispatchEvent(new Event('input', { bubbles: true }))
+    input(ed).dispatchEvent(new Event('change', { bubbles: true }))
     expect(ed.wysiwyg.querySelector('ol').hasAttribute('start')).toBe(false)
     expect(ed.getContent()).not.toContain('start=')
   })
 
-  it('数字でない入力では属性を付けない', () => {
+  it('1〜20 のドラム（select）で選ぶ — スマホでも指だけで操作できる', () => {
     const ed = makeEditor('<ol class="kuro-list-decimal"><li>あ</li></ol>')
     caretIn(ed, ed.wysiwyg.querySelector('li'))
-    input(ed).value = ''
-    input(ed).dispatchEvent(new Event('input', { bubbles: true }))
-    expect(ed.wysiwyg.querySelector('ol').hasAttribute('start')).toBe(false)
+    expect(input(ed).tagName).toBe('SELECT')          // type=number の上下ボタンは不可
+    expect(input(ed).options.length).toBe(20)
+    expect(input(ed).options[0].value).toBe('1')
+    expect(input(ed).options[19].value).toBe('20')
+  })
+
+  it('一覧に無い値（HTML で直接書いた 25 等）も選択肢を足して拾う', () => {
+    const ed = makeEditor('<ol class="kuro-list-decimal" start="25"><li>あ</li></ol>')
+    caretIn(ed, ed.wysiwyg.querySelector('li'))
+    expect(input(ed).value).toBe('25')                 // 黙って 20 に丸めない
+    expect(ed.wysiwyg.querySelector('ol').getAttribute('start')).toBe('25')
   })
 
   it('リストの外では出さない', () => {
@@ -79,7 +87,7 @@ describe('番号リストの開始番号', () => {
       '<ol class="kuro-list-decimal"><li id="c">子</li></ol></li></ol>')
     caretIn(ed, ed.wysiwyg.querySelector('#c'))
     input(ed).value = '4'
-    input(ed).dispatchEvent(new Event('input', { bubbles: true }))
+    input(ed).dispatchEvent(new Event('change', { bubbles: true }))
     const [parent, child] = ed.wysiwyg.querySelectorAll('ol')
     expect(child.getAttribute('start')).toBe('4')
     expect(parent.hasAttribute('start')).toBe(false)

@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.30.0'
+export const VERSION = '2.30.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -151,6 +151,9 @@ const COLOR_GROUPS = [
     '#e9d5ff', '#c084fc', '#a855f7',
   ]},
 ]
+/** 番号リストの「開始」で選べる上限。ドラム（select）に並べる数。 */
+const OL_START_MAX = 20
+
 /** カスタムカラーの置き場 — プリセットと同じ 3×3 ブロックを 4 つ（= 36 色）。
  *  ⚠ 3 つだと右側が大きく空いて「途中で切れた」ように見える。ブロック単位で
  *  折り返すので、幅の狭い端末では自動的に行が増える。 */
@@ -2001,20 +2004,25 @@ export class PopupMenu {
     //   なので、独自記法も CSS も足さずにこれだけで完結する。1 は属性を外す。
     // ⚠ この要素だけは mousedown を潰さない（潰すと数字を打てない）。popm は
     //   「フォーカスが自分の中にある間は閉じない」ので、入力中も出たままになる。
+    // ⚠ 数値入力（type=number の上下ボタン）にしない。スマホでは矢印が出ず、
+    //   キーボードを出して打つしかない＝実質使えない。<select> なら iOS/Android で
+    //   ネイティブのドラム（ホイール）が開き、指だけで選べる。
     this._olStartWrap = createElement('label', { className: 'kuro-ol-start' })
     this._olStartWrap.appendChild(createElement('span', { html: '開始' }))
-    this._olStartInput = createElement('input', {
-      className: 'kuro-ol-start__input',
+    this._olStartSelect = createElement('select', {
+      className: 'kuro-ol-start__select',
       attrs: {
-        type: 'number', min: '1', step: '1', value: '1',
         title: 'このリストの開始番号（前のリストの続きにしたいときに）',
         'aria-label': 'このリストの開始番号',
       },
     })
-    const applyStart = () => this._applyOLStart()
-    this._olStartInput.addEventListener('input', applyStart)
-    this._olStartInput.addEventListener('change', applyStart)
-    this._olStartWrap.appendChild(this._olStartInput)
+    for (let n = 1; n <= OL_START_MAX; n++) {
+      const opt = document.createElement('option')
+      opt.value = String(n); opt.textContent = String(n)
+      this._olStartSelect.appendChild(opt)
+    }
+    this._olStartSelect.addEventListener('change', () => this._applyOLStart())
+    this._olStartWrap.appendChild(this._olStartSelect)
     this._listStylePanel.appendChild(this._olStartWrap)
 
     // ── Style option buttons ───────────────────────────────────────────────
@@ -2067,8 +2075,8 @@ export class PopupMenu {
    */
   _applyOLStart() {
     const ol = this._activeOLNode
-    if (!ol || !this._olStartInput) return
-    const n = parseInt(this._olStartInput.value, 10)
+    if (!ol || !this._olStartSelect) return
+    const n = parseInt(this._olStartSelect.value, 10)
     if (!Number.isFinite(n) || n <= 1) ol.removeAttribute('start')
     else ol.setAttribute('start', String(n))
   }
@@ -2124,9 +2132,17 @@ export class PopupMenu {
     // ⚠ 入力中は値を書き戻さない（打っている数字を横から書き換えてしまう）。
     if (this._olStartWrap) {
       this._olStartWrap.style.display = inOL ? '' : 'none'
-      if (inOL && document.activeElement !== this._olStartInput) {
-        const n = parseInt(olNode.getAttribute('start') || '1', 10)
-        this._olStartInput.value = String(Number.isFinite(n) && n > 0 ? n : 1)
+      if (inOL && document.activeElement !== this._olStartSelect) {
+        const raw = parseInt(olNode.getAttribute('start') || '1', 10)
+        const n = Number.isFinite(raw) && raw > 0 ? raw : 1
+        // ⚠ 一覧に無い値（HTML で 25 等を直接書いた本文）でも、選択肢を足して
+        //   拾えるようにする。黙って 20 に丸めると、開いただけで本文が変わる。
+        if (n > OL_START_MAX && !this._olStartSelect.querySelector(`option[value="${n}"]`)) {
+          const opt = document.createElement('option')
+          opt.value = String(n); opt.textContent = String(n)
+          this._olStartSelect.appendChild(opt)
+        }
+        this._olStartSelect.value = String(n)
       }
     }
 
