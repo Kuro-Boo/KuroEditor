@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.27.1'
+export const VERSION = '2.27.2'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -151,6 +151,12 @@ const COLOR_GROUPS = [
     '#e9d5ff', '#c084fc', '#a855f7',
   ]},
 ]
+/** カスタムカラーの置き場 — プリセットと同じ 3×3 ブロックを 4 つ（= 36 色）。
+ *  ⚠ 3 つだと右側が大きく空いて「途中で切れた」ように見える。ブロック単位で
+ *  折り返すので、幅の狭い端末では自動的に行が増える。 */
+const CUSTOM_COLOR_BLOCKS = 4
+const CUSTOM_COLOR_MAX = CUSTOM_COLOR_BLOCKS * 9
+
 /** Font size presets (% of base).  100% = standard = highlighted as baseline. */
 const FONT_SIZE_OPTIONS = [
   { label: '75%',  value: '75%'  },
@@ -1144,7 +1150,7 @@ export class ColorPicker {
         this.opts.onBeforePick?.()
         const saved = ColorPicker._loadCustomColors()
         if (!saved.includes(color)) {
-          ColorPicker._saveCustomColors([color, ...saved].slice(0, 27))
+          ColorPicker._saveCustomColors([color, ...saved].slice(0, CUSTOM_COLOR_MAX))
           this._rebuildCustomRow()
         }
         this.opts.onPick(color)
@@ -1185,8 +1191,9 @@ export class ColorPicker {
     if (!this._customRow) return
     const saved = ColorPicker._loadCustomColors()
     this._customRow.innerHTML = ''
-    // 3 blocks × 9 slots = 27 max, matching the 3×3 block unit of preset groups
-    for (let b = 0; b < 3; b++) {
+    // CUSTOM_BLOCKS 個 × 9 スロット。プリセットと同じ 3×3 のブロック単位で並べ、
+    // 幅が足りなければブロック単位で折り返す（スマホでは行数が増える）。
+    for (let b = 0; b < CUSTOM_COLOR_BLOCKS; b++) {
       const group = createElement('div', { className: 'kuro-color-group' })
       for (let s = 0; s < 9; s++) {
         const idx = b * 9 + s
@@ -1214,7 +1221,7 @@ export class ColorPicker {
   static _loadCustomColors() {
     try {
       const s = localStorage.getItem('kuro-custom-colors')
-      return s ? JSON.parse(s).filter(c => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 27) : []
+      return s ? JSON.parse(s).filter(c => /^#[0-9a-f]{6}$/i.test(c)).slice(0, CUSTOM_COLOR_MAX) : []
     } catch { return [] }
   }
 
