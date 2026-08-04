@@ -156,6 +156,26 @@ await page.click('#rb')
 await page.waitForTimeout(400)
 await shot('roundbox-menu', '.kuro-roundbox-menu, .kuro-kmenu')
 
+// ── 6. コードブロック（編集画面の見た目 — 行番号 gutter 付き）────────────
+// ⚠ 公開ページの <pre><code> には行番号が無い。gutter はエディタ側の chrome
+//   なので、マニュアルでは「編集画面での見え方」として写真で見せる。
+await setBody('<p>コードの例</p>')
+const codeBtn = await page.$('.kuro-tabs__action[data-action="code"]')
+if (codeBtn) {
+  await page.click('p')
+  await codeBtn.click()
+  await page.waitForTimeout(400)
+  const ta = await page.$('.kuro-code__area, .kuro-code-wrap textarea')
+  if (ta) {
+    await ta.click()
+    await ta.fill('function hello(name) {\n  return `こんにちは、${name}`\n}\n\nhello(\'黒兎\')')
+    await page.waitForTimeout(300)
+    await page.evaluate(() => document.activeElement.blur())
+    await page.waitForTimeout(200)
+  }
+  await shot('code-block', '.kuro-code-wrap')
+}
+
 // ── 6. 絵文字ピッカー ─────────────────────────────────────────────────────
 await setBody('<p id="e">絵文字</p>')
 await page.click('#e')
