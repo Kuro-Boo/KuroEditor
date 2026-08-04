@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.29.0'
+export const VERSION = '2.29.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -8826,7 +8826,18 @@ export class KuroEditor {
    */
   _shiftListNesting(items, dir) {
     const sel = window.getSelection()
-    const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null
+    // ⚠ Range を clone して持ち回ってはいけない。項目を動かす（= 一度 remove して
+    //   insert する）と、【DOM 側が Range の端点を勝手に付け替える】— 端点が消えた
+    //   subtree の中にあった場合、仕様どおり「元の親の、その位置」へ畳まれる。
+    //   つまり復元しようとしている Range 自身が <ul> を指す形に化けていて、
+    //   キャレットが項目の外へ飛ぶ（続けて Tab を押しても何も起きない・打った文字が
+    //   リストの外に入る）。端点は【ノード参照とオフセットの値】で先に控える。
+    //   テキストノード自体は移動しても生き続けるので、値で持てば正しく戻せる。
+    const r0 = sel?.rangeCount ? sel.getRangeAt(0) : null
+    const saved = r0 && {
+      sn: r0.startContainer, so: r0.startOffset,
+      en: r0.endContainer,   eo: r0.endOffset,
+    }
 
     // ⚠ アウトデントは【逆順】に処理する。手前から出すと、まだ中に残っている
     //   後続の項目を「出した項目の下」へぶら下げ直すことになり、同じ項目を
@@ -8837,11 +8848,16 @@ export class KuroEditor {
       else         this._outdentListItem(li)
     }
 
-    // 項目ごと動かしただけなので中のテキストノードは生きている = 選択は有効
-    if (savedRange) {
+    // 項目ごと動かしただけなのでテキストノードは生きている = 値で控えた端点で戻せる。
+    // 戻せなければ動かした項目の先頭へ（キャレットを本文の外に置き去りにしない）。
+    if (saved && sel) {
       try {
-        sel.setBaseAndExtent(savedRange.startContainer, savedRange.startOffset,
-                             savedRange.endContainer,   savedRange.endOffset)
+        if (saved.sn.isConnected && saved.en.isConnected) {
+          sel.setBaseAndExtent(saved.sn, saved.so, saved.en, saved.eo)
+        } else {
+          const li = order[order.length - 1]
+          if (li?.isConnected) sel.setBaseAndExtent(li, 0, li, 0)
+        }
       } catch (_) {}
     }
   }

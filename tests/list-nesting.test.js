@@ -170,6 +170,35 @@ describe('2 段階の「解除」', () => {
     expect(ed.wysiwyg.querySelector('ul').className).toBe('kuro-ul-disc')
   })
 
+  // ⚠ 項目を動かすと DOM が Range の端点を勝手に付け替える（消えた subtree の中に
+  //   あった端点は元の親へ畳まれる）。clone した Range で復元するとキャレットが
+  //   <ul> へ飛び、続けて Tab を押しても何も起きない・打った文字が別の場所に入る。
+  // ⚠ この 2 つは happy-dom では【壊れた実装でも通ってしまう】（happy-dom は
+  //   ノード移動時の Range 更新を実装していない）。意図の記録と他の退行検出には
+  //   効くが、この件そのものは実ブラウザで見ること（.claude/skills/verify）。
+  it('入れ子にしたあともキャレットは項目の中に残る', () => {
+    const ed = makeEditor('<ul class="kuro-ul-disc"><li>a</li><li id="x">b</li></ul>')
+    const li = ed.wysiwyg.querySelector('#x')
+    select(li)
+    ed._shiftListNesting([li], 1)
+    const sel = window.getSelection()
+    expect(li.contains(sel.anchorNode) || sel.anchorNode === li).toBe(true)
+  })
+
+  it('条件が揃えば Tab の連打でさらに深くなる', () => {
+    // a >(b), c — c は 1 回目で b の兄弟に、2 回目で b の子になれる
+    const ed = makeEditor(
+      '<ul class="kuro-ul-disc"><li>a<ul class="kuro-ul-disc"><li>b</li></ul></li>' +
+      '<li id="c">c</li></ul>')
+    const c = ed.wysiwyg.querySelector('#c')
+    select(c)
+    ed._shiftListNesting(ed._listItemsInSelection(), 1)
+    expect(c.parentElement.previousSibling?.textContent).toBe('a')   // b の兄弟
+    // 選択は項目の中に残っているので、拾い直して 2 回目が効く
+    ed._shiftListNesting(ed._listItemsInSelection(), 1)
+    expect(c.closest('li').parentElement.closest('li').textContent).toContain('b')
+  })
+
   // 入れ子の記号は【子リスト単位】で変えられる。子は作られた時点で親の記号を
   // 引き継ぐが、その後で子だけ別の記号にしたい（例: 親は ● で子は ▶）ことがある。
   it('子リストの項目を選んで記号を押すと、その子リストだけ変わる', () => {
