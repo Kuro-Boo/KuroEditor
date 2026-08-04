@@ -538,6 +538,31 @@
       </div>
 
 
+      <h4>番号付きリストを入れ子にしたときの番号</h4>
+      <p>
+        <strong>親の番号はそのまま続きます</strong>。子リストは 1 から始まり、
+        親のほうは子の分を数えません（下の例では、子の「刻む・炒める」を挟んでも
+        次の親項目は <strong>3.</strong> です）。
+      </p>
+      <div class="demo">
+        <div class="demo__label">実際の表示</div>
+        <div class="kuro-content">
+          <ol class="kuro-list-decimal">
+            <li>準備する</li>
+            <li>作る
+              <ol class="kuro-list-decimal"><li>刻む</li><li>炒める</li></ol>
+            </li>
+            <li>盛り付ける</li>
+            <li>片付ける</li>
+          </ol>
+        </div>
+      </div>
+      <p>
+        <kbd>Tab</kbd> で項目を入れ子にすると、その項目は親の数え上げから外れるので、
+        <strong>後ろの項目は 1 つ繰り上がります</strong>（1・2・3 の 2 番目を入れ子にすると、
+        3 番目だった項目が 2. になります）。<kbd>Shift</kbd>+<kbd>Tab</kbd> で戻せば番号も元どおりです。
+      </p>
+
       <h3>リストをやめる（「解除」は 2 段階）</h3>
       <ol>
         <li><strong>1 回目</strong> — 記号だけが消えます。項目の位置と階層はそのまま。</li>
