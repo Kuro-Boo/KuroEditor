@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.29.1'
+export const VERSION = '2.30.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -7700,7 +7700,12 @@ export class KuroEditor {
       const items = lines.filter((el) => el.tagName === 'LI')
       const rest  = lines.filter((el) => el.tagName !== 'LI')
       // 混在選択（段落 + リスト項目）は行ごとに振り分けて【両方】処理する
-      if (items.length) this._shiftListNesting(items, dir)
+      if (items.length) {
+        // 入れ子にできる項目が 1 つでもあれば、それは【構造の変更】として扱う。
+        // 1 つも動かせなかったとき（＝リストの先頭で押した）だけ、リストごと
+        // 字下げする — 先頭行でも「押した分だけ右へ」が効くように。
+        if (!this._shiftListNesting(items, dir)) this._shiftListIndent(items, dir)
+      }
       if (rest.length)  this._shiftBlockIndent(dir, rest)
       return
     }
@@ -7745,6 +7750,19 @@ export class KuroEditor {
         if (range.collapsed && range.startOffset === 0) {
           // Tab と同じ土俵（行のみ）。枠やリスト項目の padding は触らない
           const line = this._nearestLine(range.startContainer)
+          // リストごとの字下げ（Tab で先頭の項目を押したときに付くもの）は、
+          // 段落と同じく【行頭 Backspace で 1 段戻せる】。
+          // ⚠ 反応するのは Tab で付けられるのと同じ「先頭の項目」だけ。ほかの項目の
+          //   行頭 Backspace は「前の項目と結合」というブラウザ既定の編集で、
+          //   そこを奪うと項目をくっつけられなくなる。
+          if (line?.tagName === 'LI' && !line.previousElementSibling) {
+            const list = line.parentElement
+            if ((parseFloat(list?.style.marginLeft) || 0) > 0) {
+              e.preventDefault()
+              this._shiftListIndent([line], -1)
+              return
+            }
+          }
           if (line && line.tagName !== 'LI') {
             const cur = parseFloat(line.style.paddingLeft) || 0
             if (cur > 0) {
@@ -8843,9 +8861,9 @@ export class KuroEditor {
     //   後続の項目を「出した項目の下」へぶら下げ直すことになり、同じ項目を
     //   二度動かして順序が入れ替わる。後ろから出せば各項目は 1 回で済む。
     const order = dir > 0 ? items : [...items].reverse()
+    let moved = 0
     for (const li of order) {
-      if (dir > 0) this._nestListItem(li)
-      else         this._outdentListItem(li)
+      if (dir > 0 ? this._nestListItem(li) : this._outdentListItem(li)) moved++
     }
 
     // 項目ごと動かしただけなのでテキストノードは生きている = 値で控えた端点で戻せる。
@@ -8859,6 +8877,40 @@ export class KuroEditor {
           if (li?.isConnected) sel.setBaseAndExtent(li, 0, li, 0)
         }
       } catch (_) {}
+    }
+    return moved
+  }
+
+  /**
+   * リストそのものを 1 段（2em）字下げする / 戻す。
+   *
+   * 入れ子にできない項目（＝すぐ上に項目が無い＝リストの先頭）で Tab を押したとき
+   * の逃げ道。「押したのに何も起きない」を無くし、先頭行では他の行と同じように
+   * 【何度でも押して位置を調整できる】ようにする（リスト全体が動くので、項目の
+   * 相対関係＝入れ子の構造は一切変わらない）。
+   *
+   * ⚠ padding-left ではなく margin-left を動かす。リストの padding-left は
+   *   【マーカーの居場所】（content.css で 1.5rem）なので、そこを上書きすると
+   *   記号や番号がずれる・0 にすると枠外へ消える。外側の余白は margin の担当。
+   *
+   * @param {HTMLElement[]} items  対象の <li>（属するリストを 1 つずつ動かす）
+   * @param {1|-1} dir
+   */
+  _shiftListIndent(items, dir) {
+    const STEP = 2  // em
+    const lists = []
+    for (const li of items) {
+      const list = li.parentElement
+      if (list && (list.tagName === 'UL' || list.tagName === 'OL') && !lists.includes(list)) {
+        lists.push(list)
+      }
+    }
+    for (const list of lists) {
+      const cur  = parseFloat(list.style.marginLeft) || 0
+      const next = Math.max(0, cur + dir * STEP)
+      list.style.marginLeft = next > 0 ? `${next}em` : ''
+      // 空の style="" を本文に残さない（保存 HTML が無意味に汚れる）
+      if (!list.getAttribute('style')) list.removeAttribute('style')
     }
   }
 
