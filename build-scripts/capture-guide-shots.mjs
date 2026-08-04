@@ -105,15 +105,18 @@ await setBody('<p id="t">ここを選択すると書式メニューが出ます<
 await selectText('#t')
 await shot('popm', '.kuro-popm')
 
-for (const [name, title] of [
-  ['popm-color',   '文字色'],
-  ['popm-size',    'フォントサイズ'],
-  ['popm-ul',      '箇条書きリスト'],
-  ['popm-ol',      '番号付きリスト'],
-  ['popm-callout', 'コールアウト'],
+// ⚠ リストのパネルは【リストの中にいるとき】だけ全部のボタンが出る（記号の色 ●・
+//   開始番号は、対象のリストが無ければ指定しようが無いので隠れる）。
+//   マニュアルには「本当の姿」を載せたいので、リストを仕込んでから開く。
+for (const [name, title, seed] of [
+  ['popm-color',   '文字色',           '<p id="t">ここを選択すると書式メニューが出ます</p>'],
+  ['popm-size',    'フォントサイズ',   '<p id="t">ここを選択すると書式メニューが出ます</p>'],
+  ['popm-ul',      '箇条書きリスト',   '<ul class="kuro-ul-disc"><li id="t">記号を選べます</li></ul>'],
+  ['popm-ol',      '番号付きリスト',   '<ol class="kuro-list-decimal"><li id="t">番号を選べます</li></ol>'],
+  ['popm-callout', 'コールアウト',     '<p id="t">ここを選択すると書式メニューが出ます</p>'],
 ]) {
   // ⚠ 直前の操作で選択が外れると popm ごと消えるので、毎回入れ直す
-  await setBody('<p id="t">ここを選択すると書式メニューが出ます</p>')
+  await setBody(seed)
   await selectText('#t')
   const btn = await page.$(`.kuro-popm__btn[title^="${title}"]`)
   if (!btn) { console.error(`  ✗ ${name} — 「${title}」のボタンが無い`); continue }
