@@ -703,6 +703,37 @@ h5[id^='kuro-h-'] {
   overflow-x: auto;
 }
 
+/* 公開ページのコピーボタン — dist/kuro-code-copy.js がホストのページで後付けする
+   （保存 HTML には入れない。JS を読まないページでは押せないボタンになるため）。
+   スタイルだけは常にここに置く: 出す/出さないはホストの判断で、出したときに
+   編集画面と同じ位置・同じ見た目になるのが「見たまま公開」。 */
+.kuro-content pre[data-gutter] {
+  position: relative;
+}
+.kuro-content .kuro-code-copybtn {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--kuro-code-border);
+  border-radius: 0.375rem;
+  background: var(--kuro-code-bg);
+  color: inherit;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+.kuro-content pre[data-gutter]:hover .kuro-code-copybtn,
+.kuro-content .kuro-code-copybtn:focus-visible {
+  opacity: 1;
+}
+.kuro-content .kuro-code-copybtn--done {
+  opacity: 1;
+  border-color: var(--kuro-check-on);
+}
+
 /* Inline <code> (not inside a <pre>) — subtle chip, theme-neutral. */
 .kuro-content :not(pre) > code {
   font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;

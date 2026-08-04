@@ -207,6 +207,22 @@ The HTML produced by KuroEditor uses class-based blocks (rounded boxes, tables, 
 
 > The editor bundle `kuro-editor.css` already includes these content styles, so you do **not** need `kuro-content.css` on pages that load the editor itself.
 
+
+### Copy button for code blocks (optional)
+
+Code blocks render **with line numbers** on public pages too (the saved `<pre data-gutter="…">` is drawn by
+`kuro-content.css`). The 📋 **copy button** needs a click handler, so it ships as a tiny opt-in script
+(**zero dependencies, ~2KB**):
+
+```html
+<!-- only needed on pages that actually contain a code block -->
+<script src="/path/to/kuro-code-copy.js" defer></script>
+```
+
+- It only touches `<pre data-gutter>` elements — **the saved HTML never changes** (the button is added at runtime)
+- Pages that swap content in can call `window.kuroCodeCopy()` again (it never double-adds)
+- No button is added where `navigator.clipboard` is unavailable (e.g. plain http)
+
 ---
 
 ## ⚙️ Options
