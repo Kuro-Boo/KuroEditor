@@ -638,13 +638,13 @@
       </ul>
       <figure class="shot">
         <img src="./img/code-block.png" alt="編集画面のコードブロック。左に行番号、右上にコピーと削除。" loading="lazy">
-        <figcaption>編集画面での見え方。左に<strong>行番号</strong>、右上に 🗑 削除と 📋 コピー。行番号の部分をドラッグすると、ブロックごと上下に移動できます。</figcaption>
+        <figcaption>編集画面での見え方。左に<strong>行番号</strong>、右上に 🗑 削除と 📋 コピー。行番号の部分をドラッグすると、ブロックごと上下に移動できます。<strong>行番号は公開ページにも同じように出ます</strong>（見たままが公開される、が KuroEditor の原則です）。</figcaption>
       </figure>
 
       <div class="demo">
-        <div class="demo__label">実際の表示（公開ページでの見え方 — 行番号は付きません）</div>
+        <div class="demo__label">実際の表示（公開ページでの見え方）</div>
         <div class="kuro-content">
-          <pre><code>function hello(name) {
+          <pre data-gutter="1&#10;2&#10;3"><code>function hello(name) {
   return `こんにちは、${name}`
 }</code></pre>
         </div>
@@ -681,8 +681,8 @@
             <tr><td>行・列を足す</td><td>セルの境目にカーソルを寄せると出る <strong>＋</strong> をクリック。</td></tr>
             <tr><td>行・列を消す</td><td>同じ位置に出る <strong>−</strong> をクリック。</td></tr>
             <tr><td>列の幅</td><td>罫線の上をドラッグ。</td></tr>
-            <tr><td>罫線</td><td>表全体・1 本ずつのどちらも、太さと種類を変えられます。</td></tr>
-            <tr><td>セルの背景・角丸</td><td>セルにカーソルを置くと出るメニューから。</td></tr>
+            <tr><td>罫線</td><td>罫線の上をクリックすると、<strong>外枠 / 中の罫線 / この 1 本だけ</strong>を選び、点線・細線・普通線・太線と<strong>色</strong>を指定できます。</td></tr>
+            <tr><td>セルの背景色</td><td>セルにカーソルを置くと出る表メニューの「背景色」から、パレットで選びます。</td></tr>
             <tr><td>セルの連結</td><td>表メニューの「右と連結」「下と連結」。端では押せません。</td></tr>
             <tr><td>縦位置</td><td>セルの中身を 上 / 中央 / 下 に揃えられます。</td></tr>
             <tr><td>表ごと削除</td><td>表メニュー右端の 🗑。</td></tr>
@@ -757,11 +757,11 @@
       <h3>リンクを直す</h3>
       <p>
         本文のリンクをクリックすると（移動はせずに）編集ポップアップが開き、URL と表示テキストを直せます。
-        右端の 🗑 でリンクを解除できます。
+        右端の 🗑 でリンクを削除できます（文字は残り、リンクだけが外れます）。
       </p>
       <figure class="shot" style="max-width:420px">
-        <img src="./img/link-edit.png" alt="リンクをクリックすると開く編集ポップアップ。表示テキスト・URL・カード表示の切り替え・解除（🗑）。" loading="lazy">
-        <figcaption>リンクをクリックすると開く編集ポップアップ。表示テキスト・URL・カード表示の切り替え・解除（🗑）。</figcaption>
+        <img src="./img/link-edit.png" alt="リンクをクリックすると開く編集ポップアップ。表示テキスト・URL・カード表示の切り替え・リンクの削除（🗑）。" loading="lazy">
+        <figcaption>リンクをクリックすると開く編集ポップアップ。表示テキスト・URL・カード表示の切り替え・リンクの削除（🗑）。</figcaption>
       </figure>
 
       <h3>URL カード</h3>
