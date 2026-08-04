@@ -165,6 +165,9 @@
        似せて書き直すと本体の変更に置いていかれるため。自前の <style> より
        後に読むこと（どちらも unlayered ＝ 後勝ちで、例の中だけ本物が効く）。 -->
   <link rel="stylesheet" href="../kuro-content.css" />
+  <!-- 公開ページ用のコピーボタン。このマニュアルの表示例も、実際の公開ページと
+       同じスクリプトでボタンが付く（説明どおりに動くものを見せる）。 -->
+  <script src="../kuro-code-copy.js" defer></script>
 </head>
 
 <body class="font-sans antialiased">
@@ -641,6 +644,7 @@
         <li>中では <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> がそのままインデントとして使えます。</li>
         <li>右上の 📋 でコピー、その左の 🗑 で削除。</li>
         <li><strong>行番号の部分をドラッグ</strong>すると、ブロックごと上下に移動できます。</li>
+        <li>公開ページでも<strong>行番号と 📋 コピーボタンが出ます</strong>（📋 はサイト側で読み込む小さなスクリプトが付けるので、出ない設定のサイトもあります）。</li>
       </ul>
       <figure class="shot">
         <img src="./img/code-block.png" alt="編集画面のコードブロック。左に行番号、右上にコピーと削除。" loading="lazy">

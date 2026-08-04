@@ -1,5 +1,6 @@
 // dist へ「vite が扱わない素ファイル」を複製する。
 //  - kuro-content.css : 公開ページ用の本文スタイル（エディタ非読込ページ向け）
+//  - kuro-code-copy.js : 公開ページのコードブロックに 📋 を後付けする小さな script
 //  - blocks.js / kuro-links.js / recipe.js : DOM 非依存の共有純関数モジュール
 //    （ホストが vendored。recipe.js は KuroCMS のサーバー側検証とも実装を共有する）
 //  - *.d.ts : 上記モジュールの型定義（KuroEditor が単一保守 → ホストが vendored）
@@ -13,6 +14,8 @@ const files = [
   ['src/blocks.js', 'dist/kuro-blocks.js'],
   ['src/kuro-blocks.d.ts', 'dist/kuro-blocks.d.ts'],
   ['src/kuro-links.js', 'dist/kuro-links.js'],
+  // 公開ページ用のコピーボタン（ホストが opt-in で読み込む小さなスクリプト）
+  ['src/kuro-code-copy.js', 'dist/kuro-code-copy.js'],
   ['src/kuro-links.d.ts', 'dist/kuro-links.d.ts'],
   ['src/normalize.js', 'dist/kuro-normalize.js'],
   ['src/recipe.js', 'dist/kuro-recipe.js'],
