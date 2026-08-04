@@ -18,6 +18,21 @@ Zero external JS libraries — an embeddable WYSIWYG editor that runs by loading
 
 ---
 
+## 📖 Documentation
+
+| Audience | Where to look |
+|---|---|
+| **Writers** (people using the editor) | 📖 **[User guide](https://kuro.boo/kuroeditor/guide/)** — screen tour, paragraphs vs. line breaks, indenting, lists, tables, media, links and callouts, with **real screenshots and live examples**. *Japanese only for now.* |
+| **Integrators** | This README (from Quick start down) and the [showcase page](https://kuro.boo/kuroeditor/) |
+| **Just curious** | 🎮 [Live sample](https://kuro.boo/kuroeditor/sample/) — the real editor, in your browser |
+
+The user guide also opens from the **“?” button** in the editor's tab bar (left of the table-of-contents
+button). Point it at your own manual with `helpUrl`, or hide the button with `helpUi: false`.
+The guide itself is **[`public/guide/index.html`](public/guide/index.html) in this repository**, so you can
+host a copy on your own site and point `helpUrl` there.
+
+---
+
 ## ⚠️ v2.0.0 — CSS architecture v2 (stronger WYSIWYG)
 
 Content styling is now a **single source of truth** so the in-editor view and the
@@ -211,6 +226,8 @@ Main options you can pass to `new KuroEditor(mountEl, options)`:
 | `onDirty()` | `function` | Called the moment an unsaved change appears (false→true transitions only; saving clears it, the next edit re-fires). Decoration-only DOM operations (text color, cell backgrounds, table ops) do **not** fire `input`, so hosts with their own save UI must subscribe to this instead of watching `input`. Call `clearDirty()` when your save completes |
 | `canvasDark` | `boolean` | Optional. Force the initial canvas dark mode from the host. When set, it overrides the localStorage preference and toggling no longer writes to localStorage. When omitted, the persisted preference is restored as before (default light) |
 | `canvasDarkUi` | `boolean` | Default `false` (hidden). Set `true` to show the "dark" toggle checkbox in the tab bar. Even when hidden, `canvasDark` / `setCanvasDark()` still switch the canvas |
+| `helpUi` | `boolean` | Default `true` (shown). Set `false` to hide the “?” help button (tab bar, left of the ToC button) |
+| `helpUrl` | `string \| null` | URL the “?” button opens in a **new tab**. Defaults to the official user guide `https://kuro.boo/kuroeditor/guide/` (Japanese). Point it at your own manual, or pass `null` to hide the button |
 | `versionUi` | `boolean` | Default `true` (shown). Set `false` to hide the version badge (`vX.Y.Z`) at the top-left of the tab bar. The version stays readable via the `data-kuro-editor` attribute and `window.KUROEDITOR_VERSION` |
 | `canvasColors` | `object` | Optional. Match the light-mode canvas palette to your site's real colors: `{ bg, text, caret, placeholder, cellFocusBg, dragOverBg }` (each a CSS color; all keys optional). Omitted keys keep the stylesheet defaults (white / slate-900). Change at runtime with `setCanvasColors()` |
 | `canvasDarkColors` | `object` | Optional. Dark-mode canvas palette, same shape as `canvasColors`; applied only while the canvas is dark. Omitted keys keep the dark defaults (`#171717` / `#f5f5f5`). Change at runtime with `setCanvasDarkColors()` |

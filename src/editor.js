@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.27.0'
+export const VERSION = '2.27.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -9425,8 +9425,10 @@ export class KuroEditor {
       // 行番号は【公開ページでも出す】（WYSIWYG は絶対 — 編集画面に gutter が
       // あって公開ページに無い、は許さない）。公開側は <pre><code> の素の
       // テキストなので、行番号を出す手掛かりを保存時に焼き込む。
-      // ⚠ 行番号を <span> 等の【要素】にしないこと。コードをコピーすると番号まで
-      //   付いてくる。data-gutter を content.css が ::before に出す形なら、
+      // ⚠ 行番号を <span> 等の【要素】にしないこと。編集画面には 📋 コピーボタンが
+      //   あるので手で選択されないが、【公開ページには無い】ので読者は本文と同じく
+      //   マウスで選択してコピーする。要素にすると番号まで付いてきて、貼り付けた
+      //   コードが動かなくなる。data-gutter を content.css が ::before に出す形なら
       //   疑似要素なので選択・コピーの対象にならない。
       const lines = Math.max(1, value.split('\n').length)
       pre.setAttribute('data-gutter',

@@ -7,7 +7,8 @@
  * 見張っているのはこの 3 点:
  *   1. 行数と data-gutter が一致する（保存のたびに数え直される）
  *   2. コード本文は data-gutter に汚染されない＝往復しても壊れない
- *   3. 番号は【疑似要素】で出す ＝ 要素にしない（コピーに番号が付いてこない）
+ *   3. 番号は【疑似要素】で出す ＝ 要素にしない。編集画面には 📋 コピーボタンが
+ *      あるが公開ページには無く、読者はマウスで選択してコピーするため
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
