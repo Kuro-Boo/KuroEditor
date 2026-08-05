@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.31.1'
+export const VERSION = '2.32.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -3137,6 +3137,10 @@ export class TableInserter {
     this._onRowBorderClick = callbacks.onRowBorderClick
     this._onColBorderClick = callbacks.onColBorderClick
     this._editor = null   // KuroEditor が設定（mmenu を避ける位置決めに使う）
+    this._reorderMode  = null   // 並び替えモード中の <table>（長押しで入る）
+    this._reorderStart = null
+    this._reorderMoved = false
+    this._pressTimer   = null
 
     // Container: transparent wrapper for _onDocMousedown hit-test
     this.container = createElement('div', {
@@ -3209,6 +3213,8 @@ export class TableInserter {
   activate(table) {
     const wasActive = this.activeTable !== null
     this.activeTable = table
+    // 別の表へ移ったら並び替えモードは終わり（同じ表なら維持）
+    if (this._reorderMode && this._reorderMode !== table) this._exitReorderMode()
     if (!wasActive) {
       document.addEventListener('mousemove', this._onMouseMove)
       document.addEventListener('scroll', this._onScroll, { capture: true, passive: true })
@@ -3530,15 +3536,15 @@ export class TableInserter {
   /** 閲覧モードでは列幅ドラッグ等と同じく無効化する。 */
   get _dragEnabled() { return this.wysiwyg.getAttribute('contenteditable') === 'true' }
 
-  _startRowDrag(e) {
-    if (e.button !== 0 || !this._dragEnabled) return
-    const table = this.activeTable
-    const row   = this._currentCell?.closest('tr')
+  _startRowDrag(e, targetRow = null) {
+    if ((e.button ?? 0) !== 0 || !this._dragEnabled) return
+    const row   = targetRow ?? this._currentCell?.closest('tr')
+    const table = row?.closest('table') ?? this.activeTable
     if (!table || !row) return
     const rows = Array.from(table.querySelectorAll('tr'))
     if (rows.length <= 1) return
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault?.()
+    e.stopPropagation?.()
 
     this._rowDrag = true
     row.classList.add('kuro-table-row--grabbed')
@@ -3931,10 +3937,13 @@ export class TableInserter {
 
     const reset = (row, animate) => {
       if (!row) return
-      row.style.transition = animate ? 'transform .18s ease, opacity .18s ease' : ''
+      row.style.transition = animate
+        ? 'transform .18s ease, opacity .18s ease, background-color .18s ease' : ''
       row.style.transform  = ''
       row.style.opacity    = ''
-      if (animate) setTimeout(() => { row.style.transition = '' }, 200)
+      row.style.backgroundColor = ''
+      row.classList.remove('kuro-table-row--will-delete')
+      if (animate) setTimeout(() => { row.style.cssText = '' }, 200)
     }
 
     this._onSwipeStart = (e) => {
@@ -3942,18 +3951,45 @@ export class TableInserter {
       const row = e.target.closest?.('tr')
       if (!row || !this.wysiwyg.contains(row)) return
       const table = row.closest('table')
+
+      // 並び替えモード中は、どの行でもそのままつかんで動かせる（ハンドル不要）。
+      // ⚠ モードに入った時点で table を touch-action:none にしてある。ここで
+      //   初めてブラウザから縦の動きを奪える — ジェスチャの許可はタッチ開始時に
+      //   確定するので、ドラッグが始まってから none にしても間に合わない。
+      if (this._reorderMode && this._reorderMode === table) {
+        this._reorderMoved = false
+        this._reorderStart = { x: e.clientX, y: e.clientY }
+        this._startRowDrag(e, row)
+        return
+      }
       // 横スクロールできる表＝横ジェスチャは「表を送る」ためのもの
       const scroller = table?.parentElement
       if (scroller && scroller.scrollWidth > scroller.clientWidth + 1) return
       if (table && table.querySelectorAll('tr').length <= 1) return   // 最後の 1 行は消さない
       st = { row, x0: e.clientX, y0: e.clientY, w: row.getBoundingClientRect().width,
              engaged: false, pointerId: e.pointerId }
+
+      // 長押し（動かさずに 500ms）→ 並び替えモード。指で小さなハンドルを狙えない
+      // 端末のための入口で、ハンドルは今までどおり残る。
+      clearTimeout(this._pressTimer)
+      this._pressTimer = setTimeout(() => {
+        if (!st || st.engaged) return          // 横に振っていたら（＝削除）入らない
+        st = null                               // スワイプ判定は捨てる
+        this._enterReorderMode(table)
+      }, 500)
     }
 
     this._onSwipeMove = (e) => {
+      if (this._reorderMode && this._reorderStart) {
+        // モード中のドラッグ量を覚えておく（指を離したとき「タップ」か判断する）
+        if (Math.abs(e.clientX - this._reorderStart.x) > 8 ||
+            Math.abs(e.clientY - this._reorderStart.y) > 8) this._reorderMoved = true
+      }
       if (!st || e.pointerId !== st.pointerId) return
       const dx = e.clientX - st.x0
       const dy = e.clientY - st.y0
+      // 動いた時点で長押しは無効（スクロールかスワイプの意図）
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) clearTimeout(this._pressTimer)
       if (!st.engaged) {
         if (Math.abs(dy) > Math.abs(dx)) { st = null; return }   // 縦 = スクロール
         if (Math.abs(dx) < MIN) return
@@ -3962,19 +3998,30 @@ export class TableInserter {
       }
       e.preventDefault()                       // 以降はキャレット移動もスクロールもさせない
       const shift = Math.min(0, dx)            // 左方向だけ
+      // 進み具合を【色】で見せる。どこまで振れば消えるのかが分からないと、
+      // 手前で離して「消えない」/ 行き過ぎて「消えた」の両方が起きる。
+      const ratio = Math.min(1, Math.abs(shift) / this._swipeThreshold(st.w))
       st.row.style.transform = `translateX(${shift}px)`
-      st.row.style.opacity   = String(Math.max(0.25, 1 - Math.abs(shift) / st.w))
+      st.row.style.opacity   = String(1 - 0.25 * ratio)
+      st.row.style.backgroundColor = `rgba(239, 68, 68, ${(0.06 + 0.44 * ratio).toFixed(3)})`
+      // しきい値を越えた＝離せば消える。枠を出して「もう消える」と分かるようにする
+      st.row.classList.toggle('kuro-table-row--will-delete', ratio >= 1)
     }
 
     this._onSwipeEnd = (e) => {
+      clearTimeout(this._pressTimer)
+      // モード中に「動かさず離した」＝ただのタップ → モードを抜ける。
+      // 抜け道を分かりやすく 1 つに保つ（タップすれば元の編集に戻る）。
+      if (this._reorderMode && this._reorderStart && !this._reorderMoved) {
+        this._reorderStart = null
+        this._exitReorderMode()
+        return
+      }
+      this._reorderStart = null
       if (!st || (e.pointerId !== undefined && e.pointerId !== st.pointerId)) return
       const { row } = st
-      // しきい値は【行幅の 50%・最低 120px】。一般的な実装（Android の
-      // ItemTouchHelper / Compose の SwipeToDismiss が 0.5、Flutter の
-      // Dismissible が 0.4）に合わせた重さで、うっかり触れた程度では消えない。
-      // ⚠ 軽くすると「意図せず本文が消える」— 消えるより残るほうが安全。
       const done = st.engaged &&
-        Math.abs(Math.min(0, e.clientX - st.x0)) >= Math.max(120, st.w * 0.5)
+        Math.abs(Math.min(0, e.clientX - st.x0)) >= this._swipeThreshold(st.w)
       st = null
       if (!done) { reset(row, true); return }
       // 消す前に画面外まで送る（消えたことが分かる）。戻したいときは Undo。
@@ -3987,13 +4034,54 @@ export class TableInserter {
       }, 150)
     }
 
+    // ⚠ モードの出口は【選択状態に頼らない】。選択が一瞬外れただけで解除されると
+    //   「長押ししたのに掴めない」になる。表の外を触ったかどうかで判断する。
+    this._onDocPointerDown = (e) => {
+      if (this._reorderMode && !this._reorderMode.contains(e.target)) this._exitReorderMode()
+    }
+    document.addEventListener('pointerdown', this._onDocPointerDown, true)
+
     this.wysiwyg.addEventListener('pointerdown', this._onSwipeStart)
     this.wysiwyg.addEventListener('pointermove', this._onSwipeMove, { passive: false })
     this.wysiwyg.addEventListener('pointerup', this._onSwipeEnd)
     this.wysiwyg.addEventListener('pointercancel', () => { if (st) { reset(st.row, true); st = null } })
   }
 
+  /**
+   * スワイプ削除のしきい値（px）。行幅の 50%・最低 120px。
+   * 一般的な実装（Android の ItemTouchHelper / Compose の SwipeToDismiss が 0.5、
+   * Flutter の Dismissible が 0.4）に合わせた重さで、うっかり触れた程度では消えない。
+   * ⚠ 軽くすると「意図せず本文が消える」— 消えるより残るほうが安全。
+   */
+  _swipeThreshold(rowWidth) { return Math.max(120, rowWidth * 0.5) }
+
+  /**
+   * 並び替えモードに入る（長押しの結果）。
+   * ⚠ table を touch-action:none にするのがこのモードの本体。ブラウザは
+   *   タッチ開始時に「このジェスチャで何を許すか」を確定するので、ドラッグが
+   *   始まってから奪おうとしても遅い。先にモードへ入れてから掴んでもらう。
+   */
+  _enterReorderMode(table) {
+    if (!table || this._reorderMode === table) return
+    this._exitReorderMode()
+    this._reorderMode = table
+    table.classList.add('kuro-table--reorder')
+    table.style.touchAction = 'none'
+  }
+
+  _exitReorderMode() {
+    const t = this._reorderMode
+    if (!t) return
+    this._reorderMode = null
+    t.classList.remove('kuro-table--reorder')
+    t.style.removeProperty('touch-action')
+    if (!t.getAttribute('style')) t.removeAttribute('style')
+  }
+
   destroy() {
+    clearTimeout(this._pressTimer)
+    this._exitReorderMode()
+    document.removeEventListener('pointerdown', this._onDocPointerDown, true)
     document.removeEventListener('mousemove', this._onMouseMove)
     this.wysiwyg.removeEventListener('pointerdown', this._onSwipeStart)
     this.wysiwyg.removeEventListener('pointermove', this._onSwipeMove)
@@ -6750,14 +6838,57 @@ export class KuroEditor {
     })
   }
 
-  /** Restore saved caret and insert HTML at that position. */
+  /**
+   * 覚えておいたキャレット位置に HTML を挿し、【挿入したものの直後】にキャレットを
+   * 置き直す。
+   *
+   * ⚠ 挿入後にキャレットを置き直さないと、どこにも居ない状態になり、次に打った
+   *   文字が思わぬ場所へ入る／画面が本文の先頭まで戻る（報告のあった症状）。
+   * ⚠ 控えた位置が使えない（本文を一度も触っていない・差し替えでノードが消えた）
+   *   ときは【本文の末尾】へ。先頭に挿すと、書きかけの記事の頭に画像が入り、
+   *   表示も先頭へ飛ぶ。書き手が挿したいのはたいてい今いる場所か末尾。
+   */
   _restoreAndInsert(html) {
+    const sel = window.getSelection()
     this.wysiwyg.focus()
-    if (this._savedRange) {
-      const sel = window.getSelection()
-      try { sel.removeAllRanges(); sel.addRange(this._savedRange) } catch {}
+
+    let restored = false
+    const r = this._savedRange
+    if (r && this.wysiwyg.contains(r.startContainer) && r.startContainer.isConnected) {
+      try { sel.removeAllRanges(); sel.addRange(r); restored = true } catch { /* noop */ }
     }
-    execFormat('insertHTML', html)
+    if (!restored) {
+      // ⚠ 末尾は「本文（div）の子の末尾」ではなく【最後のブロックの中】に置くこと。
+      //   要素そのものの境界にキャレットがあると execCommand('insertHTML') が
+      //   何も挿さない（実測: <div>の子末尾に置くと空段落だけができて図が消える）。
+      try {
+        const end = document.createRange()
+        const last = this.wysiwyg.lastElementChild
+        if (last) end.selectNodeContents(last)
+        else      end.selectNodeContents(this.wysiwyg)
+        end.collapse(false)
+        sel.removeAllRanges()
+        sel.addRange(end)
+      } catch { /* noop */ }
+    }
+
+    // 挿入した塊の末尾に置く空段落へ目印を付け、そこへキャレットを戻す。
+    // execCommand の後始末はブラウザ差が大きいので、自前で決める。
+    const TAIL = '<p><br></p>'
+    const MARK = 'kuro-caret-after-insert'
+    const marked = html.endsWith(TAIL)
+      ? html.slice(0, -TAIL.length) + `<p id="${MARK}"><br></p>`
+      : html
+    execFormat('insertHTML', marked)
+
+    const tail = this.wysiwyg.querySelector(`#${MARK}`)
+    if (tail) {
+      tail.removeAttribute('id')
+      try { sel.setBaseAndExtent(tail, 0, tail, 0) } catch { /* noop */ }
+      // 挿入したものが画面の外なら見える位置へ（画面が飛んだと感じさせない）
+      tail.scrollIntoView?.({ block: 'nearest' })
+    }
+    if (sel?.rangeCount) this._savedRange = sel.getRangeAt(0).cloneRange()
   }
 
   /** Insert media from a URL typed directly in the dialog. */
@@ -6933,6 +7064,15 @@ export class KuroEditor {
     // selectionchange fires after the selection has actually changed — more reliable
     // than mouseup for detecting collapse (e.g. click inside table cell to deselect).
     this._onDocSelChange = () => {
+      // ⚠ 本文の中にキャレットがある間は、その位置を【常に】控える。blur のときだけ
+      //   覚えていると、本文を一度も触っていない状態でツールバーから挿入したとき
+      //   「最後に居た場所」が無く、挿入が本文の先頭に飛ぶ（＝画面も先頭へ戻る）。
+      try {
+        const s = window.getSelection()
+        if (s?.rangeCount && this.wysiwyg.contains(s.getRangeAt(0).startContainer)) {
+          this._savedRange = s.getRangeAt(0).cloneRange()
+        }
+      } catch { /* noop */ }
       // W3: キャレットが保留 block を離れたら確定マージする
       if (this._heldOps && this._heldOps.size) this._releaseHeldBlocks('caret')
       if (this._mode === 'wysiwyg' && this.popm.el.classList.contains('kuro-popm--visible')) {

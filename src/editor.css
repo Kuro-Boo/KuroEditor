@@ -934,6 +934,25 @@
   .kuro-table-col-indicator { width: 3px; }
 
   /* During row/col drag: freeze the grab cursor across the entire page */
+  /* スワイプ削除 — しきい値を越えた（＝離せば消える）状態。色の濃さは JS が
+     指の進み具合に応じて付けるので、ここでは「もう消える」枠だけを担当する。 */
+  .kuro-table-row--will-delete > td,
+  .kuro-table-row--will-delete > th {
+    outline: 2px solid theme('colors.red.500');
+    outline-offset: -2px;
+  }
+
+  /* 並び替えモード（行の長押しで入る）— 見た目で「いま掴める」と分かるように。
+     このモード中は table が touch-action:none なので、指の縦移動が行の移動になる。
+     タップすれば抜ける。 */
+  .kuro-table--reorder {
+    outline: 2px dashed theme('colors.indigo.400');
+    outline-offset: 3px;
+  }
+  .kuro-table--reorder tr {
+    cursor: grab;
+  }
+
   body.kuro-row-dragging, body.kuro-row-dragging *,
   body.kuro-col-dragging, body.kuro-col-dragging * {
     cursor: grabbing !important;

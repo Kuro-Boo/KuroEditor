@@ -116,6 +116,53 @@ describe('表 — スマホでの操作', () => {
     expect(ed.wysiwyg.querySelectorAll('tr').length).toBe(1)
   })
 
+  it('スワイプの進み具合が色で分かる（しきい値を越えたら「もう消える」表示）', () => {
+    const ed = makeEditor(TABLE)
+    measurable(ed, 340)                       // しきい値 = 170px
+    const cell = ed.wysiwyg.querySelector('#a2')
+    const row  = cell.closest('tr')
+    cell.dispatchEvent(pointer('pointerdown', { x: 300, y: 100 }))
+    cell.dispatchEvent(pointer('pointermove', { x: 240, y: 100 }))   // -60 → まだ薄い
+    const light = row.style.backgroundColor
+    expect(light).toMatch(/^rgba\(239, 68, 68/)
+    expect(row.classList.contains('kuro-table-row--will-delete')).toBe(false)
+    cell.dispatchEvent(pointer('pointermove', { x: 100, y: 100 }))   // -200 → 越えた
+    expect(row.classList.contains('kuro-table-row--will-delete')).toBe(true)
+    expect(parseFloat(row.style.backgroundColor.split(',')[3]))
+      .toBeGreaterThan(parseFloat(light.split(',')[3]))              // 濃くなる
+    cell.dispatchEvent(pointer('pointerup', { x: 220, y: 100 }))     // 戻して離す（消えない）
+  })
+
+  it('長押しで並び替えモードに入り、タップで抜ける', async () => {
+    const ed = makeEditor(TABLE)
+    measurable(ed)
+    const cell = ed.wysiwyg.querySelector('#a2')
+    const table = ed.wysiwyg.querySelector('table')
+    cell.dispatchEvent(pointer('pointerdown', { x: 300, y: 100 }))
+    await new Promise((r) => setTimeout(r, 600))                     // 動かさず 500ms 超
+    expect(table.classList.contains('kuro-table--reorder')).toBe(true)
+    // ⚠ モードの本体は touch-action:none（ブラウザから縦の動きを奪う）
+    expect(table.style.touchAction).toBe('none')
+    cell.dispatchEvent(pointer('pointerup', { x: 300, y: 100 }))
+
+    // モード中のタップ（動かさず離す）で抜ける
+    cell.dispatchEvent(pointer('pointerdown', { x: 300, y: 100 }))
+    cell.dispatchEvent(pointer('pointerup', { x: 300, y: 100 }))
+    expect(table.classList.contains('kuro-table--reorder')).toBe(false)
+    expect(table.hasAttribute('style')).toBe(false)
+  })
+
+  it('横に振ってから長押ししても並び替えモードには入らない（削除の操作中）', async () => {
+    const ed = makeEditor(TABLE)
+    measurable(ed)
+    const cell = ed.wysiwyg.querySelector('#a2')
+    cell.dispatchEvent(pointer('pointerdown', { x: 300, y: 100 }))
+    cell.dispatchEvent(pointer('pointermove', { x: 260, y: 100 }))   // 横に振った
+    await new Promise((r) => setTimeout(r, 600))
+    expect(ed.wysiwyg.querySelector('table').classList.contains('kuro-table--reorder')).toBe(false)
+    cell.dispatchEvent(pointer('pointerup', { x: 260, y: 100 }))
+  })
+
   it('削除ボタンは画面の外へ出さない（表の右端が画面の右端でも押せる）', () => {
     const ed = makeEditor(TABLE)
     const table = ed.wysiwyg.querySelector('table')
