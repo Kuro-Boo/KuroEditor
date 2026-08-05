@@ -1481,6 +1481,17 @@
      moved to content.css (single source of truth, shared with the public page).
      Their colors are themed via the --kuro-* variables set on .kuro-content above. */
 
+  /* 行のスワイプ削除（指）— 横方向のジェスチャを【ブラウザに取られない】ようにする。
+     touch-action が既定のままだと、横に振った瞬間にブラウザがスクロールと判断して
+     pointercancel を投げるので、スワイプ判定が始まる前に毎回終わってしまう。
+     pan-y にすると縦スクロールは今までどおり効き、横だけこちらへ来る。 */
+  /* ⚠ touch-action は【表の行（table-row）には効かない】— CSS 仕様の適用外
+     （非置換インライン・table-row・row-group・column・column-group は対象外）。
+     <table> 側（ブロックボックス）に置くこと。 */
+  .kuro-pane__wysiwyg table {
+    touch-action: pan-y;
+  }
+
   /* ── Code block ──
      Structure (textarea-based):
        <div.kuro-code-wrap contenteditable="false">

@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.30.1'
+export const VERSION = '2.31.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -3136,6 +3136,7 @@ export class TableInserter {
     this._pendingColIdx = null
     this._onRowBorderClick = callbacks.onRowBorderClick
     this._onColBorderClick = callbacks.onColBorderClick
+    this._editor = null   // KuroEditor が設定（mmenu を避ける位置決めに使う）
 
     // Container: transparent wrapper for _onDocMousedown hit-test
     this.container = createElement('div', {
@@ -3193,6 +3194,7 @@ export class TableInserter {
     document.body.appendChild(this.container)
 
     this._onMouseMove = (e) => this._handleMouseMove(e)
+    this._bindRowSwipe()
 
     // Scroll of window OR any inner container (capture — scroll doesn't bubble):
     // buttons live in a viewport-fixed layer, so they must be re-anchored to the
@@ -3317,7 +3319,12 @@ export class TableInserter {
       attrs: { type: 'button', title },
     })
     btn.style.display = 'none'
-    btn.addEventListener('mousedown', onMouseDown)
+    // ⚠ mousedown ではなく pointerdown。タッチでは mousedown/mousemove が
+    //   「指を離したあと」にしか合成されないので、mouse 系だけだと
+    //   【スマホでつかんでも動かない】。pointer 系はマウスも指も同じ経路で来る。
+    btn.addEventListener('pointerdown', onMouseDown)
+    // 指の縦ドラッグをページスクロールに持っていかれないように
+    btn.style.touchAction = 'none'
     return btn
   }
 
@@ -3364,15 +3371,24 @@ export class TableInserter {
     const GAP  = 5
     const MGAP = 6   // gap between a delete button and its stacked move handle
 
+    // ⚠ 表の外に置けるとは限らない。編集領域が画面いっぱいになるスマホでは、
+    //   表の右端＝画面の右端なので「右の外」に置くと【画面外で押せない】。
+    //   外に出せないぶんだけ内側（罫線の上）へ寄せる — 罫線に重なってでも
+    //   押せることを優先する（押せないボタンは無いのと同じ）。
+    const SIZE = BTN * 2
+    const clampX = (x) => Math.max(4, Math.min(x, window.innerWidth - SIZE - 4))
+    const clampY = (y) =>
+      Math.max(4, Math.min(y, popupBottomLimit(this._editor?.mmenu) - SIZE))
+
     if (rowRect) {
       this.rowDelBtn.style.display = 'flex'
-      this.rowDelBtn.style.left = `${Math.round(tableRect.right + GAP)}px`
-      this.rowDelBtn.style.top  = `${Math.round(rowRect.top + rowRect.height / 2 - BTN)}px`
+      this.rowDelBtn.style.left = `${Math.round(clampX(tableRect.right + GAP))}px`
+      this.rowDelBtn.style.top  = `${Math.round(clampY(rowRect.top + rowRect.height / 2 - BTN))}px`
     }
 
     this.colDelBtn.style.display = 'flex'
-    this.colDelBtn.style.left = `${Math.round(cellRect.left + cellRect.width / 2 - BTN)}px`
-    this.colDelBtn.style.top  = `${Math.round(tableRect.bottom + GAP)}px`
+    this.colDelBtn.style.left = `${Math.round(clampX(cellRect.left + cellRect.width / 2 - BTN))}px`
+    this.colDelBtn.style.top  = `${Math.round(clampY(tableRect.bottom + GAP))}px`
 
     // Move handles are hidden when there's nothing to reorder against, or
     // when the table has merged cells — a whole-row/column move can't
@@ -3383,16 +3399,16 @@ export class TableInserter {
 
     if (rowRect && rowCount > 1 && !hasMerged && !this._colDrag) {
       this.rowMoveBtn.style.display = 'flex'
-      this.rowMoveBtn.style.left = `${Math.round(tableRect.right + GAP)}px`
-      this.rowMoveBtn.style.top  = `${Math.round(rowRect.top + rowRect.height / 2 - BTN - (BTN * 2 + MGAP))}px`
+      this.rowMoveBtn.style.left = `${Math.round(clampX(tableRect.right + GAP))}px`
+      this.rowMoveBtn.style.top  = `${Math.round(clampY(rowRect.top + rowRect.height / 2 - BTN - (BTN * 2 + MGAP)))}px`
     } else {
       this.rowMoveBtn.style.display = 'none'
     }
 
     if (colCount > 1 && !hasMerged && !this._rowDrag) {
       this.colMoveBtn.style.display = 'flex'
-      this.colMoveBtn.style.left = `${Math.round(cellRect.left + cellRect.width / 2 - BTN)}px`
-      this.colMoveBtn.style.top  = `${Math.round(tableRect.top - GAP - BTN * 2)}px`
+      this.colMoveBtn.style.left = `${Math.round(clampX(cellRect.left + cellRect.width / 2 - BTN))}px`
+      this.colMoveBtn.style.top  = `${Math.round(clampY(tableRect.top - GAP - BTN * 2))}px`
     } else {
       this.colMoveBtn.style.display = 'none'
     }
@@ -3404,9 +3420,9 @@ export class TableInserter {
    *  ② 削除対象の行に rowspan>1 のセルがある → rowspan-1 で次の行に複製
    *  ③ 行を remove
    */
-  _deleteRow() {
-    const row   = this._currentCell?.closest('tr')
-    const table = this.activeTable
+  _deleteRow(target = null) {
+    const row   = target ?? this._currentCell?.closest('tr')
+    const table = row?.closest('table') ?? this.activeTable
     if (!row || !table) return
     if (table.querySelectorAll('tr').length <= 1) { this._deleteTable(); return }
 
@@ -3561,15 +3577,17 @@ export class TableInserter {
       if (dropTarget) {
         dropTarget.before ? dropTarget.el.before(row) : dropTarget.el.after(row)
       }
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
       this._rowDrag = false
       this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
       this._updateDelBtns()
     }
 
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
   }
 
   _startColDrag(e) {
@@ -3624,15 +3642,17 @@ export class TableInserter {
       if (dropIdx !== null && dropIdx !== colIdx && dropIdx !== colIdx + 1) {
         this._moveColumn(table, colIdx, dropIdx)
       }
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
       this._colDrag = false
       this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
       this._updateDelBtns()
     }
 
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
   }
 
   /**
@@ -3895,8 +3915,85 @@ export class TableInserter {
     }
   }
 
+  // ── スワイプで行を削除（指の環境だけ）───────────────────────────────────
+  //
+  // 基本は「−」ボタン。これは【追加の近道】で、18px の丸を指で正確に狙うのが
+  // 辛い環境のための逃げ道。
+  // ⚠ pointerType === 'touch' のときだけ動かす。マウスの横ドラッグは本文の範囲
+  //   選択なので、奪うと文字が選べなくなる。
+  // ⚠ 横スクロールする表では乗っ取らない（表を横に送るジェスチャと衝突する）。
+  // ⚠ 縦の動きが勝っていたらページスクロールに譲る。方向が決まるまで
+  //   preventDefault しない（判定前に潰すとスクロールが効かなくなる）。
+  // ⚠ 閲覧モードでは動かさない（contenteditable が切れていることで判定する）。
+  _bindRowSwipe() {
+    const MIN = 12          // ここまで動いたら「横に振っている」と見なす
+    let st = null           // { row, x0, y0, w, engaged, pointerId }
+
+    const reset = (row, animate) => {
+      if (!row) return
+      row.style.transition = animate ? 'transform .18s ease, opacity .18s ease' : ''
+      row.style.transform  = ''
+      row.style.opacity    = ''
+      if (animate) setTimeout(() => { row.style.transition = '' }, 200)
+    }
+
+    this._onSwipeStart = (e) => {
+      if (e.pointerType !== 'touch' || !this.wysiwyg.isContentEditable) return
+      const row = e.target.closest?.('tr')
+      if (!row || !this.wysiwyg.contains(row)) return
+      const table = row.closest('table')
+      // 横スクロールできる表＝横ジェスチャは「表を送る」ためのもの
+      const scroller = table?.parentElement
+      if (scroller && scroller.scrollWidth > scroller.clientWidth + 1) return
+      if (table && table.querySelectorAll('tr').length <= 1) return   // 最後の 1 行は消さない
+      st = { row, x0: e.clientX, y0: e.clientY, w: row.getBoundingClientRect().width,
+             engaged: false, pointerId: e.pointerId }
+    }
+
+    this._onSwipeMove = (e) => {
+      if (!st || e.pointerId !== st.pointerId) return
+      const dx = e.clientX - st.x0
+      const dy = e.clientY - st.y0
+      if (!st.engaged) {
+        if (Math.abs(dy) > Math.abs(dx)) { st = null; return }   // 縦 = スクロール
+        if (Math.abs(dx) < MIN) return
+        st.engaged = true
+        st.row.style.transition = ''
+      }
+      e.preventDefault()                       // 以降はキャレット移動もスクロールもさせない
+      const shift = Math.min(0, dx)            // 左方向だけ
+      st.row.style.transform = `translateX(${shift}px)`
+      st.row.style.opacity   = String(Math.max(0.25, 1 - Math.abs(shift) / st.w))
+    }
+
+    this._onSwipeEnd = (e) => {
+      if (!st || (e.pointerId !== undefined && e.pointerId !== st.pointerId)) return
+      const { row } = st
+      const done = st.engaged &&
+        Math.abs(Math.min(0, e.clientX - st.x0)) >= Math.max(80, st.w * 0.3)
+      st = null
+      if (!done) { reset(row, true); return }
+      // 消す前に画面外まで送る（消えたことが分かる）。戻したいときは Undo。
+      row.style.transition = 'transform .15s ease, opacity .15s ease'
+      row.style.transform  = `translateX(-${Math.round(row.getBoundingClientRect().width)}px)`
+      row.style.opacity    = '0'
+      setTimeout(() => {
+        row.style.cssText = ''       // 消えなかったとき（Undo 後）に備えて必ず戻す
+        this._deleteRow(row)
+      }, 150)
+    }
+
+    this.wysiwyg.addEventListener('pointerdown', this._onSwipeStart)
+    this.wysiwyg.addEventListener('pointermove', this._onSwipeMove, { passive: false })
+    this.wysiwyg.addEventListener('pointerup', this._onSwipeEnd)
+    this.wysiwyg.addEventListener('pointercancel', () => { if (st) { reset(st.row, true); st = null } })
+  }
+
   destroy() {
     document.removeEventListener('mousemove', this._onMouseMove)
+    this.wysiwyg.removeEventListener('pointerdown', this._onSwipeStart)
+    this.wysiwyg.removeEventListener('pointermove', this._onSwipeMove)
+    this.wysiwyg.removeEventListener('pointerup', this._onSwipeEnd)
     this.container.remove()
   }
 }
@@ -6382,6 +6479,7 @@ export class KuroEditor {
     // Pass wysiwyg as constraint: popm stays within its horizontal bounds
     this.popm = new PopupMenu(this.root, this.wysiwyg)
     this.popm._editor = this
+    this.tableInserter._editor = this   // ボタンを mmenu の上に置かないため
     // Provide colour handlers (DOM-based, no execCommand selection side-effects)
     this.popm.setClearColorFn(() => this._clearColor())
     this.popm.setApplyColorFn((color) => this._applyColor(color))
