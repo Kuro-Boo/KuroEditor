@@ -110,7 +110,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.31.0'
+export const VERSION = '2.31.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -3969,8 +3969,12 @@ export class TableInserter {
     this._onSwipeEnd = (e) => {
       if (!st || (e.pointerId !== undefined && e.pointerId !== st.pointerId)) return
       const { row } = st
+      // しきい値は【行幅の 50%・最低 120px】。一般的な実装（Android の
+      // ItemTouchHelper / Compose の SwipeToDismiss が 0.5、Flutter の
+      // Dismissible が 0.4）に合わせた重さで、うっかり触れた程度では消えない。
+      // ⚠ 軽くすると「意図せず本文が消える」— 消えるより残るほうが安全。
       const done = st.engaged &&
-        Math.abs(Math.min(0, e.clientX - st.x0)) >= Math.max(80, st.w * 0.3)
+        Math.abs(Math.min(0, e.clientX - st.x0)) >= Math.max(120, st.w * 0.5)
       st = null
       if (!done) { reset(row, true); return }
       // 消す前に画面外まで送る（消えたことが分かる）。戻したいときは Undo。

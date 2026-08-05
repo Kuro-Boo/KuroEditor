@@ -65,6 +65,14 @@ describe('表 — スマホでの操作', () => {
     expect(rows(ed)).toBe('A1,A3')
   })
 
+  it('半分に届かないスワイプでは消さない（行幅 340 → しきい値 170）', async () => {
+    const ed = makeEditor(TABLE)
+    measurable(ed, 340)
+    swipe(ed.wysiwyg.querySelector('#a2'), { dx: -150 })
+    await new Promise((r) => setTimeout(r, 220))
+    expect(rows(ed)).toBe('A1,A2,A3')
+  })
+
   it('少しだけ動かしたときは消さない（誤操作で本文を失わせない）', async () => {
     const ed = makeEditor(TABLE)
     measurable(ed)
