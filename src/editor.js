@@ -112,7 +112,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.33.3'
+export const VERSION = '2.33.4'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -8269,24 +8269,8 @@ export class KuroEditor {
     const range      = sel.getRangeAt(0)
     const savedRange = range.cloneRange()
 
-    // Collect every matching list that intersects the selection
-    const lists = []
-    const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_ELEMENT, null)
-    let node = walker.nextNode()
-    while (node) {
-      if (node.tagName === listTag && range.intersectsNode(node)) lists.push(node)
-      node = walker.nextNode()
-    }
-
-    // Fallback: walk up from the caret to find the nearest ancestor list
-    if (lists.length === 0) {
-      let n = range.startContainer
-      if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
-      while (n && n !== this.wysiwyg) {
-        if (n.tagName === listTag) { lists.push(n); break }
-        n = n.parentElement
-      }
-    }
+    // 対象は【選択がかかっている項目のリスト】だけ（祖先のリストは巻き込まない）
+    const lists = this._listsInSelection(listTag)
 
     for (const listEl of lists) {
       const parent = listEl.parentNode
@@ -8295,8 +8279,22 @@ export class KuroEditor {
       for (const li of Array.from(listEl.children)) {
         if (li.tagName !== 'LI') continue
         const p = document.createElement('p')
-        while (li.firstChild) p.appendChild(li.firstChild)
+        // ⚠ 子リストを <p> の中へ入れないこと。<p> の中に <ul> は置けず、
+        //   <p>親<p>子</p></p> のような壊れた HTML になる。子リストは段落の
+        //   【次】に出して階層を保つ。
+        const subLists = []
+        while (li.firstChild) {
+          const child = li.firstChild
+          if (child.nodeType === Node.ELEMENT_NODE &&
+              (child.tagName === 'UL' || child.tagName === 'OL')) {
+            subLists.push(child)
+            li.removeChild(child)
+          } else {
+            p.appendChild(child)
+          }
+        }
         parent.insertBefore(p, listEl)
+        for (const sub of subLists) parent.insertBefore(sub, listEl)
       }
       listEl.remove()
     }
@@ -8335,33 +8333,34 @@ export class KuroEditor {
     if (!sel?.rangeCount) return
     const range = sel.getRangeAt(0)
 
-    const BLOCKS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'BLOCKQUOTE', 'PRE'])
+    // ── リスト化する対象は【選択がかかっている行】────────────────────────
+    // ⚠ 「本文直下のブロック」まで遡ってはいけない。コールアウトや角丸ボックスの
+    //   中の段落を選ぶと、遡った先は【枠そのもの】なので、枠ごと 1 個の項目に
+    //   なってしまう（＝中の文章ではなくブロック全体がリストになる不具合）。
+    //   Tab の字下げと同じ語彙（_linesInSelection）で「行」を拾い、その行が
+    //   居る場所（枠の中なら枠の中）にリストを組む。
+    let targets = this._linesInSelection().filter((el) => el.tagName !== 'LI')
 
-    // ── Helper: walk up to find the direct child of wysiwyg ──────────────────
-    const topBlock = (node) => {
-      let el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node
-      while (el && el.parentElement !== this.wysiwyg) el = el.parentElement
-      return (el && el !== this.wysiwyg) ? el : null
-    }
+    // セルは行ではなく器。セルの【中身】をリストにする（<tr> の直下に <ul> は置けない）
+    targets = targets.flatMap((el) => {
+      if (el.tagName !== 'TD' && el.tagName !== 'TH') return [el]
+      const p = document.createElement('p')
+      while (el.firstChild) p.appendChild(el.firstChild)
+      el.appendChild(p)
+      return [p]
+    })
 
-    // ── Collect all top-level blocks from selection start to end ─────────────
-    // Walk siblings between startBlock and endBlock (inclusive) instead of
-    // relying on intersectsNode, which can miss intermediate blocks.
-    const startBlock = topBlock(range.startContainer)
-    const endBlock   = topBlock(range.endContainer)
-
-    const targets = []
-    if (startBlock) {
-      let el = startBlock
-      while (el) {
-        if (el.nodeType === Node.ELEMENT_NODE && BLOCKS.has(el.tagName)) targets.push(el)
-        if (el === endBlock) break
-        el = el.nextElementSibling
+    // 連続していない行（別の枠にまたがる選択など）は、まとまりごとに分けて扱えないので
+    // 先頭のまとまりだけを対象にする。混ぜて 1 つのリストにすると枠をまたいで壊れる。
+    if (targets.length > 1) {
+      const head = [targets[0]]
+      for (let i = 1; i < targets.length; i++) {
+        if (targets[i].parentElement === head[0].parentElement &&
+            head[head.length - 1].nextElementSibling === targets[i]) head.push(targets[i])
+        else break
       }
+      targets = head
     }
-
-    // Fallback: collapsed caret or both ends in the same block
-    if (targets.length === 0 && startBlock) targets.push(startBlock)
 
     // Last resort: no block containers — wrap loose content in a <p>
     if (targets.length === 0) {
@@ -8414,28 +8413,14 @@ export class KuroEditor {
       if (!sel?.rangeCount) return
       range = sel.getRangeAt(0)
     }
-    const BLOCKS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5',
-                             'LI', 'TD', 'TH', 'BLOCKQUOTE', 'PRE'])
-    const blocks = []
+    // ⚠ 対象は【選択がかかっている行】。intersectsNode で拾うと選択は祖先とも
+    //   交差するので、コールアウトの中の段落を選んだだけで枠にも text-align が
+    //   書かれ、枠の中の【他の行まで】寄ってしまう（Tab の字下げと同じ罠）。
+    const blocks = this._linesInSelection(range)
 
-    // Walk the wysiwyg subtree and collect blocks that intersect the selection
-    const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_ELEMENT, null)
-    let node = walker.nextNode()
-    while (node) {
-      if (BLOCKS.has(node.tagName) && range.intersectsNode(node)) {
-        blocks.push(node)
-      }
-      node = walker.nextNode()
-    }
-
-    // Fallback: walk up from caret to find the nearest block ancestor
     if (blocks.length === 0) {
-      let n = range.startContainer
-      if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
-      while (n && n !== this.wysiwyg) {
-        if (BLOCKS.has(n.tagName)) { blocks.push(n); break }
-        n = n.parentElement
-      }
+      const line = this._nearestLine(range.startContainer)
+      if (line) blocks.push(line)
       // Last resort: apply to the wysiwyg container itself
       if (blocks.length === 0) blocks.push(this.wysiwyg)
     }
@@ -8554,12 +8539,20 @@ export class KuroEditor {
       return
     }
 
-    // ── Wrap the current top-level block in a new callout ──────────────────
-    // Use the wysiwyg's direct child so nested elements (e.g. an <li>) end up
-    // with their whole container inside the callout, not partially.
-    let block = range.startContainer
-    if (block.nodeType === Node.TEXT_NODE) block = block.parentElement
-    while (block && block.parentElement !== this.wysiwyg) block = block.parentElement
+    // ── 囲む対象は【キャレットのある行】────────────────────────────────
+    // ⚠ 本文直下のブロックまで遡ってはいけない。角丸ボックスの中の段落で押すと
+    //   遡った先はボックスそのもので、【ボックス全体】がコールアウトに入る。
+    //   行の居る場所（枠の中なら枠の中）で囲むのが正しい。
+    let block = this._nearestLine(range.startContainer)
+    // リスト項目は【リストごと】囲む（項目 1 つだけ囲むとリストが分断される）
+    if (block?.tagName === 'LI') block = block.parentElement
+    // セルは器なので、セルの中身を段落にまとめてから囲む
+    if (block?.tagName === 'TD' || block?.tagName === 'TH') {
+      const p = document.createElement('p')
+      while (block.firstChild) p.appendChild(block.firstChild)
+      block.appendChild(p)
+      block = p
+    }
     if (!block || block === this.wysiwyg) return
 
     const wrap = document.createElement('div')
@@ -8750,10 +8743,10 @@ export class KuroEditor {
    *   選択に触れているか」で行い、そのうえで祖先も選ばれている要素は落とす
    *   （親を動かせば中身は一緒に動くので、両方処理すると二重に動く）。
    */
-  _linesInSelection() {
+  _linesInSelection(explicitRange = null) {
     const sel = window.getSelection()
-    if (!sel?.rangeCount) return []
-    const range = sel.getRangeAt(0)
+    const range = explicitRange ?? (sel?.rangeCount ? sel.getRangeAt(0) : null)
+    if (!range) return []
     const hit = (node) => { try { return range.intersectsNode(node) } catch { return false } }
     const ownLineSelected = (el) => {
       for (const c of el.childNodes) {
@@ -8984,25 +8977,13 @@ export class KuroEditor {
     const sel = window.getSelection()
     if (!sel?.rangeCount) return
     const range  = sel.getRangeAt(0)
-    const BLOCKS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5',
-                             'LI', 'TD', 'TH', 'BLOCKQUOTE', 'PRE'])
-    const blocks = []
+    // ⚠ align と同じ理由で【行】だけを対象にする（枠に line-height を書くと
+    //   枠の中の他の行まで行間が変わる）。
+    const blocks = this._linesInSelection(range)
 
-    const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_ELEMENT, null)
-    let node = walker.nextNode()
-    while (node) {
-      if (BLOCKS.has(node.tagName) && range.intersectsNode(node)) blocks.push(node)
-      node = walker.nextNode()
-    }
-
-    // Fallback: nearest block ancestor
     if (blocks.length === 0) {
-      let n = range.startContainer
-      if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
-      while (n && n !== this.wysiwyg) {
-        if (BLOCKS.has(n.tagName)) { blocks.push(n); break }
-        n = n.parentElement
-      }
+      const line = this._nearestLine(range.startContainer)
+      if (line) blocks.push(line)
       if (blocks.length === 0) blocks.push(this.wysiwyg)
     }
 
@@ -9093,26 +9074,27 @@ export class KuroEditor {
 
   /** 選択範囲に交差する <ul> / <ol> をすべて（文書順で）。 */
   _listsInSelection(tag) {
+    // ⚠ intersectsNode で <ul>/<ol> を拾ってはいけない。入れ子の子項目を選ぶと
+    //   【祖先のリストにも交差する】ので、子項目で「解除」しただけで親リストまで
+    //   マーカーが消える／段落に戻る（実測: 子を解除したら 3 項目とも段落化した）。
+    //   選択がかかっている【項目】から、その項目が属するリストだけを取る。
+    const out = []
+    for (const li of this._listItemsInSelection()) {
+      const list = li.parentElement
+      if (list?.tagName === tag && !out.includes(list)) out.push(list)
+    }
+    if (out.length) return out
+
+    // 折りたたみキャレット等で項目が拾えなければ、上へ辿って最も近い 1 つ
     const sel = window.getSelection()
     if (!sel?.rangeCount) return []
-    const range = sel.getRangeAt(0)
-    const out = []
-    const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_ELEMENT, null)
-    let n = walker.nextNode()
-    while (n) {
-      if (n.tagName === tag && range.intersectsNode(n)) out.push(n)
-      n = walker.nextNode()
+    let x = sel.getRangeAt(0).startContainer
+    if (x.nodeType === Node.TEXT_NODE) x = x.parentElement
+    while (x && x !== this.wysiwyg) {
+      if (x.tagName === tag) return [x]
+      x = x.parentElement
     }
-    // 折りたたみキャレット等で拾えなければ、上へ辿って最も近い 1 つ
-    if (out.length === 0) {
-      let x = range.startContainer
-      if (x.nodeType === Node.TEXT_NODE) x = x.parentElement
-      while (x && x !== this.wysiwyg) {
-        if (x.tagName === tag) { out.push(x); break }
-        x = x.parentElement
-      }
-    }
-    return out
+    return []
   }
 
   /**
@@ -10264,11 +10246,15 @@ export class KuroEditor {
     // previous sibling is the new box.
     const sel = window.getSelection()
     if (!sel?.rangeCount) return
+    // ⚠ 「本文直下まで遡る」で探さないこと。コールアウト等の枠の中に入れたときは
+    //   遡った先が枠になり、新しいボックスを見失う（＝設定メニューが出ない）。
     let n = sel.getRangeAt(0).startContainer
-    while (n && n.parentNode && n.parentNode !== this.wysiwyg) n = n.parentNode
-    const box = n?.classList?.contains('kuro-roundbox')
-      ? n
-      : (n?.previousElementSibling?.classList?.contains('kuro-roundbox') ? n.previousElementSibling : null)
+    if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
+    const box = n?.closest?.('.kuro-roundbox')
+      ?? (n?.previousElementSibling?.classList?.contains('kuro-roundbox')
+        ? n.previousElementSibling
+        : n?.parentElement?.previousElementSibling?.classList?.contains('kuro-roundbox')
+          ? n.parentElement.previousElementSibling : null)
     if (box) {
       const p = box.querySelector('p') || box
       const r = document.createRange()

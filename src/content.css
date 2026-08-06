@@ -437,6 +437,27 @@ h5[id^='kuro-h-'] {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
 }
 
+/* 枠の中の最初 / 最後の子の margin は落とす。
+   ⚠ 枠は自前の padding を持つので、子の margin がそこへ【そのまま足される】。
+     見出しは margin-top が 1.25rem あるため、コールアウトの 1 行目が見出しだと
+     アイコンの右に「謎の空白」が空く（段落は .25rem なので気づかれず、
+     「出るときと出ないときがある」に見える）。margin は【兄弟との間隔】であって
+     枠との間隔ではない、という原則どおりに 0 にする。 */
+.kuro-content .kuro-callout > :first-child,
+.kuro-content .kuro-roundbox > :first-child,
+.kuro-content blockquote > :first-child,
+.kuro-content td > :first-child,
+.kuro-content th > :first-child {
+  margin-top: 0;
+}
+.kuro-content .kuro-callout > :last-child,
+.kuro-content .kuro-roundbox > :last-child,
+.kuro-content blockquote > :last-child,
+.kuro-content td > :last-child,
+.kuro-content th > :last-child {
+  margin-bottom: 0;
+}
+
 /* Callout / admonition blocks — icon column on the left + left accent bar */
 .kuro-content .kuro-callout {
   margin: 1rem 0;
