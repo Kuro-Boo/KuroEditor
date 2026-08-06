@@ -292,6 +292,40 @@ describe('resolveEmbedUrl', () => {
   })
 })
 
+// ─── Google マップ ────────────────────────────────────────────────────────────
+// 専用記法（[[map:…]]）は作らず、動画と同じ「URL を貼れば埋め込み」に乗せる。
+// これでサイズ・寄せの指定とイメージメニューでの大きさ変更がそのまま効く。
+describe('resolveEmbedUrl — Google マップ', () => {
+  it('公式の埋め込み URL（共有 → 地図を埋め込む）はそのまま使う', () => {
+    const u = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3'
+    expect(resolveEmbedUrl(u)).toBe(u)
+  })
+
+  it('座標つきの地図 URL は座標とズームを引き継ぐ', () => {
+    expect(resolveEmbedUrl('https://www.google.com/maps/place/X/@35.6812,139.7671,17z/data=!3m1'))
+      .toBe('https://maps.google.com/maps?q=35.6812,139.7671&z=17&output=embed')
+  })
+
+  it('q= の地図 URL は検索語を引き継ぐ（google.co.jp などでも）', () => {
+    expect(resolveEmbedUrl('https://maps.google.co.jp/maps?q=%E6%9D%B1%E4%BA%AC%E9%A7%85'))
+      .toBe('https://maps.google.com/maps?q=%E6%9D%B1%E4%BA%AC%E9%A7%85&output=embed')
+  })
+
+  it('/maps/place/名前 の "+" は空白として扱う（検索語を変えない）', () => {
+    expect(resolveEmbedUrl('https://www.google.com/maps/place/Tokyo+Tower/'))
+      .toBe('https://maps.google.com/maps?q=Tokyo%20Tower&output=embed')
+  })
+
+  it('短縮 URL は埋め込みにしない（展開できない＝リンクのまま）', () => {
+    expect(resolveEmbedUrl('https://maps.app.goo.gl/abc123')).toBeNull()
+    expect(resolveEmbedUrl('https://goo.gl/maps/abc123')).toBeNull()
+  })
+
+  it('Google でも地図以外は埋め込みにしない', () => {
+    expect(resolveEmbedUrl('https://www.google.com/search?q=foo')).toBeNull()
+  })
+})
+
 // ─── createElement ────────────────────────────────────────────────────────────
 
 describe('createElement', () => {
