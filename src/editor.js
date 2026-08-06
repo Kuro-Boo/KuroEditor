@@ -34,6 +34,7 @@ import {
   parseMediaParams,
   buildMediaAttr,
   resolveEmbedUrl,
+  isMapEmbed,
   normalizeMediaKinds,
   VIDEO_EXT_RE,
   AUDIO_EXT_RE,
@@ -81,6 +82,7 @@ export {
   renderSpecialLinks,
   parseMediaParams,
   resolveEmbedUrl,
+  isMapEmbed,
   normalizeMediaKinds,
 }
 export { mediaKindFromSlug } from './kuro-links.js'
@@ -110,7 +112,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.33.0'
+export const VERSION = '2.33.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4890,6 +4892,24 @@ export class LinkEditPopup {
    * （出したままだと打ててしまい、1 文字入力した時点で黙ってテキストリンクに
    *   戻る＝チェックが入ったままなのにカードでない、という食い違いが起きる）。
    */
+  /**
+   * リンクとして書く代わりに、その位置へ地図を埋め込む。
+   * 新規なら作りかけの位置へ、既存リンクの編集ならその <a> を置き換える。
+   */
+  _insertMapInstead(url) {
+    const ed = this.editor
+    const range = document.createRange()
+    if (this.activeLink?.isConnected) range.selectNode(this.activeLink)  // 置き換え
+    else if (this._pendingRange)      range.setStart(this._pendingRange.startContainer,
+                                                    this._pendingRange.startOffset)
+    else return
+    if (!this.activeLink?.isConnected) range.collapse(true)
+    ed._savedRange = range          // _insertMediaURL はここへ挿す
+    this._pendingRange = null
+    this.close()
+    ed._insertMediaURL(url)
+  }
+
   _syncCardUi(isCard) {
     if (this._cardToggle) this._cardToggle.checked = isCard
     // 表示テキストを打っている最中に空にした場合（それもカード化する）は、
@@ -5037,6 +5057,16 @@ export class LinkEditPopup {
   _apply() {
     const text = this._textInput.value.trim()
     const url  = this._urlInput.value.trim()
+
+    // ── Google マップは【リンクではなく地図】として置く ──────────────────
+    // 地図の URL は表題を付ける必要も、URL の一部を書き換える用途も無い。
+    // リンク欄に貼られても埋め込みへ寄せたほうが「思ったとおり」になる。
+    // ⚠ 表示テキストが付いているときは触らない — 「地図はこちら」のような
+    //   テキストリンクを壊さない（名前を付けた＝リンクにしたい、という意思表示）。
+    if (url && isMapEmbed(resolveEmbedUrl(url) || '') && (!text || text === url)) {
+      this._insertMapInstead(url)
+      return
+    }
 
     let a = this.activeLink
     const fresh = !a

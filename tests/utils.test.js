@@ -13,6 +13,7 @@ import {
   buildTableGrid,
   parseMediaParams,
   resolveEmbedUrl,
+  isMapEmbed,
   VERSION,
   LINK_RE,
   readLinkParts,
@@ -319,6 +320,13 @@ describe('resolveEmbedUrl — Google マップ', () => {
   it('短縮 URL は埋め込みにしない（展開できない＝リンクのまま）', () => {
     expect(resolveEmbedUrl('https://maps.app.goo.gl/abc123')).toBeNull()
     expect(resolveEmbedUrl('https://goo.gl/maps/abc123')).toBeNull()
+  })
+
+  it('isMapEmbed は地図の埋め込みだけを true にする（動画と見分ける）', () => {
+    expect(isMapEmbed(resolveEmbedUrl('https://maps.google.co.jp/maps?q=x'))).toBe(true)
+    expect(isMapEmbed(resolveEmbedUrl('https://www.google.com/maps/embed?pb=!1m18'))).toBe(true)
+    expect(isMapEmbed(resolveEmbedUrl('https://youtu.be/dQw4w9WgXcQ'))).toBe(false)
+    expect(isMapEmbed(null)).toBe(false)
   })
 
   it('Google でも地図以外は埋め込みにしない', () => {
