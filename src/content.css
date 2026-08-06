@@ -87,6 +87,17 @@
    @apply Tailwind output.)
    ════════════════════════════════════════════════════════════════════════ */
 
+/* 長い URL などの「折り返せない連続 Latin 文字列」で本文が横に伸びるのを防ぐ。
+   日本語は任意位置で折れるので普段は問題にならないが、本文にベタ貼りされた
+   URL は既定では途中で折れず、スマホで【ページごと横スクロールできてしまう】
+   （実測: 92 字の URL が 375px 端末で本文カラムを 329px 超過）。
+   ⚠ break-word ではなく anywhere にすること。break-word は見た目だけ折り返し、
+     min-content 幅は単語のままなので、表のセルや flex の中では結局はみ出す。
+     anywhere は min-content も 1 文字まで縮むので、表の中の長い URL にも効く。 */
+.kuro-content {
+  overflow-wrap: anywhere;
+}
+
 /* Headings — h1=text-3xl … h5=text-base. */
 .kuro-content h1,
 h1[id^='kuro-h-'] {
