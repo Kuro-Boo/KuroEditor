@@ -469,7 +469,10 @@ h5[id^='kuro-h-'] {
 .kuro-content .kuro-callout::before {
   position: absolute;
   left: 0.875rem;
-  top: 0.625rem;
+  /* 上寄せではなく【上下の中央】に置く。1〜2 行の囲みでは上寄せだと記号だけが
+     浮いて見え、balance が悪い。絶対配置なので本文のレイアウトには影響しない。 */
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 1.25rem;
   line-height: 1;
 }
