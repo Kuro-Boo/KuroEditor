@@ -112,7 +112,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.34.1'
+export const VERSION = '2.35.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -153,6 +153,76 @@ const COLOR_GROUPS = [
     '#e9d5ff', '#c084fc', '#a855f7',
   ]},
 ]
+/**
+ * 浮遊メニューを「つまみ」でドラッグ移動できるようにする。
+ *
+ * どのメニューも本文の上に浮くので、編集したい場所に重なることがある。逃げ道が
+ * 無いと HTML タブへ行くしかないので、共通の小さなグリップ（⠿）を左端に置く。
+ *
+ * ⚠ **つかんでも文字の選択を解除しないこと**。popm は「選択がある間だけ出る」ので、
+ *   掴んだ瞬間に選択が外れると popm ごと消えて移動できない。他のメニューでも、
+ *   選択が消えるとボタンが効かなくなる。そのために:
+ *     ① mousedown を preventDefault する（contenteditable の選択を潰すのはこれ。
+ *        pointerdown を潰しても互換 mouse イベントは飛んでくるので両方要る）
+ *     ② グリップは user-select: none（掴んだ指でメニュー内の文字を選ばせない）
+ *     ③ フォーカスも移さない（focus が移ると selectionchange で popm が畳まれる）
+ * ⚠ pointer 系で書く（mousedown だけでは指で掴めない）。
+ *
+ * @param {HTMLElement} el      動かす対象のメニュー本体（position: fixed）
+ * @param {HTMLElement} handle  つまみ
+ * @param {() => void} [onDrag] 実際に動かしたときに呼ぶ（自動配置を止める用）
+ */
+export function bindFloaterDrag(el, handle, onDrag) {
+  let st = null
+  handle.style.touchAction = 'none'
+  handle.style.userSelect = 'none'
+  handle.style.webkitUserSelect = 'none'
+
+  // ① これが「選択を消さない」の本体。ボタン類が mousedown を潰しているのと同じ理由。
+  handle.addEventListener('mousedown', (e) => e.preventDefault())
+
+  const onMove = (e) => {
+    if (!st) return
+    e.preventDefault()
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const left = Math.max(4, Math.min(e.clientX - st.dx, window.innerWidth - w - 4))
+    const top  = Math.max(4, Math.min(e.clientY - st.dy, window.innerHeight - h - 4))
+    el.style.left = `${Math.round(left)}px`
+    el.style.top  = `${Math.round(top)}px`
+    onDrag?.()
+  }
+  const onUp = () => {
+    st = null
+    handle.classList.remove('kuro-drag-grip--active')
+    document.removeEventListener('pointermove', onMove)
+    document.removeEventListener('pointerup', onUp)
+    document.removeEventListener('pointercancel', onUp)
+  }
+  handle.addEventListener('pointerdown', (e) => {
+    const r = el.getBoundingClientRect()
+    st = { dx: e.clientX - r.left, dy: e.clientY - r.top }
+    handle.classList.add('kuro-drag-grip--active')
+    e.preventDefault()
+    document.addEventListener('pointermove', onMove, { passive: false })
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
+  })
+  return handle
+}
+
+/** つまみ（⠿）を作る。見た目は CSS（.kuro-drag-grip）。 */
+export function makeDragGrip(title = 'ドラッグでこのメニューを移動') {
+  return createElement('span', {
+    className: 'kuro-drag-grip',
+    html: '<svg width="6" height="16" viewBox="0 0 6 16" fill="currentColor" aria-hidden="true">' +
+      '<circle cx="1.5" cy="3" r="1.2"/><circle cx="4.5" cy="3" r="1.2"/>' +
+      '<circle cx="1.5" cy="8" r="1.2"/><circle cx="4.5" cy="8" r="1.2"/>' +
+      '<circle cx="1.5" cy="13" r="1.2"/><circle cx="4.5" cy="13" r="1.2"/></svg>',
+    attrs: { title, 'aria-hidden': 'true' },
+  })
+}
+
 /** 番号リストの「開始」で選べる上限。ドラム（select）に並べる数。 */
 const OL_START_MAX = 20
 
@@ -1263,6 +1333,8 @@ export class PopupMenu {
 
     // Main button row
     this._mainRow = createElement('div', { className: 'kuro-popm__main' })
+    // つまみ（左端）— 選択の上に重なったときに、選択を消さずどけられるように
+    this._mainRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
     this.el.appendChild(this._mainRow)
 
     // Colour picker sub-panel (shown inline beneath buttons)
@@ -2327,6 +2399,10 @@ export class PopupMenu {
     const _sel = window.getSelection()
     if (_sel?.rangeCount) this._activeRange = _sel.getRangeAt(0).cloneRange()
 
+    // つまみで動かした後は、その位置に留める（選択のたびに戻ってきたら
+    // どけた意味がない）。閉じれば自動配置に戻る。
+    if (this._dragged) { this.el.classList.add('kuro-popm--visible'); return }
+
     // ── Width constraint ───────────────────────────────────────────────────
     // popm を pane (constraintEl) の幅に合わせて max-width 制約をかける。
     // 中身ボタン群は既に flex-wrap なので、 全ボタンが横並びに入りきらない
@@ -2393,6 +2469,7 @@ export class PopupMenu {
 
   /** Hide popup and all sub-panels. */
   hide() {
+    this._dragged = false   // 次に出すときは自動配置から
     this.el.classList.remove('kuro-popm--visible')
     this._hideColors()
     this._hideSizes()
@@ -2488,6 +2565,8 @@ export class RoundboxMenu {
       className: 'kuro-roundbox-menu__label',
       html: 'BOX設定',
     }))
+    this.el.insertBefore(
+      bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }), this.el.firstChild)
 
     // Width select
     this._widthSel = createElement('select', {
@@ -2587,6 +2666,7 @@ export class RoundboxMenu {
   }
 
   deactivate() {
+    this._dragged = false   // 次に出すときは自動配置から
     this._box = null
     this.el.style.display = 'none'
     this._editor._setRoundboxBtnActive(false)
@@ -2596,6 +2676,7 @@ export class RoundboxMenu {
 
   _position() {
     if (!this._box) return
+    if (this._dragged) return   // 手で動かした後は自動配置しない
     const boxRect = this._box.getBoundingClientRect()
     const menuH   = this.el.offsetHeight || 32
     const menuW   = this.el.offsetWidth  || 240
@@ -2698,13 +2779,15 @@ export class TableManager {
     // ⚠ ラベルは【つかんで動かす取っ手】も兼ねる。表の上に重なって編集の邪魔に
     //   なることがあるが、ボタンはどれも押した瞬間に効いてしまうので、
     //   「押しても何も起きない場所」＝ラベルを取っ手にする。
+    this._mainRow.appendChild(
+      bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
     this._dragHandle = createElement('span', {
       className: 'kuro-table-menu__label',
       html: 'TBL設定',
       attrs: { title: 'ドラッグでこのメニューを移動' },
     })
     this._mainRow.appendChild(this._dragHandle)
-    this._bindMenuDrag(this._dragHandle)
+    bindFloaterDrag(this.el, this._dragHandle, () => { this._dragged = true })
     this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
 
     // Background color button (colored square icon + label)
@@ -2988,49 +3071,6 @@ export class TableManager {
       this.el.style.top  = `${top}px`
       this.el.style.left = `${left}px`
     }
-  }
-
-  /**
-   * メニュー自体をつかんで動かす（取っ手 = 「TBL設定」ラベル）。
-   *
-   * 表の上に重なって編集できない、という状況の逃げ道。動かしたあとは自動配置を
-   * 止める（せっかくどけたのに次のスクロールで戻ってきたら意味がない）。
-   * 別の表へ移ったとき・畳んだときに自動配置へ戻す（_resetDragged）。
-   *
-   * ⚠ pointer 系で書く。mousedown だけではタッチで掴めない。
-   */
-  _bindMenuDrag(handle) {
-    let st = null
-    handle.style.cursor = 'grab'
-    handle.style.touchAction = 'none'   // 指の移動をスクロールに取られない
-
-    const onMove = (e) => {
-      if (!st) return
-      e.preventDefault()
-      const w = this.el.offsetWidth
-      const h = this.el.offsetHeight
-      const left = Math.max(4, Math.min(e.clientX - st.dx, window.innerWidth - w - 4))
-      const top  = Math.max(4, Math.min(e.clientY - st.dy, window.innerHeight - h - 4))
-      this.el.style.left = `${Math.round(left)}px`
-      this.el.style.top  = `${Math.round(top)}px`
-      this._dragged = true
-    }
-    const onUp = () => {
-      st = null
-      handle.style.cursor = 'grab'
-      document.removeEventListener('pointermove', onMove)
-      document.removeEventListener('pointerup', onUp)
-      document.removeEventListener('pointercancel', onUp)
-    }
-    handle.addEventListener('pointerdown', (e) => {
-      const r = this.el.getBoundingClientRect()
-      st = { dx: e.clientX - r.left, dy: e.clientY - r.top }
-      handle.style.cursor = 'grabbing'
-      e.preventDefault()
-      document.addEventListener('pointermove', onMove, { passive: false })
-      document.addEventListener('pointerup', onUp)
-      document.addEventListener('pointercancel', onUp)
-    })
   }
 
   /** 自動配置に戻す（別の表へ移ったとき・畳んだとき） */
@@ -4195,6 +4235,7 @@ export class LinePopupMenu {
   _build() {
     // ── Scope row ─────────────────────────────────────────────────────────
     const scopeRow = createElement('div', { className: 'kuro-line-popm__row kuro-line-popm__scope-row' })
+    scopeRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
 
     const scopes = [
       { value: 'outer',  title: '外枠', icon: `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>` },
@@ -4336,6 +4377,8 @@ export class LinePopupMenu {
     this.el.classList.add('kuro-line-popm--visible')
 
     // Measure & position
+    // 手で動かした後は位置を触らない（どけた場所に留める）
+    if (this._dragged) return
     requestAnimationFrame(() => {
       const aRect = anchorEl.getBoundingClientRect()
       const popW  = this.el.offsetWidth  || 220
@@ -4372,6 +4415,7 @@ export class LinePopupMenu {
   }
 
   close() {
+    this._dragged = false   // 次に開くときは自動配置から
     this.el.classList.remove('kuro-line-popm--visible')
     this._target = null
   }
@@ -5736,6 +5780,7 @@ export class ImageMenu {
   _build() {
     // ── Size row ────────────────────────────────────────────────────────────
     this._sizeRow = createElement('div', { className: 'kuro-image-menu__row' })
+    this._sizeRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
     for (const size of IMAGE_SIZE_OPTIONS) {
       const btn = createElement('button', {
         className: 'kuro-image-menu__btn',
@@ -5971,6 +6016,8 @@ export class ImageMenu {
     }
     this._hideLinkPanel()
 
+    // 手で動かした後は位置を触らない
+    if (this._dragged) { this.el.classList.add('kuro-image-menu--visible'); return }
     requestAnimationFrame(() => {
       const rect  = figureEl.getBoundingClientRect()
       const menuH = this.el.offsetHeight || 72
@@ -5990,6 +6037,7 @@ export class ImageMenu {
   }
 
   deactivate() {
+    this._dragged = false   // 次に出すときは自動配置から
     if (this.activeEl) {
       this.activeEl.classList.remove('kuro-media-wrap--selected')
     }

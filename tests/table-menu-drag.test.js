@@ -76,6 +76,47 @@ describe('表メニュー', () => {
     expect(tm._dragged).toBe(false)             // 別の表なら自動配置へ戻す
   })
 
+  // ── 共通のつまみ（全浮遊メニュー）──────────────────────────────────────
+  it('主要な浮遊メニューすべてに「つまみ」がある', () => {
+    const ed = makeEditor(TABLE)
+    const has = (el) => !!el.querySelector('.kuro-drag-grip')
+    expect(has(ed.popm.el)).toBe(true)             // 文字装飾
+    expect(has(ed.tableManager.el)).toBe(true)     // 表
+    expect(has(ed.linePopupMenu.el)).toBe(true)    // 罫線
+    expect(has(ed.imageMenu.el)).toBe(true)        // 画像
+    expect(has(ed.roundboxMenu.el)).toBe(true)     // BOX設定
+  })
+
+  it('つまみを掴んでも文字の選択が解除されない（mousedown を潰す）', () => {
+    const ed = makeEditor('<p id="t">選択する文章</p>')
+    // 選択を作る
+    const r = document.createRange()
+    r.selectNodeContents(ed.wysiwyg.querySelector('#t'))
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r)
+    const before = sel.toString()
+    expect(before.length).toBeGreaterThan(0)
+
+    const grip = ed.popm.el.querySelector('.kuro-drag-grip')
+    // ⚠ contenteditable の選択を潰すのは mousedown。ここが preventDefault
+    //   されていないと、掴んだ瞬間に選択が消えて popm ごと閉じる。
+    const md = new Event('mousedown', { bubbles: true, cancelable: true })
+    grip.dispatchEvent(md)
+    expect(md.defaultPrevented).toBe(true)
+
+    grip.dispatchEvent(pointer('pointerdown', { x: 50, y: 50 }))
+    document.dispatchEvent(pointer('pointermove', { x: 300, y: 400 }))
+    document.dispatchEvent(pointer('pointerup', { x: 300, y: 400 }))
+    expect(window.getSelection().toString()).toBe(before)   // 選択はそのまま
+    expect(ed.popm.el.style.left).not.toBe('')
+  })
+
+  it('つまみは選択できない要素にする（掴んだ指でメニュー内の文字を選ばせない）', () => {
+    const ed = makeEditor(TABLE)
+    const grip = ed.popm.el.querySelector('.kuro-drag-grip')
+    expect(grip.style.userSelect).toBe('none')
+    expect(grip.style.touchAction).toBe('none')
+  })
+
   it('罫線ポップアップもノート切り替えで畳む', () => {
     const ed = makeEditor(TABLE)
     ed.linePopupMenu.el.classList.add('kuro-line-popm--visible')

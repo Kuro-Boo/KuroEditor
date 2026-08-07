@@ -1137,6 +1137,17 @@
     @apply text-xs text-neutral-300;
   }
 
+  /* 浮遊メニュー共通の「つまみ」— 本文に重なったときに、どけるための取っ手。
+     ⚠ 掴んでも文字の選択を消さないこと（JS 側で mousedown を preventDefault）。
+     見た目は控えめに。押すボタンではないので、色もホバーも弱くする。 */
+  .kuro-drag-grip {
+    @apply flex items-center px-1 text-neutral-500 flex-shrink-0;
+    cursor: grab;
+    align-self: stretch;
+  }
+  .kuro-drag-grip:hover { @apply text-neutral-300; }
+  .kuro-drag-grip--active { cursor: grabbing; @apply text-indigo-400; }
+
   .kuro-table-menu__label {
     @apply text-xs font-semibold text-neutral-400 pl-1 pr-0.5;
     white-space: nowrap;
