@@ -112,7 +112,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.34.0'
+export const VERSION = '2.34.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -2695,7 +2695,16 @@ export class TableManager {
     // ── Main button row ──────────────────────────────────────────────────
     this._mainRow = createElement('div', { className: 'kuro-table-menu__main' })
 
-    this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__label', html: 'TBL設定' }))
+    // ⚠ ラベルは【つかんで動かす取っ手】も兼ねる。表の上に重なって編集の邪魔に
+    //   なることがあるが、ボタンはどれも押した瞬間に効いてしまうので、
+    //   「押しても何も起きない場所」＝ラベルを取っ手にする。
+    this._dragHandle = createElement('span', {
+      className: 'kuro-table-menu__label',
+      html: 'TBL設定',
+      attrs: { title: 'ドラッグでこのメニューを移動' },
+    })
+    this._mainRow.appendChild(this._dragHandle)
+    this._bindMenuDrag(this._dragHandle)
     this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
 
     // Background color button (colored square icon + label)
@@ -2886,6 +2895,8 @@ export class TableManager {
   /** Show toolbar anchored above (or below) the cursor position. */
   activate(table) {
     const wasActive = this.activeTable !== null
+    // 別の表へ移ったら自動配置に戻す（前の表でどけた位置を引きずらない）
+    if (this.activeTable !== table) this._resetDragged()
     this.activeTable = table
     requestAnimationFrame(() => {
       this._place()
@@ -2915,6 +2926,9 @@ export class TableManager {
     // で別ノートを読み込んだのに畳み忘れた古い参照)と、以降の getBoundingClientRect() は
     // 全て 0 を返し、位置計算が画面左上に集まってしまう。ここで確実に畳む。
     if (!this.activeTable?.isConnected) { this.deactivate(); return }
+    // 手で動かしたあとは自動配置しない（せっかくどけたのにスクロールで戻ってきたら
+    // 意味がない）。別の表へ移る / 畳むときに _resetDragged() で自動へ戻す。
+    if (this._dragged) return
     {
       const menuH = this.el.offsetHeight || 36
       const menuW = this.el.offsetWidth  || 200
@@ -2976,11 +2990,62 @@ export class TableManager {
     }
   }
 
+  /**
+   * メニュー自体をつかんで動かす（取っ手 = 「TBL設定」ラベル）。
+   *
+   * 表の上に重なって編集できない、という状況の逃げ道。動かしたあとは自動配置を
+   * 止める（せっかくどけたのに次のスクロールで戻ってきたら意味がない）。
+   * 別の表へ移ったとき・畳んだときに自動配置へ戻す（_resetDragged）。
+   *
+   * ⚠ pointer 系で書く。mousedown だけではタッチで掴めない。
+   */
+  _bindMenuDrag(handle) {
+    let st = null
+    handle.style.cursor = 'grab'
+    handle.style.touchAction = 'none'   // 指の移動をスクロールに取られない
+
+    const onMove = (e) => {
+      if (!st) return
+      e.preventDefault()
+      const w = this.el.offsetWidth
+      const h = this.el.offsetHeight
+      const left = Math.max(4, Math.min(e.clientX - st.dx, window.innerWidth - w - 4))
+      const top  = Math.max(4, Math.min(e.clientY - st.dy, window.innerHeight - h - 4))
+      this.el.style.left = `${Math.round(left)}px`
+      this.el.style.top  = `${Math.round(top)}px`
+      this._dragged = true
+    }
+    const onUp = () => {
+      st = null
+      handle.style.cursor = 'grab'
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
+    }
+    handle.addEventListener('pointerdown', (e) => {
+      const r = this.el.getBoundingClientRect()
+      st = { dx: e.clientX - r.left, dy: e.clientY - r.top }
+      handle.style.cursor = 'grabbing'
+      e.preventDefault()
+      document.addEventListener('pointermove', onMove, { passive: false })
+      document.addEventListener('pointerup', onUp)
+      document.addEventListener('pointercancel', onUp)
+    })
+  }
+
+  /** 自動配置に戻す（別の表へ移ったとき・畳んだとき） */
+  _resetDragged() { this._dragged = false }
+
   deactivate() {
-    if (!this.activeTable) return
-    this.activeTable = null
+    // ⚠ activeTable の有無で早期 return しないこと。ホストがノートを切り替えた
+    //   （setContent）直後などに「表は消えたのにメニューだけ残る」報告があった —
+    //   何らかの理由で activeTable が先に null になっていると、畳む処理ごと
+    //   飛ばされてしまう。表示を消すのは常に実行し、後始末だけ条件付きにする。
     this.el.classList.remove('kuro-table-menu--visible')
     this._hideColorPanel()
+    this._resetDragged()
+    if (!this.activeTable) return
+    this.activeTable = null
     document.removeEventListener('scroll', this._onScroll, { capture: true })
   }
 
@@ -10390,6 +10455,9 @@ export class KuroEditor {
     this.imageMenu.deactivate()
     this.roundboxMenu.deactivate()
     this.linkEditPopup.close()
+    this.linePopupMenu.close()   // 罫線ポップアップ（差し替え前の表を指したまま残る）
+    this.emojiPanel.hide()
+    this.mediaDialog?.hide?.()
     this._clearDirty()  // プログラムからの差し替えは「未保存の変更」ではない
     this._resetHistory()     // 新しい文書 — それ以前の手には undo で戻さない
     this._resyncBlockShadow() // W2: 新しい文書を shadow の基準に（load は onBlockChange を出さない）
