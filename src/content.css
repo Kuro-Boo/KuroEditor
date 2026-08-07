@@ -480,10 +480,12 @@ h5[id^='kuro-h-'] {
 .kuro-content .kuro-callout::before {
   position: absolute;
   left: 0.875rem;
-  /* 上寄せではなく【上下の中央】に置く。1〜2 行の囲みでは上寄せだと記号だけが
-     浮いて見え、balance が悪い。絶対配置なので本文のレイアウトには影響しない。 */
-  top: 50%;
-  transform: translateY(-50%);
+  /* 記号は【左上・1 行目の隣】。囲みが大きいと中央では紹介している文章から遠く
+     離れて浮くため（v2.33.5 で中央を試し、v2.33.7 で戻した）。Notion / GitHub の
+     アラート / Obsidian / Docusaurus も同じく上寄せ。
+     ⚠ 1 行目と綺麗に並ぶのは「枠の中の最初の子の margin を 0 にした」前提
+       （v2.33.4）。あれが無いと見出し始まりの囲みで記号だけ上に浮く。 */
+  top: 0.625rem;
   font-size: 1.25rem;
   line-height: 1;
 }
