@@ -112,7 +112,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.33.8'
+export const VERSION = '2.34.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -7453,6 +7453,37 @@ export class KuroEditor {
     const body = new DOMParser().parseFromString(markup, 'text/html').body
 
     const COLOR_PROPS = ['color', 'background', 'background-color', 'background-image']
+
+    // ── 貼り付けで残してよいものの許可リスト ────────────────────────────────
+    // ⚠ 除去は【禁止リスト】ではなく【許可リスト】で行うこと。外部の HTML が
+    //   持ち込む装飾は無数にあり（letter-spacing / word-spacing / text-indent /
+    //   white-space / box-shadow / transform …）、KuroEditor の UI からは直せない。
+    //   つまり一度入ると HTML タブでしか消せない＝書き手には手の出しようがない。
+    //   「このエディタが自分で書けるものだけ残す」なら、残ったものは必ず UI で
+    //   直せる、という保証になる。
+    // ⚠ color / background は許可リストにも入れない（下の COLOR_PROPS で明示除去）。
+    //   暗いテーマからのコピーが明るい公開ページで読めなくなるため。
+    const STYLE_ALLOW = new Set([
+      'font-size', 'font-family', 'font-weight', 'font-style',
+      'text-decoration', 'text-decoration-line',
+      'text-align', 'line-height', 'vertical-align',
+      'width', 'padding-left', 'margin-left',
+      '--kuro-marker-color',
+    ])
+    // 属性も同様に許可リスト。data-kuro-* / data-checked / data-gutter などの
+    // 「KuroEditor 自身が意味を持たせている」ものは別途通す（下の keepAttr）。
+    const ATTR_ALLOW = new Set([
+      'href', 'target', 'rel', 'title', 'src', 'alt', 'controls', 'loading',
+      'allow', 'allowfullscreen', 'frameborder',
+      'colspan', 'rowspan', 'scope', 'start', 'value',
+      'contenteditable', 'style', 'class', 'dir', 'lang',
+    ])
+    const keepAttr = (name) =>
+      ATTR_ALLOW.has(name) || name.startsWith('data-kuro') ||
+      name === 'data-checked' || name === 'data-gutter' ||
+      name === 'data-align' || name === 'data-width' || name === 'data-recipe' ||
+      name === 'data-recipe-version'
+
     // Chrome's "copy" serializes the element's ENTIRE computed style as
     // `<prop>: revert-layer` (hundreds of props) plus the real color — pure noise
     // that bloats saved HTML. Drop every CSS-wide-keyword declaration too.
@@ -7468,11 +7499,28 @@ export class KuroEditor {
       // ids are dropped here and re-minted by the block-id observer.
       el.removeAttribute('data-bid')
       el.removeAttribute('data-cbid')
+      // 許可リストに無い属性は落とす（外部サイトの id / aria / on* / 独自 data-* など）
+      for (const attr of [...el.attributes]) {
+        if (!keepAttr(attr.name)) el.removeAttribute(attr.name)
+      }
+      // class は kuro-* だけ残す（他所の CSS 前提のクラスは持ち込んでも効かず、
+      // ホストのスタイルと衝突するだけ）
+      if (el.hasAttribute('class')) {
+        const keep = [...el.classList].filter((c) => c.startsWith('kuro-'))
+        if (keep.length) el.setAttribute('class', keep.join(' '))
+        else el.removeAttribute('class')
+      }
       const st = el.style
       if (st && el.hasAttribute('style')) {
         for (const p of COLOR_PROPS) st.removeProperty(p)
-        for (const p of [...st]) {
-          if (NOISE_VALUES.has(st.getPropertyValue(p).trim())) st.removeProperty(p)
+        // ⚠ CSSStyleDeclaration をスプレッドで回さない（happy-dom は iterable ではなく
+        //   実行時に落ちる＝テストでしか気づけない差になる）。index で後ろから回せば、
+        //   途中で削除しても添字がずれない。
+        for (let i = st.length - 1; i >= 0; i--) {
+          const prop = st.item(i)
+          const v = st.getPropertyValue(prop).trim()
+          // 許可リスト外 / CSS 全体キーワード（Chrome のコピーが吐く revert-layer の山）は落とす
+          if (!STYLE_ALLOW.has(prop) || NOISE_VALUES.has(v)) st.removeProperty(prop)
         }
         if (el.getAttribute('style') === '') el.removeAttribute('style')
       }
