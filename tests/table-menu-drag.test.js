@@ -47,11 +47,13 @@ describe('表メニュー', () => {
     expect(visible(ed)).toBe(false)
   })
 
-  it('「TBL設定」ラベルをつかんで動かせる', () => {
+  it('目印アイコン（上部ツールバーと同じ絵）をつかんで動かせる', () => {
     const ed = makeEditor(TABLE)
     const tm = ed.tableManager
-    const handle = tm.el.querySelector('.kuro-table-menu__label')
+    // ⚠ 文字ラベル（旧「TBL設定」）ではなくアイコン。どのメニューも同じ絵で揃える
+    const handle = tm.el.querySelector('.kuro-menu-icon')
     expect(handle).toBeTruthy()
+    expect(tm.el.textContent).not.toContain('TBL設定')
     expect(handle.getAttribute('title')).toContain('移動')
 
     handle.dispatchEvent(pointer('pointerdown', { x: 100, y: 100 }))
@@ -77,9 +79,9 @@ describe('表メニュー', () => {
   })
 
   // ── 共通のつまみ（全浮遊メニュー）──────────────────────────────────────
-  it('主要な浮遊メニューすべてに「つまみ」がある', () => {
+  it('主要な浮遊メニューすべてに「つまみ」と「目印アイコン」がある', () => {
     const ed = makeEditor(TABLE)
-    const has = (el) => !!el.querySelector('.kuro-drag-grip')
+    const has = (el) => !!el.querySelector('.kuro-drag-grip') && !!el.querySelector('.kuro-menu-icon')
     expect(has(ed.popm.el)).toBe(true)             // 文字装飾
     expect(has(ed.tableManager.el)).toBe(true)     // 表
     expect(has(ed.linePopupMenu.el)).toBe(true)    // 罫線

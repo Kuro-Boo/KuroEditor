@@ -1148,6 +1148,17 @@
   .kuro-drag-grip:hover { @apply text-neutral-300; }
   .kuro-drag-grip--active { cursor: grabbing; @apply text-indigo-400; }
 
+  /* 浮遊メニューの目印アイコン（つまみの隣）— 上部ツールバーと同じ絵を出す。
+     押せるボタンではないので、色は控えめ・カーソルもドラッグ用のまま。 */
+  .kuro-menu-icon {
+    @apply flex items-center px-1 text-neutral-400 flex-shrink-0;
+    cursor: grab;
+    align-self: center;
+    line-height: 1;
+    user-select: none;
+  }
+  .kuro-menu-icon:hover { @apply text-neutral-200; }
+
   .kuro-table-menu__label {
     @apply text-xs font-semibold text-neutral-400 pl-1 pr-0.5;
     white-space: nowrap;

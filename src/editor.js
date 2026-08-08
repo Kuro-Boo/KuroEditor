@@ -112,7 +112,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.35.0'
+export const VERSION = '2.35.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -209,6 +209,22 @@ export function bindFloaterDrag(el, handle, onDrag) {
     document.addEventListener('pointercancel', onUp)
   })
   return handle
+}
+
+/**
+ * 浮遊メニューの「目印」アイコン（つまみの隣）。
+ *
+ * どのメニューも【上部ツールバーと同じアイコン】を出す。文字ラベル（旧「TBL設定」等）
+ * より一目で対応が分かり、幅も食わず、言語にも依存しない。
+ * @param {string} svg    ICON.* の markup（絵文字でも可）
+ * @param {string} title  ホバー説明（何のメニューか＋移動できること）
+ */
+export function makeMenuIcon(svg, title) {
+  return createElement('span', {
+    className: 'kuro-menu-icon',
+    html: svg,
+    attrs: { title, 'aria-label': title },
+  })
 }
 
 /** つまみ（⠿）を作る。見た目は CSS（.kuro-drag-grip）。 */
@@ -468,6 +484,15 @@ const ICON = {
   link: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">` +
     `<path d="M6.5 9.5 a2.6 2.6 0 0 1 0-3.7l2.1-2.1 a2.6 2.6 0 0 1 3.7 3.7l-1 1"/>` +
     `<path d="M9.5 6.5 a2.6 2.6 0 0 1 0 3.7l-2.1 2.1 a2.6 2.6 0 0 1-3.7-3.7l1-1"/>` +
+  `</svg>`,
+  // Border — 四角の中に破線 1 本（罫線ボタン / 罫線ポップアップの目印。共有する）
+  border: `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">` +
+    `<rect x="2" y="2" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+    `<line x1="8" y1="2" x2="8" y2="14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="2 2"/>` +
+  `</svg>`,
+  // Text — 「A」。文字装飾メニューの目印（ツールバーに対応ボタンが無いので専用）
+  text: `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">` +
+    `<path d="M8 2.4 3.2 13.6h1.7l1.15-2.8h4.3l1.15 2.8h1.7L8 2.4Zm-1.36 6.9L8 5.9l1.36 3.4H6.64Z"/>` +
   `</svg>`,
   // Help — 円の中の「？」（タブバー上段、目次ボタンの左。操作ガイドを別タブで開く）
   help: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
@@ -1335,6 +1360,8 @@ export class PopupMenu {
     this._mainRow = createElement('div', { className: 'kuro-popm__main' })
     // つまみ（左端）— 選択の上に重なったときに、選択を消さずどけられるように
     this._mainRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
+    this._mainRow.appendChild(bindFloaterDrag(
+      this.el, makeMenuIcon(ICON.text, '文字の書式（ドラッグで移動）'), () => { this._dragged = true }))
     this.el.appendChild(this._mainRow)
 
     // Colour picker sub-panel (shown inline beneath buttons)
@@ -2561,10 +2588,9 @@ export class RoundboxMenu {
     })
     this.el.style.display = 'none'
 
-    this.el.appendChild(createElement('span', {
-      className: 'kuro-roundbox-menu__label',
-      html: 'BOX設定',
-    }))
+    this.el.appendChild(bindFloaterDrag(
+      this.el, makeMenuIcon(ICON.roundbox, '角丸ボックス設定（ドラッグで移動）'),
+      () => { this._dragged = true }))
     this.el.insertBefore(
       bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }), this.el.firstChild)
 
@@ -2781,11 +2807,9 @@ export class TableManager {
     //   「押しても何も起きない場所」＝ラベルを取っ手にする。
     this._mainRow.appendChild(
       bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
-    this._dragHandle = createElement('span', {
-      className: 'kuro-table-menu__label',
-      html: 'TBL設定',
-      attrs: { title: 'ドラッグでこのメニューを移動' },
-    })
+    // ⚠ 文字ラベル（旧「TBL設定」）ではなく【上部ツールバーと同じアイコン】。
+    //   どのメニューも同じ絵で「これは何の設定か」が分かるほうが統一感がある。
+    this._dragHandle = makeMenuIcon(ICON.table, 'テーブル設定（ドラッグで移動）')
     this._mainRow.appendChild(this._dragHandle)
     bindFloaterDrag(this.el, this._dragHandle, () => { this._dragged = true })
     this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
@@ -3446,10 +3470,7 @@ export class TableInserter {
    * Icon = square with a single inner dashed line (matches the supplied design).
    */
   _makeBorderBtn(title, onClick) {
-    const icon = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-      <rect x="2" y="2" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
-      <line x1="8" y1="2" x2="8" y2="14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="2 2"/>
-    </svg>`
+    const icon = ICON.border
     const btn = createElement('button', {
       className: 'kuro-table-border-btn',
       html: icon,
@@ -4236,6 +4257,8 @@ export class LinePopupMenu {
     // ── Scope row ─────────────────────────────────────────────────────────
     const scopeRow = createElement('div', { className: 'kuro-line-popm__row kuro-line-popm__scope-row' })
     scopeRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
+    scopeRow.appendChild(bindFloaterDrag(
+      this.el, makeMenuIcon(ICON.border, '罫線（ドラッグで移動）'), () => { this._dragged = true }))
 
     const scopes = [
       { value: 'outer',  title: '外枠', icon: `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>` },
@@ -5781,6 +5804,8 @@ export class ImageMenu {
     // ── Size row ────────────────────────────────────────────────────────────
     this._sizeRow = createElement('div', { className: 'kuro-image-menu__row' })
     this._sizeRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
+    this._sizeRow.appendChild(bindFloaterDrag(
+      this.el, makeMenuIcon('🖼', 'メディア（ドラッグで移動）'), () => { this._dragged = true }))
     for (const size of IMAGE_SIZE_OPTIONS) {
       const btn = createElement('button', {
         className: 'kuro-image-menu__btn',
