@@ -26,6 +26,7 @@ import {
 import {
   defaultResolver,
   renderSpecialLinks,
+  _escapeHtml,
   _urlCardInner,
   _urlCardErrorInner,
   buildBrokenMedia,
@@ -112,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.36.1'
+export const VERSION = '2.37.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4883,8 +4884,10 @@ export class TableOfContents {
     this.contentEl = contentEl
     this._update   = debounce(() => this._doUpdate(), 250)
 
-    // 折りたたみ状態 (heading id の Set)
+    // 折りたたみ状態 (見出しの並び順の Set)
     this._collapsed = new Set()
+    // 行 → 見出し要素。目次から本文へ飛ぶのに id を使わないので参照で持つ
+    this._targets = []
 
     this._observer = new MutationObserver(this._update)
     this._observer.observe(contentEl, { childList: true, subtree: true, characterData: true })
@@ -4900,11 +4903,25 @@ export class TableOfContents {
     }
     if (headings.length === 0) return
 
-    // 各見出しに id を付与し、子(より深いレベル)があるか確認
-    const items = headings.map((h, i) => {
-      if (!h.id) h.id = `kuro-h-${i}`
-      return { el: h, id: h.id, level: parseInt(h.tagName[1], 10) }
-    })
+    // ⚠ 見出しに id を書き込まない（v2.37.0〜）。
+    //
+    // かつてはここで `id="kuro-h-<連番>"` を本文 DOM へ振っていた。目次は
+    // 【本文を映すビュー】であって本文の内容ではないのに、その副作用が
+    // getContent() に乗って保存 HTML と公開ページまで流れていた。連番なので
+    // 見出しを 1 つ足すだけで以降が全部ずれ、共有できるアンカーにもならず、
+    // data-bid を持たないブロックでは mergeBlocks の鍵（= ブロックの HTML）
+    // にまで揺れが混ざる。公開ページ用の安定した見出し id は、テキストから
+    // 引ける publish 時の仕事（ホスト側。KuroCMS は src/headings.ts）。
+    //
+    // 目次から本文へ飛ぶのは要素参照で足りる（href は要らない）。行の同一性は
+    // 並び順で持つ — 旧実装の `kuro-h-<連番>` も結局は並び順だったので、
+    // 折りたたみ状態の持ち方は変わらない。
+    const items = headings.map((h, i) => ({
+      el: h,
+      key: String(i),
+      level: parseInt(h.tagName[1], 10),
+    }))
+    this._targets = headings
     for (let i = 0; i < items.length; i++) {
       const next = items[i + 1]
       items[i].hasChildren = !!(next && next.level > items[i].level)
@@ -4913,25 +4930,28 @@ export class TableOfContents {
     let html = '<p class="kuro-toc__title">目次</p>'
     for (const it of items) {
       const indent = (it.level - 1) * 10
-      const collapsed = this._collapsed.has(it.id)
+      const collapsed = this._collapsed.has(it.key)
       const toggle = it.hasChildren
-        ? `<button class="kuro-toc__toggle ${collapsed ? 'kuro-toc__toggle--collapsed' : ''}" data-toc-id="${it.id}" aria-label="${collapsed ? '展開' : '折りたたみ'}">▾</button>`
+        ? `<button class="kuro-toc__toggle ${collapsed ? 'kuro-toc__toggle--collapsed' : ''}" data-toc-key="${it.key}" aria-label="${collapsed ? '展開' : '折りたたみ'}">▾</button>`
         : `<span class="kuro-toc__toggle-spacer"></span>`
+      // ⚠ 見出しテキストはユーザー入力。'<' を含む見出しで目次が壊れないよう必ず
+      //   エスケープする（本文の HTML をそのまま流し込む場所ではない）。
+      const label = _escapeHtml(it.el.textContent || '（無題）')
       html +=
-        `<div class="kuro-toc__row" data-toc-id="${it.id}" data-toc-level="${it.level}" style="padding-left:${indent + 4}px">` +
+        `<div class="kuro-toc__row" data-toc-key="${it.key}" data-toc-level="${it.level}" style="padding-left:${indent + 4}px">` +
           toggle +
-          `<a href="#${it.id}" class="kuro-toc__item kuro-toc__item--h${it.level}">${it.el.textContent || '（無題）'}</a>` +
+          `<button type="button" class="kuro-toc__item kuro-toc__item--h${it.level}" data-toc-key="${it.key}">${label}</button>` +
         `</div>`
     }
 
     this.panelEl.innerHTML = html
     this._applyCollapse()
 
-    // スクロール (見出しクリック)
-    this.panelEl.querySelectorAll('.kuro-toc__item').forEach(a => {
-      a.addEventListener('click', (e) => {
+    // スクロール (見出しクリック)。飛び先は id ではなく【要素そのもの】。
+    this.panelEl.querySelectorAll('.kuro-toc__item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
         e.preventDefault()
-        const target = this.contentEl.querySelector(a.getAttribute('href'))
+        const target = this._targets[Number(btn.dataset.tocKey)]
         target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
     })
@@ -4941,9 +4961,9 @@ export class TableOfContents {
       btn.addEventListener('click', (e) => {
         e.preventDefault()
         e.stopPropagation()
-        const id = btn.dataset.tocId
-        if (this._collapsed.has(id)) this._collapsed.delete(id)
-        else                          this._collapsed.add(id)
+        const key = btn.dataset.tocKey
+        if (this._collapsed.has(key)) this._collapsed.delete(key)
+        else                          this._collapsed.add(key)
         this._doUpdate()
       })
     })
@@ -4959,7 +4979,7 @@ export class TableOfContents {
     let hideBelow = null    // この level より深いものを hide
     for (const row of rows) {
       const level = parseInt(row.dataset.tocLevel, 10)
-      const id    = row.dataset.tocId
+      const key   = row.dataset.tocKey
 
       if (hideBelow !== null && level > hideBelow) {
         row.classList.add('kuro-toc__row--hidden')
@@ -4967,13 +4987,16 @@ export class TableOfContents {
         row.classList.remove('kuro-toc__row--hidden')
         hideBelow = null
       }
-      if (this._collapsed.has(id)) {
+      if (this._collapsed.has(key)) {
         hideBelow = hideBelow === null ? level : Math.min(hideBelow, level)
       }
     }
   }
 
-  destroy() { this._observer.disconnect() }
+  destroy() {
+    this._observer.disconnect()
+    this._targets = []
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

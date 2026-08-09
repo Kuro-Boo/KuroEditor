@@ -523,10 +523,17 @@
     @apply px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-neutral-500;
   }
 
+  /* 目次の行。v2.37.0 で <a href="#id"> から <button> に変えた（本文の見出しに
+     id を書き込むのをやめ、飛び先を要素参照で持つようにしたため）。ボタンの
+     既定（中央寄せ・下地・枠・独自フォント）を打ち消してリンクの見た目に戻す。 */
   .kuro-toc__item {
-    @apply block py-1 pr-3 text-xs text-neutral-400
+    @apply block py-1 pr-3 text-xs text-left text-neutral-400
            hover:text-indigo-400 hover:bg-neutral-800
-           transition-colors truncate cursor-pointer no-underline flex-1;
+           transition-colors truncate cursor-pointer no-underline flex-1 min-w-0
+           bg-transparent border-0;
+    /* 大きさは @apply text-xs のまま。ボタン既定の UA フォントだけ本文に戻す */
+    font-family: inherit;
+    font-weight: inherit;
   }
 
   .kuro-toc__item--h1 { @apply font-semibold text-neutral-300; }
