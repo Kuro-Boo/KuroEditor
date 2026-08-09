@@ -200,6 +200,7 @@
         <a href="#enter">改行と段落</a>
         <a href="#paste">貼り付け</a>
         <a href="#decorate">文字の装飾</a>
+        <a href="#ruby">ルビ（ふりがな）</a>
         <a href="#indent">字下げ（Tab）</a>
         <a href="#list">箇条書き・番号</a>
         <a href="#check">チェックリスト</a>
@@ -442,8 +443,8 @@
       <h2 id="decorate">文字の装飾</h2>
       <p>文字を選択すると出るポップアップメニューから操作します。</p>
       <figure class="shot">
-        <img src="./img/popm.png" alt="文字を選択すると出るポップアップメニュー。左から 太字・斜体・下線・打ち消し線／見出し／引用・囲み・キー表記／文字色・サイズ・フォント・行間／寄せ／リスト。" loading="lazy">
-        <figcaption>文字を選択すると出るポップアップメニュー。左から 太字・斜体・下線・打ち消し線／見出し／引用・囲み・キー表記／文字色・サイズ・フォント・行間／寄せ／リスト。</figcaption>
+        <img src="./img/popm.png" alt="文字を選択すると出るポップアップメニュー。左から 太字・斜体・下線・打ち消し線／見出し／引用・囲み・キー表記・ルビ／文字色・サイズ・フォント・行間／寄せ／リスト。" loading="lazy">
+        <figcaption>文字を選択すると出るポップアップメニュー。左から 太字・斜体・下線・打ち消し線／見出し／引用・囲み・キー表記・ルビ／文字色・サイズ・フォント・行間／寄せ／リスト。</figcaption>
       </figure>
       <figure class="shot" style="max-width:620px">
         <img src="./img/popm-color.png" alt="「A」を押すと文字色のパレットが開きます（使った色は下に貯まります）。" loading="lazy">
@@ -463,6 +464,7 @@
             <tr><td>フォント</td><td>ゴシック（初期）／明朝。サイト側が Web フォントを読み込んでいれば、それも選べます。</td></tr>
             <tr><td>引用</td><td>選んだ段落を引用にします。引用の中の<strong>空行で <kbd>Enter</kbd></strong> を押すと引用から抜けます。</td></tr>
             <tr><td>キー表記</td><td>選んだ文字を <kbd>Ctrl</kbd> のようなキー風の表示にします。もう一度押すと戻ります。</td></tr>
+            <tr><td>ルビ（ふりがな）</td><td>選んだ文字の上に読みを振ります。<a href="#ruby">下の項</a>を参照。</td></tr>
           </tbody>
         </table>
       </div>
@@ -473,6 +475,45 @@
           <span style="color:#dc2626">文字色</span>、<span style="font-size:150%">大きな文字</span>も使えます。</p>
           <blockquote><p>引用にすると、左に線が付いて斜体になります。</p></blockquote>
           <p>キー表記は <kbd>Ctrl</kbd>+<kbd>S</kbd> のように出ます。</p>
+        </div>
+      </div>
+
+
+      <h2 id="ruby">ルビ（ふりがな）</h2>
+      <p>
+        読みを付けたい文字を選んで、ポップアップメニューの
+        <span class="kbtn"><svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor" aria-hidden="true"><text x="8" y="5.2" font-size="5.4" text-anchor="middle" font-family="sans-serif">じ</text><text x="8" y="13.6" font-size="9" text-anchor="middle" font-family="sans-serif">字</text></svg></span>
+        を押すと、メニューの下に読みの入力欄が開きます。
+        読みを打って <strong>大きさのボタン（小・標準・大）</strong>を押すか、<kbd>Enter</kbd> で確定します。
+      </p>
+      <figure class="shot">
+        <img src="./img/popm-ruby.png" alt="ルビボタンを押すと、メニューの下に読みの入力欄と 小・標準・大・解除 が出ます。" loading="lazy">
+        <figcaption>ルビボタンを押すと、メニューの下に読みの入力欄と 小・標準・大・解除 が出ます。</figcaption>
+      </figure>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>したいこと</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>ルビを振る</td><td>文字を選ぶ → ルビボタン → 読みを打つ → 大きさのボタン、または <kbd>Enter</kbd>。</td></tr>
+            <tr><td>読みを直す</td><td>ルビの付いた文字を選び直すと、入力欄に今の読みが入っています。打ち直して確定。</td></tr>
+            <tr><td>大きさを変える</td><td>同じく選び直して、小・標準・大 を押すだけ。</td></tr>
+            <tr><td>ルビを外す</td><td><strong>解除</strong>を押します。文字はそのまま残り、読みだけが消えます。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="demo">
+        <div class="demo__label">実際の表示</div>
+        <div class="kuro-content">
+          <p>小さめ：<ruby class="kuro-ruby--sm">石動雷十太<rt>いするぎらいじゅうた</rt></ruby> が現れた。</p>
+          <p>標準：<ruby>石動雷十太<rt>いするぎらいじゅうた</rt></ruby> が現れた。</p>
+          <p>大きめ：<ruby class="kuro-ruby--lg">石動雷十太<rt>いするぎらいじゅうた</rt></ruby> が現れた。</p>
+        </div>
+      </div>
+      <div class="box box-note">
+        <div class="box-icon">📌</div>
+        <div>
+          大きさは<strong>文字の大きさに対する比率</strong>なので、あとから文字サイズを変えてもルビの釣り合いは崩れません。
+          なお、<strong>行をまたいで選ぶとルビは振れません</strong>。1 行の中の文字を選んでください。
         </div>
       </div>
 

@@ -114,6 +114,7 @@ for (const [name, title, seed] of [
   ['popm-ul',      '箇条書きリスト',   '<ul class="kuro-ul-disc"><li id="t">記号を選べます</li></ul>'],
   ['popm-ol',      '番号付きリスト',   '<ol class="kuro-list-decimal"><li id="t">番号を選べます</li></ol>'],
   ['popm-callout', 'コールアウト',     '<p id="t">ここを選択すると書式メニューが出ます</p>'],
+  ['popm-ruby',    'ルビ',             '<p id="t">石動雷十太</p>'],
 ]) {
   // ⚠ 直前の操作で選択が外れると popm ごと消えるので、毎回入れ直す
   await setBody(seed)
