@@ -448,6 +448,23 @@ h5[id^='kuro-h-'] {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
 }
 
+/* ルビ（ふりがな）— <ruby>親文字<rt>よみ</rt></ruby>
+   大きさは <ruby> のクラスで 3 段階。
+   ⚠ 単位は必ず em（親文字に対する比率）。px / % で焼くと、あとから親文字の
+     フォントサイズを変えたときにルビだけ取り残されて釣り合いが崩れる。
+   ⚠ 既定（クラス無し）の 0.5em も明示する。ブラウザ既定と同じ値だが、書いて
+     おかないと「小・大はクラスで効くのに標準だけ環境差が出る」ことになる。 */
+.kuro-content ruby {
+  ruby-position: over;
+}
+.kuro-content rt {
+  font-size: 0.5em;
+  line-height: 1.1;
+  text-align: center;
+}
+.kuro-content ruby.kuro-ruby--sm rt { font-size: 0.4em; }
+.kuro-content ruby.kuro-ruby--lg rt { font-size: 0.65em; }
+
 /* 枠の中の最初 / 最後の子の margin は落とす。
    ⚠ 枠は自前の padding を持つので、子の margin がそこへ【そのまま足される】。
      見出しは margin-top が 1.25rem あるため、コールアウトの 1 行目が見出しだと

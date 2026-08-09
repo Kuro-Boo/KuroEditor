@@ -779,6 +779,25 @@
     @apply outline-none border-indigo-500;
   }
 
+  /* ルビの読み入力（popm のルビパネル）。
+     ⚠ この入力欄だけは mousedown を潰さない（潰すと文字を打てない）ので、
+        フォーカスが popm の中にある間 popm は閉じない、という規約に乗っている。 */
+  .kuro-ruby-field {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs
+           text-neutral-300 bg-neutral-700 select-none;
+  }
+  .kuro-ruby-field__input {
+    @apply rounded px-1.5 py-0.5 text-xs text-neutral-100
+           bg-neutral-900 border border-neutral-600;
+    width: 9rem;
+  }
+  .kuro-ruby-field__input:focus {
+    @apply outline-none border-indigo-500;
+  }
+  .kuro-ruby-field__input::placeholder {
+    @apply text-neutral-500;
+  }
+
   .kuro-marker-color-btn {
     color: #ef4444;
     font-size: 1.1em;

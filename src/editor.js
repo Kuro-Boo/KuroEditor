@@ -112,7 +112,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.35.3'
+export const VERSION = '2.36.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -283,6 +283,21 @@ const FONT_FAMILY_OPTIONS = [
   },
 ]
 
+/**
+ * Ruby (ふりがな) size presets — applied as a CSS class on the <ruby> element.
+ *
+ * ⚠ サイズは <rt> の font-size をインラインで書かずクラスで持つ。ルビは
+ *   「親文字に対する比率」で決まるので、親文字のサイズを後から変えたときに
+ *   インラインの px / % が取り残されると比率が崩れる（content.css 側で em
+ *   指定にしておけば常に追従する）。
+ * base:true = ブラウザ既定と同じ 0.5em（クラスを付けない＝素の <ruby>）。
+ */
+const RUBY_SIZE_OPTIONS = [
+  { label: '小',   value: 'kuro-ruby--sm', title: 'ルビを小さく（親文字の 40%）' },
+  { label: '標準', value: '',              title: 'ルビは標準の大きさ（親文字の 50%）', base: true },
+  { label: '大',   value: 'kuro-ruby--lg', title: 'ルビを大きく（親文字の 65%）' },
+]
+
 /** Line-height presets.  1.6 = editor default (leading-relaxed). */
 const LINE_HEIGHT_OPTIONS = [
   { label: '詰め',    value: '1.2' },
@@ -437,6 +452,13 @@ const ICON = {
     `<rect x="5.3" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
     `<rect x="8.2" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
     `<rect x="2.4" y="7.6" width="7.5" height="1.3" rx="0.3" fill="currentColor" stroke="none"/>` +
+  `</svg>`,
+  // Ruby (ふりがな) — 親文字「字」の上に、その読み「じ」を小さく乗せた形。
+  // ⚠ 記号の抽象画（線・点）にしない。上に小さい字が乗る形そのものが機能なので、
+  //   実例をそのまま描いたほうが一目で分かる（Word の「ルビ」ボタンと同じ考え方）。
+  ruby: `<svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor" aria-hidden="true">` +
+    `<text x="8" y="5.2" font-size="5.4" text-anchor="middle" font-family="sans-serif">じ</text>` +
+    `<text x="8" y="13.6" font-size="9" text-anchor="middle" font-family="sans-serif">字</text>` +
   `</svg>`,
   // Eye — Preview tab
   eye: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
@@ -1524,6 +1546,7 @@ export class PopupMenu {
       this._hideULStyles()
       this._hideCalloutPanel()
       this._hideFontFamily()
+      this._hideRubyPanel()
       this._toggleColors()
     })
     this._mainRow.appendChild(btn)
@@ -1555,6 +1578,7 @@ export class PopupMenu {
       this._hideULStyles()
       this._hideCalloutPanel()
       this._hideFontFamily()
+      this._hideRubyPanel()
       this._toggleSizes()
     })
     this._mainRow.appendChild(btn)
@@ -1672,6 +1696,7 @@ export class PopupMenu {
       this._hideULStyles()
       this._hideCalloutPanel()
       this._hideFontFamily()
+      this._hideRubyPanel()
       this._toggleLineHeights()
     })
     this._mainRow.appendChild(btn)
@@ -1723,6 +1748,7 @@ export class PopupMenu {
       this._hideListStyles()
       this._hideULStyles()
       this._hideCalloutPanel()
+      this._hideRubyPanel()
       this._toggleFontFamily()
     })
     this._mainRow.appendChild(btn)
@@ -1992,6 +2018,7 @@ export class PopupMenu {
       this._hideListStyles()
       this._hideULStyles()
       this._hideFontFamily()
+      this._hideRubyPanel()
       this._toggleCalloutPanel()
     })
     this._mainRow.appendChild(this._calloutBtn)
@@ -2062,6 +2089,176 @@ export class PopupMenu {
   _toggleCalloutPanel() {
     this._calloutPanel?.classList.contains('kuro-popm__sizes--visible')
       ? this._hideCalloutPanel() : this._showCalloutPanel()
+  }
+
+  /**
+   * Ruby (ふりがな) button — opens a sub-panel with a reading input and the
+   * three size presets (小 / 標準 / 大).
+   *
+   * ⚠ 読みは【入力欄】が要るので、他のサブパネル（ボタンだけ）とは作法が違う:
+   *   ① 入力欄では mousedown を潰さない（潰すと文字を打てない。OL の開始番号と同じ）。
+   *      popm は「フォーカスが自分の中にある間は閉じない」ので入力中も出たままになる。
+   *   ② 打っている最中は値を書き戻さない（_updateRubyState が横から上書きしない）。
+   *   ③ 適用は【サイズボタン】と Enter。ボタンは _bindSubBtn 経由なので、押した
+   *      瞬間に本文の選択が復元される（入力欄にフォーカスが移っていても効く）。
+   *
+   * @param {function(string, string):void} applyFn  (読み, サイズクラス) を受け取る
+   * @param {function():void} clearFn                選択範囲のルビを解除する
+   * @returns {this}
+   */
+  addRubyButton(applyFn, clearFn) {
+    this._rubyApplyFn = applyFn
+    this._rubySize    = ''   // 現在選ばれているサイズ（'' = 標準）
+
+    // ── Toggle button ─────────────────────────────────────────────────────
+    this._rubyBtn = createElement('button', {
+      className: 'kuro-popm__btn kuro-popm__btn--ruby',
+      html: ICON.ruby,
+      attrs: { type: 'button', 'aria-label': 'ルビ', title: 'ルビ（ふりがな）' },
+    })
+    this._rubyBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      this._hideColors()
+      this._hideSizes()
+      this._hideLineHeights()
+      this._hideListStyles()
+      this._hideULStyles()
+      this._hideCalloutPanel()
+      this._hideFontFamily()
+      this._toggleRubyPanel()
+    })
+    this._mainRow.appendChild(this._rubyBtn)
+
+    // ── Panel: [ルビ ____] [小][標準][大] [解除] ───────────────────────────
+    this._rubyPanel = createElement('div', { className: 'kuro-popm__sizes' })
+
+    const field = createElement('label', { className: 'kuro-ruby-field' })
+    field.appendChild(createElement('span', { html: 'ルビ' }))
+    this._rubyInput = createElement('input', {
+      className: 'kuro-ruby-field__input',
+      attrs: {
+        type: 'text',
+        placeholder: 'よみがな',
+        title: '選んだ文字の上に振る読み（Enter で適用）',
+        'aria-label': 'ルビの読み',
+      },
+    })
+    this._rubyInput.addEventListener('keydown', (e) => {
+      // ⚠ IME の変換確定 Enter は「文字の確定」であってキー操作ではない（素通しする）
+      if (e.key !== 'Enter' || isImeComposing(e)) return
+      e.preventDefault()
+      this.restoreRange()
+      this._rubyApplyFn?.(this._rubyInput.value, this._rubySize)
+      requestAnimationFrame(() => this._updateActiveStates())
+    })
+    field.appendChild(this._rubyInput)
+    this._rubyPanel.appendChild(field)
+
+    // ── Size presets — 押した時点の読みで即適用（プレビューではない） ───────
+    this._rubySizeBtns = []
+    for (const { label, value, title, base } of RUBY_SIZE_OPTIONS) {
+      const sb = createElement('button', {
+        className: 'kuro-size-btn' + (base ? ' kuro-size-btn--base' : ''),
+        html: label,
+        attrs: { type: 'button', title, 'data-ruby-size': value || 'base' },
+      })
+      this._bindSubBtn(sb, () => {
+        this._rubySize = value
+        // ⚠ 読みが空のまま押されたときに黙って何もしない、をしない（押しても無反応は
+        //   不具合に見える）。振る読みがまだ無いので、入力欄へ戻して促す。
+        if (!this._rubyInput.value.trim() && !this._rubyAtSelection()) {
+          this._rubyInput.focus({ preventScroll: true })
+          return
+        }
+        applyFn(this._rubyInput.value, value)
+      })
+      this._rubySizeBtns.push({ el: sb, value })
+      this._rubyPanel.appendChild(sb)
+    }
+
+    // ── 解除 — ルビを外して親文字だけに戻す ────────────────────────────────
+    // ⚠ 「削除」ではなく「解除」（消えるのは飾りだけで本文は残る。リンクと同じ規約）。
+    // ⚠ ルビが無くても隠さない（同じメニューは常に同じ場所に同じボタン）。
+    this._rubyRemoveBtn = createElement('button', {
+      className: 'kuro-size-btn',
+      html: '解除',
+      attrs: { type: 'button', title: 'ルビを解除（親文字はそのまま残る）' },
+    })
+    this._bindSubBtn(this._rubyRemoveBtn, () => {
+      clearFn()
+      this._rubyInput.value = ''
+    })
+    this._rubyPanel.appendChild(this._rubyRemoveBtn)
+
+    this.el.appendChild(this._rubyPanel)
+    return this
+  }
+
+  /**
+   * Sync the ruby panel with the selection: prefill the reading of the ruby
+   * under the caret, highlight its size, and light the main button.
+   *
+   * ⚠ 入力中（フォーカスが入力欄にある）は値を書き戻さない — 打っている読みを
+   *   横から書き換えてしまう。
+   */
+  _updateRubyState() {
+    if (!this._rubySizeBtns) return
+    const ruby = this._rubyAtSelection()
+
+    if (this._rubyInput && document.activeElement !== this._rubyInput) {
+      this._rubyInput.value = ruby ? (ruby.querySelector('rt')?.textContent ?? '') : ''
+    }
+    if (ruby) {
+      this._rubySize = RUBY_SIZE_OPTIONS
+        .find(o => o.value && ruby.classList.contains(o.value))?.value ?? ''
+    }
+    for (const { el, value } of this._rubySizeBtns) {
+      el.classList.toggle('kuro-size-btn--active', !!ruby && value === this._rubySize)
+    }
+    this._rubyBtn?.classList.toggle('kuro-popm__btn--active', !!ruby)
+  }
+
+  /**
+   * The <ruby> the current selection sits in / covers, or null.
+   * 祖先をたどるだけでは足りない — 単語をまるごと選ぶと、選択の端が <ruby> の
+   * 外（親要素の子インデックス）に来るため。その場合は交差で拾う。
+   */
+  _rubyAtSelection() {
+    const root = this.constraintEl
+    const sel  = window.getSelection()
+    const live = sel?.rangeCount ? sel.getRangeAt(0) : null
+    // ⚠ 読みの入力欄にフォーカスがある間、getSelection() は本文ではなく入力欄側を
+    //   指す。popm の中にフォーカスがあるときは show() で控えた選択を正とする。
+    const range = this.el.contains(document.activeElement)
+      ? (this._activeRange ?? live)
+      : (live ?? this._activeRange)
+    if (!range) return null
+    try {
+      let node = range.startContainer
+      if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
+      const inside = node?.closest?.('ruby')
+      if (inside && (!root || root.contains(inside))) return inside
+
+      const scope = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+        ? range.commonAncestorContainer
+        : range.commonAncestorContainer.parentElement
+      for (const r of scope?.querySelectorAll?.('ruby') ?? []) {
+        if ((!root || root.contains(r)) && range.intersectsNode(r)) return r
+      }
+    } catch {}
+    return null
+  }
+
+  _showRubyPanel() {
+    this._rubyPanel?.classList.add('kuro-popm__sizes--visible')
+    this._updateRubyState()
+    // 読みをすぐ打てるように（選択は _activeRange に控えてあるので消えない）
+    this._rubyInput?.focus({ preventScroll: true })
+  }
+  _hideRubyPanel()   { this._rubyPanel?.classList.remove('kuro-popm__sizes--visible') }
+  _toggleRubyPanel() {
+    this._rubyPanel?.classList.contains('kuro-popm__sizes--visible')
+      ? this._hideRubyPanel() : this._showRubyPanel()
   }
 
   /**
@@ -2508,6 +2705,7 @@ export class PopupMenu {
     this._hideULStyles()
     this._hideCalloutPanel()
     this._hideFontFamily()
+    this._hideRubyPanel()
   }
 
   _updateActiveStates() {
@@ -2568,6 +2766,8 @@ export class PopupMenu {
     this._updateULStyleLabel()
     // Update the callout button + sub-panel active state
     this._updateCalloutActive()
+    // Update the ruby button + sub-panel (reading / size) for the current selection
+    this._updateRubyState()
   }
 }
 
@@ -6759,6 +6959,10 @@ export class KuroEditor {
       .addButton(ICON.quote, 'blockquote', () => this._formatBlock('blockquote'))
       .addCalloutButton((type) => this._applyCallout(type))
       .addButton(ICON.kbd, 'kbd', () => this._toggleKbd())
+      .addRubyButton(
+        (text, size) => this._applyRuby(text, size),
+        () => this._clearRuby(),
+      )
       .addDivider()
       .addColorButton()
       .addFontSizeButton((size) => this._applyFontSize(size))
@@ -6778,6 +6982,7 @@ export class KuroEditor {
         this.popm._hideListStyles()
         this.popm._hideCalloutPanel()
         this.popm._hideFontFamily()
+        this.popm._hideRubyPanel()
         this.popm._toggleULStyles()
       })
       .initULStylePanel(
@@ -6791,6 +6996,7 @@ export class KuroEditor {
         this.popm._hideULStyles()
         this.popm._hideCalloutPanel()
         this.popm._hideFontFamily()
+        this.popm._hideRubyPanel()
         this.popm._toggleListStyles()
       })
       .initOLStylePanel(
@@ -8391,6 +8597,141 @@ export class KuroEditor {
       } catch (_) {}
     }
     if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
+  }
+
+  // ── ルビ（ふりがな）─────────────────────────────────────────────────────
+  //
+  // 保存形式は【標準の <ruby>】: `<ruby class="kuro-ruby--lg">漢字<rt>かんじ</rt></ruby>`。
+  // ⚠ 独自記法（[[ruby:…]] のようなもの）を作らない — トークン解析・正規化・
+  //   ホスト共有モジュール・保存形式すべてに手が要るのに、得られるのは同じ <ruby>
+  //   （地図を専用記法にしなかったのと同じ理由）。ブラウザが素で描き、公開ページ・
+  //   読み上げ・持ち出しでもそのまま意味を持つ。
+  // ⚠ <rp>（ルビ非対応ブラウザ用の括弧）は入れない。contenteditable では中身が
+  //   ただの文字として編集でき、消し損ねた括弧が本文に残る。対応していない
+  //   ブラウザは実質もう無い。
+
+  /**
+   * 現在の選択範囲（本文の中にあるもの）。
+   * ⚠ 読みの入力欄にフォーカスがあると getSelection() は本文を指さないので、
+   *   その場合は popm が控えている選択を使う。
+   * @returns {Range|null}
+   */
+  _rubyRange() {
+    const sel  = window.getSelection()
+    const live = sel?.rangeCount ? sel.getRangeAt(0) : null
+    if (live && this.wysiwyg.contains(live.commonAncestorContainer)) return live
+    return this.popm?._activeRange ?? null
+  }
+
+  /**
+   * 選択文字にルビを振る。既にルビが乗っている選択なら、作り直さずその <ruby> の
+   * 読みと大きさを差し替える（同じ親文字に二重のルビを作らない）。
+   * 読みが空のまま適用されたときは「ルビを外す」意味に倒す。
+   *
+   * @param {string} text        読み（ふりがな）
+   * @param {string} sizeClass   RUBY_SIZE_OPTIONS の value（'' = 標準）
+   */
+  _applyRuby(text, sizeClass) {
+    const reading = (text ?? '').trim()
+
+    const existing = this.popm._rubyAtSelection()
+    if (existing) {
+      if (!reading) { this._unwrapRuby(existing); return }
+      this._setRubyText(existing, reading)
+      this._setRubySize(existing, sizeClass)
+      this._selectRubyBase(existing)
+      return
+    }
+
+    if (!reading) return
+    const range = this._rubyRange()
+    if (!range || range.collapsed) return
+
+    // ⚠ 行をまたぐ選択にはルビを振らない。<ruby> の中に段落や見出しは置けないので、
+    //   囲んだ瞬間に不正な HTML になる（＝保存・マージ・公開ページで壊れる）。
+    const startLine = this._nearestLine(range.startContainer)
+    if (!startLine || startLine !== this._nearestLine(range.endContainer)) return
+
+    const ruby = document.createElement('ruby')
+    if (sizeClass) ruby.className = sizeClass
+    try {
+      range.surroundContents(ruby)
+    } catch {
+      ruby.appendChild(range.extractContents())
+      range.insertNode(ruby)
+    }
+    // 選択の中に既存のルビが含まれていたら、その読みは捨てて親文字だけ残す
+    // （<ruby> の入れ子は読み上げも表示も破綻する）
+    this._flattenNestedRuby(ruby)
+
+    const rt = document.createElement('rt')
+    rt.textContent = reading
+    ruby.appendChild(rt)
+    this._selectRubyBase(ruby)
+  }
+
+  /** 選択範囲にかかっているルビをすべて外す（親文字はそのまま残す）。 */
+  _clearRuby() {
+    const range = this._rubyRange()
+    if (!range) return
+    const rubies = Array.from(this.wysiwyg.querySelectorAll('ruby')).filter((r) => {
+      try { return range.intersectsNode(r) } catch { return false }
+    })
+    for (const r of rubies) this._unwrapRuby(r)
+  }
+
+  /** <ruby> の読み（<rt>）を差し替える。無ければ作る。 */
+  _setRubyText(ruby, text) {
+    let rt = ruby.querySelector('rt')
+    if (!rt) { rt = document.createElement('rt'); ruby.appendChild(rt) }
+    rt.textContent = text
+  }
+
+  /** <ruby> の大きさクラスを差し替える（'' = 標準＝クラスを持たない）。 */
+  _setRubySize(ruby, sizeClass) {
+    for (const { value } of RUBY_SIZE_OPTIONS) {
+      if (value) ruby.classList.remove(value)
+    }
+    if (sizeClass) ruby.classList.add(sizeClass)
+    if (ruby.classList.length === 0) ruby.removeAttribute('class')
+  }
+
+  /**
+   * ルビを外して親文字だけに戻す。
+   * insertBefore で「生きているノードのまま」動かすので、Range の端点はブラウザが
+   * 自動で追随する（_clearFontSize と同じ作法）。
+   */
+  _unwrapRuby(ruby) {
+    for (const el of ruby.querySelectorAll('rt, rp')) el.remove()
+    const parent = ruby.parentNode
+    if (!parent) return
+    while (ruby.firstChild) parent.insertBefore(ruby.firstChild, ruby)
+    ruby.remove()
+  }
+
+  /** 入れ子になった <ruby> を親文字だけにして畳む（root 自身は残す）。 */
+  _flattenNestedRuby(root) {
+    for (const nested of Array.from(root.querySelectorAll('ruby'))) {
+      this._unwrapRuby(nested)
+    }
+  }
+
+  /**
+   * ルビの【親文字】を選択し直す。
+   * ⚠ 適用後にキャレットを畳まない — popm は選択がある間しか出ないので、畳むと
+   *   ポップアップごと消えて「読みを打ち直す」「大きさを変える」が続けられない。
+   */
+  _selectRubyBase(ruby) {
+    const sel = window.getSelection()
+    if (!sel) return
+    const rt  = ruby.querySelector('rt')
+    const end = rt
+      ? Array.prototype.indexOf.call(ruby.childNodes, rt)
+      : ruby.childNodes.length
+    try {
+      sel.setBaseAndExtent(ruby, 0, ruby, end)
+      if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
+    } catch { /* 選択が作れない環境では諦める（本文の内容は正しい） */ }
   }
 
   _format(command) {
