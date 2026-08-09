@@ -112,7 +112,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.36.0'
+export const VERSION = '2.36.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -453,12 +453,19 @@ const ICON = {
     `<rect x="8.2" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
     `<rect x="2.4" y="7.6" width="7.5" height="1.3" rx="0.3" fill="currentColor" stroke="none"/>` +
   `</svg>`,
-  // Ruby (ふりがな) — 親文字「字」の上に、その読み「じ」を小さく乗せた形。
-  // ⚠ 記号の抽象画（線・点）にしない。上に小さい字が乗る形そのものが機能なので、
+  // Ruby (ふりがな) — 大きい親文字の上に小さい読みが乗る形そのもの。
+  // ⚠ 記号の抽象画（線・点）にしない。「上に小さい字が乗る」形が機能そのものなので、
   //   実例をそのまま描いたほうが一目で分かる（Word の「ルビ」ボタンと同じ考え方）。
+  // ⚠ 具体的な文字（「字」に「じ」等）で描かない。小さい方が 5px 前後になり、
+  //   画数のある字は潰れて【何が乗っているのか読めない】。A なら形が単純で、
+  //   小さくても「大の上に小」の関係だけが残る。
+  // 親文字は textLength で横いっぱいに伸ばす（16px の枠で「大 / 小」の差を出すには、
+  // 縦だけでなく横幅も効かせないと差が付かない）。
+  // ⚠ 上下の間隔をケチらない。A の頂点は尖っているので、近づけると小さい A が
+  //   そこへ吸い付いて「Å」に見える（実測。隣が文字色の A なので尚更紛らわしい）。
   ruby: `<svg width="16" height="14" viewBox="0 0 16 14" fill="currentColor" aria-hidden="true">` +
-    `<text x="8" y="5.2" font-size="5.4" text-anchor="middle" font-family="sans-serif">じ</text>` +
-    `<text x="8" y="13.6" font-size="9" text-anchor="middle" font-family="sans-serif">字</text>` +
+    `<text x="8" y="4" font-size="4.4" text-anchor="middle" font-family="sans-serif" font-weight="700" textLength="4.6" lengthAdjust="spacingAndGlyphs">A</text>` +
+    `<text x="8" y="14" font-size="9.5" text-anchor="middle" font-family="sans-serif" font-weight="700" textLength="14" lengthAdjust="spacingAndGlyphs">A</text>` +
   `</svg>`,
   // Eye — Preview tab
   eye: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
