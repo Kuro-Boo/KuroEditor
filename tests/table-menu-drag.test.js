@@ -82,11 +82,23 @@ describe('表メニュー', () => {
   it('主要な浮遊メニューすべてに「つまみ」と「目印アイコン」がある', () => {
     const ed = makeEditor(TABLE)
     const has = (el) => !!el.querySelector('.kuro-drag-grip') && !!el.querySelector('.kuro-menu-icon')
-    expect(has(ed.popm.el)).toBe(true)             // 文字装飾
     expect(has(ed.tableManager.el)).toBe(true)     // 表
     expect(has(ed.linePopupMenu.el)).toBe(true)    // 罫線
     expect(has(ed.imageMenu.el)).toBe(true)        // 画像
     expect(has(ed.roundboxMenu.el)).toBe(true)     // BOX設定
+  })
+
+  // popm だけは目印アイコンを置かない（v2.36.2〜）。目印は文字装飾なので必然的に
+  // 「A」になるが、同じ列に文字色（A＋赤い下線）とルビ（大小の A）が並ぶため、
+  // 押せない目印の A が【もう一つの機能ボタン】に見える。揃えるより誤解を招かない
+  // ことを優先した例外なので、うっかり「統一」で戻されないようここで見張る。
+  it('popm には目印アイコンを置かない（A が機能ボタンに見えるため）', () => {
+    const ed = makeEditor('<p>本文</p>')
+    expect(ed.popm.el.querySelector('.kuro-menu-icon')).toBeNull()
+    // つまみは残る（無いと動かせない）。アイコン分の取っ手を補う --wide 付き。
+    const grip = ed.popm.el.querySelector('.kuro-drag-grip')
+    expect(grip).not.toBeNull()
+    expect(grip.classList.contains('kuro-drag-grip--wide')).toBe(true)
   })
 
   it('つまみを掴んでも文字の選択が解除されない（mousedown を潰す）', () => {

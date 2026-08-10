@@ -1173,6 +1173,10 @@
   }
   .kuro-drag-grip:hover { @apply text-neutral-300; }
   .kuro-drag-grip--active { cursor: grabbing; @apply text-indigo-400; }
+  /* popm 用の広いつまみ。popm だけ目印アイコン（A）を置かない（同じ列に文字色・
+     ルビの A が並び、押せない目印が機能ボタンに見えるため）ので、アイコンが
+     兼ねていた取っ手の幅をこちらで補う。指で掴める大きさを保つのが目的。 */
+  .kuro-drag-grip--wide { @apply px-2; }
 
   /* 浮遊メニューの目印アイコン（つまみの隣）— 上部ツールバーと同じ絵を出す。
      押せるボタンではないので、色は控えめ・カーソルもドラッグ用のまま。 */

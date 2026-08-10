@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.37.1'
+export const VERSION = '2.37.2'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -231,10 +231,14 @@ export function makeMenuIcon(svg, title) {
   })
 }
 
-/** つまみ（⠿）を作る。見た目は CSS（.kuro-drag-grip）。 */
-export function makeDragGrip(title = 'ドラッグでこのメニューを移動') {
+/**
+ * つまみ（⠿）を作る。見た目は CSS（.kuro-drag-grip）。
+ * @param {string} [title]      ホバー説明（何のメニューか＋移動できること）
+ * @param {string} [extraClass] 追加クラス（popm は目印アイコンを置かない分 --wide）
+ */
+export function makeDragGrip(title = 'ドラッグでこのメニューを移動', extraClass = '') {
   return createElement('span', {
-    className: 'kuro-drag-grip',
+    className: 'kuro-drag-grip' + (extraClass ? ` ${extraClass}` : ''),
     html: '<svg width="6" height="16" viewBox="0 0 6 16" fill="currentColor" aria-hidden="true">' +
       '<circle cx="1.5" cy="3" r="1.2"/><circle cx="4.5" cy="3" r="1.2"/>' +
       '<circle cx="1.5" cy="8" r="1.2"/><circle cx="4.5" cy="8" r="1.2"/>' +
@@ -522,10 +526,6 @@ const ICON = {
   border: `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">` +
     `<rect x="2" y="2" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
     `<line x1="8" y1="2" x2="8" y2="14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="2 2"/>` +
-  `</svg>`,
-  // Text — 「A」。文字装飾メニューの目印（ツールバーに対応ボタンが無いので専用）
-  text: `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">` +
-    `<path d="M8 2.4 3.2 13.6h1.7l1.15-2.8h4.3l1.15 2.8h1.7L8 2.4Zm-1.36 6.9L8 5.9l1.36 3.4H6.64Z"/>` +
   `</svg>`,
   // Help — 円の中の「？」（タブバー上段、目次ボタンの左。操作ガイドを別タブで開く）
   help: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
@@ -1391,10 +1391,15 @@ export class PopupMenu {
 
     // Main button row
     this._mainRow = createElement('div', { className: 'kuro-popm__main' })
-    // つまみ（左端）— 選択の上に重なったときに、選択を消さずどけられるように
-    this._mainRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
+    // つまみ（左端）— 選択の上に重なったときに、選択を消さずどけられるように。
+    // ⚠ popm だけは「目印アイコン」を置かない（他の浮遊メニューとは揃わない）。
+    //   popm の目印は文字装飾なので必然的に「A」になるが、この列には文字色（A＋赤い
+    //   下線）・ルビ（大小の A）と A のボタンが並ぶため、押せない目印の A が
+    //   【もう一つの機能ボタン】に見える。統一感より誤解を招かないことを優先する。
+    //   その分つまみを広くして（--wide）、取っ手として掴める大きさを保つ。
     this._mainRow.appendChild(bindFloaterDrag(
-      this.el, makeMenuIcon(ICON.text, '文字の書式（ドラッグで移動）'), () => { this._dragged = true }))
+      this.el, makeDragGrip('文字の書式（ドラッグで移動）', 'kuro-drag-grip--wide'),
+      () => { this._dragged = true }))
     this.el.appendChild(this._mainRow)
 
     // Colour picker sub-panel (shown inline beneath buttons)
