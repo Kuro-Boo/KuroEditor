@@ -243,6 +243,36 @@ describe('ブロックを内包した見出し・段落は解く (R7 / R8)', () 
   })
 })
 
+describe('既存の公開記事を一括で直さないための逃げ道 (clipboardRepair: false)', () => {
+  // 混入したまま既に公開されている記事を今から一括で直すと、公開ページの
+  // 見た目が突然変わる。読者にとっては「HTML が正規形でない」ことより
+  // 「表示が変わる」ことの方が実害が大きい。R6〜R8 が効くのは【これ以降の
+  // 書き込みだけ】で、既存記事は編集して保存した時に自然に直る。
+  // （2026-08-16 の決定。docs/貼り付け破壊の修正仕様.md）
+  const src = '<h1><p style="font-size: 15px; font-weight: 400;">本文</p></h1>'
+
+  it('一括掃除では R6〜R8 を掛けない', () => {
+    expect(N(src, { clipboardRepair: false })).toBe(src)
+  })
+
+  it('従来の規則 (R1〜R5) はそのまま効く', () => {
+    expect(N('<div>a</div><p><b>x</b></p>', { clipboardRepair: false }))
+      .toBe('<p>a</p><p><strong>x</strong></p>')
+  })
+
+  it('既定は【掛ける】—— 書き込み経路が取りこぼさないため', () => {
+    expect(N(src)).not.toBe(src)
+    expect(N(src, {})).not.toBe(src)
+  })
+
+  it('inspect も同じ扱い（掃除の予告件数がずれない）', () => {
+    const s = inspectContentHtml(src, { clipboardRepair: false })
+    expect(s.blockDecor).toBe(0)
+    expect(s.nestedBlocks).toBe(0)
+    expect(s.changed).toBe(false)
+  })
+})
+
 describe('inspectContentHtml', () => {
   it('counts what would change without changing it', () => {
     const src = '<div>a</div><p><b>x</b></p><div><br></div>'

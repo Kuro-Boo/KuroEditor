@@ -412,7 +412,7 @@ function unwrapPhrasingBlock(node) {
  * @param {Array} children
  * @param {boolean} topLevel  true for the document's own top-level run
  */
-function transformChildren(children, topLevel) {
+function transformChildren(children, topLevel, clipboardRepair) {
   const out = []
   for (const node of children) {
     if (node.type !== 'el') { out.push(node); continue }
@@ -420,19 +420,19 @@ function transformChildren(children, topLevel) {
     // Opaque subtree (code / pre) — copy through untouched.
     if (OPAQUE_TAGS.has(node.name)) { out.push(node); continue }
 
-    node.children = transformChildren(node.children, false)
+    node.children = transformChildren(node.children, false, clipboardRepair)
 
     // R6 — a size/weight on a BLOCK is never this editor's; it is Chrome's
     // computed style, inlined on copy. Drop it before anything else looks at
     // the element (clearing the style attribute can make a div bare, which is
     // what R3 below needs to see to recognise it as a paragraph).
-    if (BLOCK_DECOR_TAGS.has(node.name)) {
+    if (clipboardRepair && BLOCK_DECOR_TAGS.has(node.name)) {
       node.attrs = stripStyleProps(node.attrs, FOREIGN_BLOCK_DECOR)
     }
 
     // R7 — a heading or paragraph holding blocks is Chrome's context wrapper.
     // Undo it here, before the div/p rules below reason about the contents.
-    if (PHRASING_ONLY_TAGS.has(node.name) && hasBlockChild(node)) {
+    if (clipboardRepair && PHRASING_ONLY_TAGS.has(node.name) && hasBlockChild(node)) {
       out.push(...unwrapPhrasingBlock(node))
       continue
     }
@@ -515,14 +515,25 @@ function transformChildren(children, topLevel) {
  *   heading/paragraph holding blocks → unwrapped, one data-bid kept
  *
  * Malformed input is returned unchanged.
+ *
  * @param {string} html
+ * @param {{ clipboardRepair?: boolean }} [opts]
+ *   clipboardRepair — apply R6/R7/R8, the repairs for Chrome's clipboard
+ *   serializer. Default true: every path that WRITES content wants them.
+ *
+ *   Pass false for a bulk sweep over ALREADY PUBLISHED content. Those articles
+ *   went out with the damage baked in, and re-flowing them now would change how
+ *   live pages look — to a reader, a page that suddenly renders differently is
+ *   worse than a page whose HTML is not canonical. So the rules apply to new
+ *   writes only, and an existing article heals when someone edits and saves it.
+ *   (Decision recorded 2026-08-16; see KuroEditor/docs/貼り付け破壊の修正仕様.md)
  * @returns {string}
  */
-export function normalizeContentHtml(html) {
+export function normalizeContentHtml(html, opts = {}) {
   if (typeof html !== 'string' || html === '') return html ?? ''
   const { root, ok } = parseTree(html)
   if (!ok) return html
-  root.children = transformChildren(root.children, true)
+  root.children = transformChildren(root.children, true, opts.clipboardRepair !== false)
   return serialize(root)
 }
 
@@ -533,7 +544,8 @@ export function normalizeContentHtml(html) {
  * @returns {{ bTags:number, boldSpans:number, divBlocks:number, emptyBlocks:number,
  *             blockDecor:number, nestedBlocks:number, changed:boolean }}
  */
-export function inspectContentHtml(html) {
+export function inspectContentHtml(html, opts = {}) {
+  const clipboardRepair = opts.clipboardRepair !== false
   const stats = {
     bTags: 0, boldSpans: 0, divBlocks: 0, emptyBlocks: 0,
     blockDecor: 0, nestedBlocks: 0, changed: false,
@@ -546,9 +558,9 @@ export function inspectContentHtml(html) {
       if (node.type !== 'el' || OPAQUE_TAGS.has(node.name)) continue
       // Counted independently of the chain below: an element can both carry a
       // foreign size AND hold blocks, and each is a separate repair.
-      if (BLOCK_DECOR_TAGS.has(node.name) &&
+      if (clipboardRepair && BLOCK_DECOR_TAGS.has(node.name) &&
           stripStyleProps(node.attrs, FOREIGN_BLOCK_DECOR) !== node.attrs) stats.blockDecor++
-      if (PHRASING_ONLY_TAGS.has(node.name) && hasBlockChild(node)) stats.nestedBlocks++
+      if (clipboardRepair && PHRASING_ONLY_TAGS.has(node.name) && hasBlockChild(node)) stats.nestedBlocks++
       if (node.name === 'b') stats.bTags++
       else if (isBoldOnlySpan(node)) stats.boldSpans++
       else if (node.name === 'div' || node.name === 'p') {
@@ -560,6 +572,6 @@ export function inspectContentHtml(html) {
     }
   }
   walk(root.children, true)
-  stats.changed = normalizeContentHtml(html) !== html
+  stats.changed = normalizeContentHtml(html, opts) !== html
   return stats
 }
