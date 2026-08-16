@@ -13,6 +13,10 @@ export interface ContentHtmlStats {
   divBlocks: number;
   /** 空ブロック（<div><br></div> 等）の数。 */
   emptyBlocks: number;
+  /** ブロックに付いた font-size / font-weight の数（Chrome のコピーが焼き込む）。 */
+  blockDecor: number;
+  /** ブロックを内包している見出し・段落の数（Chrome のコピーの文脈要素）。 */
+  nestedBlocks: number;
   /** 正規化で実際に HTML が変化するか。 */
   changed: boolean;
 }
@@ -24,6 +28,9 @@ export interface ContentHtmlStats {
  * - 段落の `<div>` → `<p>`（属性は保持）
  * - 素の `<div>` ブロックラッパー → unwrap（スタイル付きは保持）
  * - 空ブロック → トップレベルは `<p><br></p>`、入れ子は `<br>`
+ * - ブロックに付いた `font-size` / `font-weight` → 除去（`<span>` のものは保持）
+ * - ブロックを内包した見出し・段落 → 解いて兄弟に並べる（文字は落とさない、
+ *   `data-bid` は 1 ブロックに 1 つだけ残す）
  *
  * `<pre>` / `<code>` 配下は一切触らない。壊れた HTML は入力をそのまま返す。
  * 冪等（2 回適用しても同じ）。

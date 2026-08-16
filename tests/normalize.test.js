@@ -154,12 +154,108 @@ describe('safety', () => {
   })
 })
 
+describe('ブロックに付いた文字装飾は混入 (R6)', () => {
+  // エディタが文字サイズを書くのは <span style="font-size:…"> だけ (_applyFontSize)、
+  // 太字は <strong>。ブロックに付いた font-size / font-weight は Chrome のコピーが
+  // 焼き込んだ計算済みスタイルだと断定できる。
+  it('見出し・段落・セルから font-size / font-weight を落とす', () => {
+    expect(N('<p style="font-size: 15px; font-weight: 400;">本文</p>')).toBe('<p>本文</p>')
+    expect(N('<h2 style="font-weight: 700">見出し</h2>')).toBe('<h2>見出し</h2>')
+    expect(N('<td style="font-size: 13px">セル</td>')).toBe('<td>セル</td>')
+    expect(N('<li style="font-size: 13px">項目</li>')).toBe('<li>項目</li>')
+  })
+
+  it('span に付いたものは書き手の指定なので残す', () => {
+    const src = '<p><span style="font-size: 150%;">大きく</span></p>'
+    expect(N(src)).toBe(src)
+  })
+
+  it('同じ style の他の指定は一字一句そのまま残す', () => {
+    // 値を作り直すと font-family の大文字小文字まで書き換わる。落とすのは
+    // 該当の宣言だけで、残りは元の綴りのまま。
+    expect(N(`<p style="text-align: center; font-size: 15px; font-family: 'Noto Sans JP';">x</p>`))
+      .toBe(`<p style="text-align: center; font-family: 'Noto Sans JP'">x</p>`)
+  })
+
+  it('style が空になったら属性ごと消える（div は段落として扱えるようになる）', () => {
+    expect(N('<div style="font-size: 15px">本文</div>')).toBe('<p>本文</p>')
+  })
+
+  it('冪等', () => {
+    const once = N('<p style="font-size: 15px; font-weight: 400;">本文</p>')
+    expect(N(once)).toBe(once)
+  })
+})
+
+describe('ブロックを内包した見出し・段落は解く (R7 / R8)', () => {
+  it('見出しが飲み込んだ本文を兄弟に戻す', () => {
+    expect(N('<h1>見出し<p>本文</p></h1>')).toBe('<h1>見出し</h1><p>本文</p>')
+  })
+
+  it('自分のテキストを持たない包みは消える（Chrome の文脈要素そのもの）', () => {
+    // 選択が見出しの内側から始まると、Chrome は記事全体をその見出しで包む。
+    expect(N('<h1><p style="font-size: 15px">本文</p><h2>次の見出し</h2></h1>'))
+      .toBe('<p>本文</p><h2>次の見出し</h2>')
+  })
+
+  it('文字は絶対に落とさない —— ブロックの後ろに続く地の文も残す', () => {
+    // タグは捨ててよいが中身の文字は捨てない。見出しの後に来た地の文は
+    // 段落として拾う（ブロックが始まった時点で見出しではなくなっている）。
+    const out = N('<h1>見出し<p>本文</p>あとがき</h1>')
+    expect(out).toBe('<h1>見出し</h1><p>本文</p><p>あとがき</p>')
+    expect(out).toContain('あとがき')
+  })
+
+  it('ブロックの間の空白は行を占めないので捨てる', () => {
+    expect(N('<h1>\n  <p>本文</p>\n</h1>')).toBe('<p>本文</p>')
+  })
+
+  it('空行は空行のまま残る', () => {
+    expect(N('<h1><p>一</p><p><br></p><p>二</p></h1>'))
+      .toBe('<p>一</p><p><br></p><p>二</p>')
+  })
+
+  it('data-bid は外側のものを1つだけ残す (R8)', () => {
+    // 共同編集のため 1 ブロック 1 bid・重複なしが不変条件。中途半端に残すと
+    // _dedupeNestedBids がどちらかを振り直し、他の人が編集中のブロックの id が変わる。
+    const out = N('<h1 data-bid="A">見出し<p data-bid="B">本文</p></h1>')
+    expect(out).toBe('<h1 data-bid="A">見出し</h1><p>本文</p>')
+    expect(out.match(/data-bid/g)).toHaveLength(1)
+  })
+
+  it('外側が持っていなければ内側のものを昇格させる', () => {
+    expect(N('<h1><p data-bid="B">本文</p><p data-bid="C">続き</p></h1>'))
+      .toBe('<p data-bid="B">本文</p><p>続き</p>')
+  })
+
+  it('段落がブロックを抱えている場合も同じ', () => {
+    expect(N('<p>まえ<ul><li>項目</li></ul></p>')).toBe('<p>まえ</p><ul><li>項目</li></ul>')
+  })
+
+  it('li / td は元からブロックを持てるので触らない', () => {
+    const src = '<ul><li><p>本文</p></li></ul>'
+    expect(N(src)).toBe(src)
+  })
+
+  it('冪等', () => {
+    const once = N('<h1 data-bid="A">見出し<p data-bid="B">本文</p></h1>')
+    expect(N(once)).toBe(once)
+  })
+})
+
 describe('inspectContentHtml', () => {
   it('counts what would change without changing it', () => {
     const src = '<div>a</div><p><b>x</b></p><div><br></div>'
     const s = inspectContentHtml(src)
     expect(s.bTags).toBe(1)
     expect(s.divBlocks).toBe(1)
+    expect(s.changed).toBe(true)
+  })
+
+  it('コピー由来の壊れ方を数える', () => {
+    const s = inspectContentHtml('<h1><p style="font-size: 15px; font-weight: 400;">本文</p></h1>')
+    expect(s.blockDecor).toBe(1)
+    expect(s.nestedBlocks).toBe(1)
     expect(s.changed).toBe(true)
   })
 

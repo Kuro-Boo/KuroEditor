@@ -29,13 +29,31 @@ describe('貼り付けの掃除（許可リスト）', () => {
     expect(out).toContain('文')
   })
 
-  it('KuroEditor が自分で書ける指定は残す（サイズ・寄せ・行間・字下げ）', () => {
+  it('KuroEditor が自分で書ける指定は残す（寄せ・行間・字下げ）', () => {
     const out = ed._sanitizePastedHTML(
-      '<p style="font-size: 120%; text-align: center; line-height: 1.8; padding-left: 2em">文</p>')
-    expect(out).toContain('font-size')
+      '<p style="text-align: center; line-height: 1.8; padding-left: 2em">文</p>')
     expect(out).toContain('text-align')
     expect(out).toContain('line-height')
     expect(out).toContain('padding-left')
+  })
+
+  it('文字サイズは span なら残す（書き手が UI で付けられる唯一の形）', () => {
+    const out = ed._sanitizePastedHTML('<p><span style="font-size: 120%">大きく</span></p>')
+    expect(out).toContain('font-size')
+  })
+
+  it('ブロックに付いた font-size / font-weight は落とす（Chrome のコピーの焼き込み）', () => {
+    // _applyFontSize は選択範囲を <span style="font-size"> で包む形しか書かない。
+    // ブロックに付いていたら混入と断定でき、しかも UI からは直せない。
+    expect(ed._sanitizePastedHTML('<p style="font-size: 15px; font-weight: 400">文</p>'))
+      .toBe('<p>文</p>')
+  })
+
+  it('見出しが飲み込んだブロックは解く（文字は落とさない）', () => {
+    // 選択が見出しの内側から始まると Chrome は全体をその見出しで包む。
+    expect(ed._sanitizePastedHTML(
+      '<h1>見出し<p style="font-size: 15px; font-weight: 400">本文</p></h1>'))
+      .toBe('<h1>見出し</h1><p>本文</p>')
   })
 
   it('太字 / 斜体の意味は残す（span でコピーされた強調を失わない）', () => {
@@ -46,10 +64,10 @@ describe('貼り付けの掃除（許可リスト）', () => {
 
   it('色・背景は残さない（暗いテーマからのコピーが明るいページで読めなくなる）', () => {
     const out = ed._sanitizePastedHTML(
-      '<p style="color: #fff; background-color: #000; font-size: 120%">文</p>')
+      '<p style="color: #fff; background-color: #000; text-align: center">文</p>')
     expect(out).not.toMatch(/color:/)
     expect(out).not.toMatch(/background/)
-    expect(out).toContain('font-size')
+    expect(out).toContain('text-align')
   })
 
   it('見た目まわりのその他の指定も落とす', () => {

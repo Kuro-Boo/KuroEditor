@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.37.3'
+export const VERSION = '2.38.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -7805,6 +7805,69 @@ export class KuroEditor {
       }
       // それ以外 (純テキスト) は通常のテキストペーストを通す
     })
+
+    // ── コピー — クリップボードに【正規形】を書く ─────────────────────────
+    // Chrome の既定の直列化は本文を壊す。計算済みスタイルをインラインで焼き込み
+    // (font-size: 15px; font-weight: 400 の出所)、選択が見出しの内側から始まると
+    // 全体をその見出しで包む (<h1> が記事全体を飲み込む)。ブラウザ側に止める
+    // 設定は無いので、こちらで中身を差し替える。
+    //
+    // Range.cloneContents() は部分選択された祖先を【兄弟として】複製するので、
+    // 文脈要素の入れ子がそもそも生まれない。あとは保存と同じ直列化を通すだけで
+    // 「保存される HTML」と「コピーされる HTML」が一致する。
+    //
+    // ⚠ cut は扱わない。preventDefault すると削除まで止まるので、範囲を自分で
+    //   消す必要があり、Undo 履歴とキャレット復元まで巻き込む。エディタ内で
+    //   切って貼る経路は貼り付け側の掃除で同じ結果になる。
+    this.wysiwyg.addEventListener('copy', (e) => {
+      // コードブロックの <textarea> からのコピーは素通し (中身はコードそのもの)
+      const tag = e.target?.tagName
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return
+      const sel = window.getSelection?.()
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
+      const range = sel.getRangeAt(0)
+      if (!this.wysiwyg.contains(range.commonAncestorContainer)) return
+      let html
+      try {
+        html = this._canonicalSelectionHtml(range)
+      } catch {
+        return   // 直列化できない選択はブラウザ既定に任せる (壊すよりまし)
+      }
+      if (!html) return
+      e.clipboardData?.setData('text/html', html)
+      e.clipboardData?.setData('text/plain', sel.toString())
+      e.preventDefault()
+    })
+  }
+
+  /**
+   * 選択範囲を、保存されるのと同じ正規形の HTML にする。
+   * @param {Range} range
+   * @returns {string}
+   */
+  _canonicalSelectionHtml(range) {
+    const box = document.createElement('div')
+    box.appendChild(range.cloneContents())
+    // ブロック ID は文書ごとのもの。貼り付け側でも落とすが、コピー時点で外して
+    // おけば他アプリへ出ていく HTML にも編集用の内部属性が混ざらない。
+    return stripInternalIds(this._serializeForExport(box))
+  }
+
+  /**
+   * DOM の断片 (文書全体でも選択範囲でも) を、保存される形の HTML にする。
+   * getContent とコピーで共有する —— 別実装にすると
+   * 「保存した本文」と「コピーした本文」がずれる。
+   * @param {Element} root  破壊してよい【複製】。生の DOM を渡さないこと
+   * @returns {string}
+   */
+  _serializeForExport(root) {
+    this._serializeCodeBlocksToHtml(root)
+    // RecipeCard の内側を正本(data-recipe)から作り直す = 編集用 chrome を保存しない
+    this._serializeRecipeCards(root)
+    // Strip the presentational atomic-block wrappers so the stored form is the
+    // same token-based shape as before this feature (no migration, no drift).
+    this._unwrapAtomicBlocks(root)
+    return normalizeContentHtml(unrenderSpecialLinks(root.innerHTML))
   }
 
   /**
@@ -7845,6 +7908,12 @@ export class KuroEditor {
     //   直せる、という保証になる。
     // ⚠ color / background は許可リストにも入れない（下の COLOR_PROPS で明示除去）。
     //   暗いテーマからのコピーが明るい公開ページで読めなくなるため。
+    // ⚠ font-size / font-weight は【span に対してだけ】残る。ブロック（p / li /
+    //   h1..h6 / ol / ul / td / th / div）に付いたものは、最後に通す
+    //   normalizeContentHtml が落とす（R6）。エディタが文字サイズを書くのは
+    //   <span style="font-size:…"> だけなので、ブロックに付いていたら Chrome の
+    //   コピーが焼き込んだ計算済みスタイルだと断定できる。ここは要素ごとの
+    //   区別をしないので、許可リストには残したまま下流で判定する。
     const STYLE_ALLOW = new Set([
       'font-size', 'font-family', 'font-weight', 'font-style',
       'text-decoration', 'text-decoration-line',
@@ -10369,13 +10438,18 @@ export class KuroEditor {
     const live  = Array.from(this.wysiwyg.querySelectorAll('.kuro-code-wrap'))
     const clone = Array.from(root.querySelectorAll('.kuro-code-wrap'))
     clone.forEach((wrap, i) => {
-      const value = live[i]?.querySelector('.kuro-code__area')?.value ?? ''
+      // 対応する生の要素は【data-bid で引く】。getContent は文書全体の複製なので
+      // 添字でも合うが、コピーは選択範囲だけの複製なので添字がずれる —— 2つ目の
+      // コードブロックだけを選んでコピーすると1つ目の中身が入る、という形で
+      // 「別のコードが貼られる」。id で引けば選択範囲でも正しい。
+      const bid = wrap.getAttribute('data-bid')
+      const src = (bid && live.find((w) => w.getAttribute('data-bid') === bid)) || live[i]
+      const value = src?.querySelector('.kuro-code__area')?.value ?? ''
       const pre  = document.createElement('pre')
       pre.className = 'kuro-code'
       // Preserve block identity across serialize: without this the code block
       // gets a fresh data-bid on every save/reload, so a per-block 3-way merge
       // sees it as delete+insert and can spuriously duplicate it (F0-1).
-      const bid = wrap.getAttribute('data-bid')
       if (bid) pre.setAttribute('data-bid', bid)
       // 行番号は【公開ページでも出す】（WYSIWYG は絶対 — 編集画面に gutter が
       // あって公開ページに無い、は許さない）。公開側は <pre><code> の素の
@@ -10924,20 +10998,13 @@ export class KuroEditor {
   getContent() {
     if (this._mode === 'source') return this.sourceArea.value
     // Clone the live tree, then serialize code-block textareas to <pre><code>.
-    const clone = this.wysiwyg.cloneNode(true)
-    this._serializeCodeBlocksToHtml(clone)
-    // RecipeCard の内側を正本(data-recipe)から作り直す = 編集用 chrome を保存しない
-    this._serializeRecipeCards(clone)
-    // Strip the presentational atomic-block wrappers so the stored form is the
-    // same token-based shape as before this feature (no migration, no drift).
-    this._unwrapAtomicBlocks(clone)
     // Canonicalize on the way OUT — this is the single point where editor DOM
     // becomes stored HTML, so it is where the spelling is pinned (<b> and
     // bold-only spans → <strong>, div paragraphs → <p>). contenteditable is
     // free to build whatever the browser prefers in the live tree; what gets
     // SAVED is the same shape the API writes. The transform is idempotent and
     // renders identically, so this never shows up as a visible edit.
-    return normalizeContentHtml(unrenderSpecialLinks(clone.innerHTML))
+    return this._serializeForExport(this.wysiwyg.cloneNode(true))
   }
 
   /**
