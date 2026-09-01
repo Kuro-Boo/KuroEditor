@@ -138,3 +138,48 @@ describe('表メニュー', () => {
     expect(ed.linePopupMenu.el.classList.contains('kuro-line-popm--visible')).toBe(false)
   })
 })
+
+// ── 初期位置（2026-09-02 指示）────────────────────────────────────────────
+//
+// 「表の 2 行ぶん上。画面外になるときは一番上」。基準を**表**にするのは、
+// カーソル行を基準にすると表の中を移るたびにメニューが上下して落ち着かない
+// ため。入らないときに**下へ回さない**のは、下＝いま打っているセルの近くで、
+// 本文を隠してしまうため（長い表ほど上端は画面外にあり、この条件は普通に起きる）。
+describe('表メニューの初期位置', () => {
+  beforeEach(() => { document.body.innerHTML = '' })
+
+  /** happy-dom はレイアウトを持たないので、位置決めが読む値だけ差し替える。 */
+  const place = (tableTop) => {
+    const ed = makeEditor(TABLE)
+    const tm = ed.tableManager
+    const table = ed.wysiwyg.querySelector('table')
+    tm.activate(table)
+    Object.defineProperty(tm.el, 'offsetHeight', { value: 36, configurable: true })
+    Object.defineProperty(tm.el, 'offsetWidth', { value: 200, configurable: true })
+    table.getBoundingClientRect = () => ({
+      top: tableTop, bottom: tableTop + 120, left: 20, right: 220, width: 200, height: 120,
+    })
+    tm._place()
+    return { tm, top: parseFloat(tm.el.style.top) }
+  }
+
+  it('表の上に余裕があれば、表の上端から約2行ぶん上に置く', () => {
+    // 表の上端 300 / メニュー高 36 / 1行 20px とみなす → 300-36-40 = 224
+    const { top } = place(300)
+    expect(top).toBe(224)
+  })
+
+  it('画面の上に出てしまうときは一番上に貼る（下へ回さない）', () => {
+    // 表の上端が 10 なら 10-36-40 < 4。下へ回すと編集中のセルを隠す。
+    const { tm, top } = place(10)
+    expect(top).toBe(4)
+    // 表の下端（130）より下に落ちていないこと＝下へ回していない。
+    expect(top).toBeLessThan(130)
+    expect(tm._dragged).toBe(false)
+  })
+
+  it('表の上端が画面の外（負）でも一番上に留まる', () => {
+    const { top } = place(-400)
+    expect(top).toBe(4)
+  })
+})

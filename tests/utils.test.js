@@ -851,17 +851,39 @@ describe('nativeSelectionBarClearance', () => {
     ).toBe(64)
   })
 
-  it('iOS / デスクトップでは 0(OS メニューは選択の上に重ならない)', () => {
+  // iOS 16 で編集メニューが吹き出し型になり、**選択の上**に出るのが既定に
+  // なった。0 のままだと装飾ポップアップと正面から重なる(2026-09-02 実機)。
+  it('iOS でも帯を返す(編集メニューは選択の上に出る)', () => {
     expect(
       nativeSelectionBarClearance(
         'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15',
       ),
-    ).toBe(0)
+    ).toBe(58)
+  })
+
+  it('マウスのデスクトップでは 0(OS のメニューが出ない)', () => {
     expect(
       nativeSelectionBarClearance(
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
       ),
     ).toBe(0)
+  })
+
+  // iPadOS 13+ の Safari は Macintosh を名乗る。UA だけ見ると「デスクトップ」に
+  // 化けて、iPad でだけポップアップが重なる。触れる画面かどうかで見分ける。
+  it('Macintosh を名乗る iPad は、触れる画面として扱う', () => {
+    const original = Object.getOwnPropertyDescriptor(navigator, 'maxTouchPoints')
+    Object.defineProperty(navigator, 'maxTouchPoints', { value: 5, configurable: true })
+    try {
+      expect(
+        nativeSelectionBarClearance(
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
+        ),
+      ).toBe(58)
+    } finally {
+      if (original) Object.defineProperty(navigator, 'maxTouchPoints', original)
+      else delete navigator.maxTouchPoints
+    }
   })
 })
 

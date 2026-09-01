@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.38.2'
+export const VERSION = '2.39.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -726,16 +726,27 @@ export function popupBottomLimit(mmenuEl, margin = 4) {
 
 /**
  * OS のテキスト選択ツールバーが「選択範囲の上」に占有する帯の高さ(px)。
- * Android の floating toolbar(コピー/貼り付け/翻訳…)は選択のすぐ上に描画される
- * ため、選択の上に出すポップアップ(popm)はこの分さらに上へ逃がす必要がある。
- * iOS は編集メニューが選択の「下」に出るので 0(下方向は flip 時のみ使われ、
- * その場合 OS メニューはユーザー操作で消えるのが通例)。
- * 高さは 48dp のツールバー + マージンの実測近似。
+ *
+ * Android の floating toolbar(コピー/貼り付け/翻訳…)も、iOS の編集メニュー
+ * (コピー/調べる/…)も、**選択のすぐ上**に描画される。選択の上に出す
+ * ポップアップ(popm)は、その分さらに上へ逃がさないと重なって押せない。
+ *
+ * ⚠ **iOS を 0 にしない**(2026-09-02 に実機で修正)。かつては「iOS の編集
+ *   メニューは選択の下に出る」として 0 にしていたが、iOS 16 で編集メニューが
+ *   吹き出し型になってから**選択の上**に出るのが既定で、装飾ポップアップと
+ *   正面から重なっていた。下に出るのは上に入りきらないときだけである。
+ *
+ * 高さは Android 48dp / iOS 44pt のツールバー + 吹き出しの尖りとマージンの
+ * 実測近似。デスクトップは OS のメニューが出ないので 0 のまま。
  * @param {string} [ua=navigator.userAgent]
  * @returns {number}
  */
 export function nativeSelectionBarClearance(ua = navigator.userAgent) {
-  return /Android/i.test(ua) ? 64 : 0
+  if (/Android/i.test(ua)) return 64
+  // iPadOS 13+ の Safari は Macintosh を名乗るので、タッチの有無も見る。
+  const iOS = /iPhone|iPad|iPod/i.test(ua) ||
+    (/Macintosh/i.test(ua) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1)
+  return iOS ? 58 : 0
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3264,14 +3275,21 @@ export class TableManager {
         ? caretRect
         : (cell?.getBoundingClientRect() ?? this.activeTable.getBoundingClientRect())
 
-      // カーソル行の直上ではなく約3行分上に離して表示する。
       // 1行分の高さは caret 矩形から取り、取れない場合は 20px とみなす。
       const lineH = (caretRect && caretRect.height > 0) ? caretRect.height : 20
       // 選択の「下」に置くときの余白。Android は選択ハンドル(雫型)が選択の下に
       // ぶら下がって OS が描くため、その分(約 28px)も空けてボタンが隠れないようにする。
       const belowClear = 6 + (nativeSelectionBarClearance() ? 28 : 0)
-      let top = refRect.top - menuH - lineH * 3
-      if (top < 4) top = refRect.bottom + belowClear
+
+      // ── 初期位置 = **表の上端から約2行ぶん上**(2026-09-02 指示) ──────────
+      // 基準をカーソル行にすると、表の中でセルを移るたびにメニューが上下して
+      // 落ち着かない。表を基準にすれば、同じ表を触っている間は動かない。
+      const tableRect = this.activeTable.getBoundingClientRect()
+      let top = tableRect.top - menuH - lineH * 2
+      // 画面の上に出てしまうときは**一番上に貼り付ける**。下へ回すと、表の
+      // すぐ下 = いま打っているセルの近くに割り込んで本文を隠す(長い表ほど
+      // 表の上端は画面外にあるので、下へ回す条件は普通に起きる)。
+      if (top < 4) top = 4
 
       const overlaps = (t, r) => r && t < r.bottom + GAP && t + menuH > r.top - GAP
 
@@ -6472,6 +6490,11 @@ export class KuroEditor {
       canvasDark: null,
       canvasDarkUi: false,
       versionUi: true,
+      // 文字数カウンターの居場所。'auto'（既定）= 2 段目の右端に置き、狭くて
+      // 3 行目に落ちるときだけ 1 段目へ逃がす。'top' = 幅によらず**常に 1 段目**。
+      // ホストが 2 段目の右端を自分の用途で使いたいとき（KuroNote はそこに
+      // キーボードの開閉ボタンを置く）に、席を空けるための指定。
+      charCountSlot: 'auto',
       helpUi: true,
       // 公式の操作マニュアル（書く人向け）。ホストが独自マニュアルを持つなら差し替える
       helpUrl: 'https://kuro.boo/kuroeditor/guide/',
@@ -6845,7 +6868,14 @@ export class KuroEditor {
     this._charCountValue = null   // 前回描画した値(同値スキップ用)
     this._charCountShape = null   // 桁構成 '#,###' — 変わったら列を作り直す
     const row2Right = createElement('div', { className: 'kuro-tabs__group kuro-tabs__group--right' })
-    row2Right.appendChild(this.charCount)
+    // charCountSlot:'top' のときは最初から 1 段目へ。2 段目に置いてから移すと、
+    // 初回描画で一瞬 2 段目に見える(ちらつく)。
+    if (this.options.charCountSlot === 'top') {
+      row1Right.insertBefore(this.charCount, this._charCountUp)
+      this.charCount.classList.add('kuro-charcount--in-top')
+    } else {
+      row2Right.appendChild(this.charCount)
+    }
     row2.appendChild(row2Right)
 
     this.tabBar.appendChild(row1)
@@ -6871,6 +6901,10 @@ export class KuroEditor {
    */
   _syncCharCountSlot() {
     if (!this.charCount || !this._row2Right) return
+    // 'top' は幅に関係なく 1 段目に据え置く。**ここで戻さない** ——
+    // 戻すと、2 段目の右端を使うホスト(KuroNote のキーボード開閉ボタン)と
+    // 場所を取り合って、幅が変わるたびに入れ替わる。
+    if (this.options.charCountSlot === 'top') return
     // display:none（ソースモード）では offsetTop が測れない。表示に戻るときに再度呼ぶ
     if (this.charCount.classList.contains('kuro-charcount--hidden')) return
 

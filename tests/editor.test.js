@@ -2103,6 +2103,34 @@ describe('KuroEditor', () => {
       expect(document.querySelector('.kuro-tabs__char-count')).toBeNull()
       expect(document.querySelector('.kuro-mmenu__char-count')).toBeNull()
     })
+
+    // charCountSlot:'top' — 2 段目の右端をホストが使いたいときに席を空ける
+    // (KuroNote はそこにキーボードの開閉ボタンを置く・2026-09-02)。
+    describe("charCountSlot: 'top'", () => {
+      let ed
+      let mount2
+      beforeEach(() => {
+        mount2 = makeMount()
+        ed = new KuroEditor(mount2, { charCountSlot: 'top' })
+      })
+      afterEach(() => { mount2.remove() })
+
+      it('最初から 1 段目に居る(2 段目に出してから移さない=ちらつかない)', () => {
+        expect(ed.charCount.closest('.kuro-tabs__row--top')).not.toBeNull()
+        expect(ed.charCount.classList.contains('kuro-charcount--in-top')).toBe(true)
+      })
+
+      it('幅が広くても 2 段目へ戻さない(席を取り合わない)', () => {
+        layout(ed._tabActions, 0, 32)
+        layout(ed.charCount,   6, 20)   // 'auto' なら 2 段目へ帰る値
+        ed._syncCharCountSlot()
+        expect(ed.charCount.closest('.kuro-tabs__row--top')).not.toBeNull()
+      })
+
+      it('2 段目の右端は空いている(ホストが使える)', () => {
+        expect([...ed._row2Right.children]).toHaveLength(0)
+      })
+    })
   })
 
   describe('角丸ボックス — 中にいる間は挿入ボタンが点灯', () => {
