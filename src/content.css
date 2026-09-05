@@ -382,6 +382,8 @@ h5[id^='kuro-h-'] {
   border-left: 4px solid var(--kuro-quote-border);
   color: var(--kuro-quote-text);
   font-style: italic;
+  /* コールアウトと同じ理由。浮いている画像の下へ潜らせない。 */
+  display: flow-root;
 }
 .kuro-content blockquote p {
   margin: 0.25rem 0;
@@ -497,6 +499,14 @@ h5[id^='kuro-h-'] {
   border-radius: 0.5rem;
   border-left: 4px solid;
   position: relative;
+  /* ⚠ **浮いている画像の下へ潜らせない**（v2.39.3）。
+     ふつうのブロックは float の**下**に敷かれ、縮むのは行だけなので、
+     囲みの背景と枠線が画像と重なる。コードは overflow-x:auto、角丸ボックスは
+     overflow:hidden で、たまたま BFC になっていたから縮んでいた ——
+     コールアウトと引用にだけ無く、そこだけ重なっていた。
+     `flow-root` は切り取らずに BFC を作る（overflow:hidden と違い、
+     はみ出す装飾を隠さない）。 */
+  display: flow-root;
 }
 .kuro-content .kuro-callout::before {
   position: absolute;

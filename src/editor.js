@@ -450,13 +450,18 @@ const ICON = {
   undo: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,4 2,4 2,1"/><path d="M2 4 a5 5 0 0 1 5 -1 h2 a4 4 0 0 1 0 8 h-3"/></svg>`,
   // Redo: undo の左右対称
   redo: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9,4 12,4 12,1"/><path d="M12 4 a5 5 0 0 0 -5 -1 h-2 a4 4 0 0 0 0 8 h3"/></svg>`,
-  // Keyboard key (kbd) — minimalistic keyboard outline + dot keys
+  // Keyboard key (kbd) — 枠 + 3 つのキー + 中央の空白キー。
+  //
+  // ⚠ **描き込まない。** 14px では線と塗りが多いほど潰れて「四角い塊」になる。
+  //   旧版は枠いっぱいの空白キーと端に寄った点で、実機では中身が読めなかった
+  //   （2026-09-05 の指摘）。**中央に寄せ、余白を残す**ほうがキーボードに見える。
+  // ⚠ 枠は外さない。点と線だけにすると、下線付きのメニューに見える（描いて比べた）。
   kbd: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true">` +
-    `<rect x="0.5" y="3.5" width="13" height="7" rx="1.2"/>` +
-    `<rect x="2.4" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
-    `<rect x="5.3" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
-    `<rect x="8.2" y="5.2" width="1.4" height="1.4" rx="0.3" fill="currentColor" stroke="none"/>` +
-    `<rect x="2.4" y="7.6" width="7.5" height="1.3" rx="0.3" fill="currentColor" stroke="none"/>` +
+    `<rect x="1" y="3.5" width="12" height="7" rx="1.5"/>` +
+    `<rect x="3.2" y="5.6" width="1.6" height="1.6" rx="0.4" fill="currentColor" stroke="none"/>` +
+    `<rect x="6.2" y="5.6" width="1.6" height="1.6" rx="0.4" fill="currentColor" stroke="none"/>` +
+    `<rect x="9.2" y="5.6" width="1.6" height="1.6" rx="0.4" fill="currentColor" stroke="none"/>` +
+    `<rect x="4.2" y="8.4" width="5.6" height="1" rx="0.5" fill="currentColor" stroke="none"/>` +
   `</svg>`,
   // Ruby (ふりがな) — 大きい親文字の上に小さい読みが乗る形そのもの。
   // ⚠ 記号の抽象画（線・点）にしない。「上に小さい字が乗る」形が機能そのものなので、
@@ -1515,8 +1520,30 @@ export class PopupMenu {
     this._colorPanel.appendChild(picker.el)
   }
 
-  _showColors() { this._colorPanel.classList.add('kuro-popm__colors--visible') }
-  _hideColors() { this._colorPanel.classList.remove('kuro-popm__colors--visible') }
+  _showColors() { this._colorPanel.classList.add('kuro-popm__colors--visible'); this._reflow() }
+  _hideColors() { this._colorPanel.classList.remove('kuro-popm__colors--visible'); this._reflow() }
+
+  /**
+   * 追加枠の開け閉めで背が変わったぶん、置き直す（v2.39.3）。
+   *
+   * ⚠ 開け閉めは class を足すだけで、`top` は**出したときの背のまま**だった。
+   *   上に出していた popm は、伸びたぶんだけ下へ食み出す —— 選択の上に空けた
+   *   帯を自分で埋めてしまい、**OS のコピペメニューと必ず重なる**（実機）。
+   *
+   * 選択はもう手元に無いことがある（読みの欄へ焦点が移っている）ので、
+   * 控えてある `_activeRange` を使う。
+   */
+  _reflow() {
+    if (!this.el.classList.contains('kuro-popm--visible')) return
+    if (this._dragged) return   // つまみで動かした後は動かさない
+    const sel = window.getSelection()
+    const live = sel?.rangeCount ? sel.getRangeAt(0) : null
+    const range = live && !live.collapsed ? live : this._activeRange
+    if (!range) return
+    const rect = range.getBoundingClientRect?.()
+    if (!rect || (rect.width === 0 && rect.height === 0)) return
+    this._placeAt(rect)
+  }
   _toggleColors() {
     this._colorPanel.classList.contains('kuro-popm__colors--visible')
       ? this._hideColors() : this._showColors()
@@ -1684,8 +1711,8 @@ export class PopupMenu {
     }
   }
 
-  _showSizes()   { this._sizePanel?.classList.add('kuro-popm__sizes--visible') }
-  _hideSizes()   { this._sizePanel?.classList.remove('kuro-popm__sizes--visible') }
+  _showSizes()   { this._sizePanel?.classList.add('kuro-popm__sizes--visible'); this._reflow() }
+  _hideSizes()   { this._sizePanel?.classList.remove('kuro-popm__sizes--visible'); this._reflow() }
   _toggleSizes() {
     this._sizePanel?.classList.contains('kuro-popm__sizes--visible')
       ? this._hideSizes() : this._showSizes()
@@ -1742,8 +1769,8 @@ export class PopupMenu {
     return this
   }
 
-  _showLineHeights()   { this._lhPanel?.classList.add('kuro-popm__sizes--visible') }
-  _hideLineHeights()   { this._lhPanel?.classList.remove('kuro-popm__sizes--visible') }
+  _showLineHeights()   { this._lhPanel?.classList.add('kuro-popm__sizes--visible'); this._reflow() }
+  _hideLineHeights()   { this._lhPanel?.classList.remove('kuro-popm__sizes--visible'); this._reflow() }
   _toggleLineHeights() {
     this._lhPanel?.classList.contains('kuro-popm__sizes--visible')
       ? this._hideLineHeights() : this._showLineHeights()
@@ -1938,10 +1965,12 @@ export class PopupMenu {
     // panel always shows the default (ゴシック ring) even when a web font / 明朝
     // is actually in effect.
     this._updateFontFamilyLabel()
+    this._reflow()
   }
   _hideFontFamily()   {
     this._fontFamilyPanel?.classList.remove('kuro-popm__sizes--visible')
     this._hideWebFontList()
+    this._reflow()
   }
   _toggleFontFamily() {
     this._fontFamilyPanel?.classList.contains('kuro-popm__sizes--visible')
@@ -2108,8 +2137,8 @@ export class PopupMenu {
     this._calloutBtn?.classList.toggle('kuro-popm__btn--active', activeType !== null)
   }
 
-  _showCalloutPanel()   { this._calloutPanel?.classList.add('kuro-popm__sizes--visible') }
-  _hideCalloutPanel()   { this._calloutPanel?.classList.remove('kuro-popm__sizes--visible') }
+  _showCalloutPanel()   { this._calloutPanel?.classList.add('kuro-popm__sizes--visible'); this._reflow() }
+  _hideCalloutPanel()   { this._calloutPanel?.classList.remove('kuro-popm__sizes--visible'); this._reflow() }
   _toggleCalloutPanel() {
     this._calloutPanel?.classList.contains('kuro-popm__sizes--visible')
       ? this._hideCalloutPanel() : this._showCalloutPanel()
@@ -2276,10 +2305,12 @@ export class PopupMenu {
   _showRubyPanel() {
     this._rubyPanel?.classList.add('kuro-popm__sizes--visible')
     this._updateRubyState()
+    // 背が変わったので置き直す（読みの欄が OS のメニューに隠れないように）
+    this._reflow()
     // 読みをすぐ打てるように（選択は _activeRange に控えてあるので消えない）
     this._rubyInput?.focus({ preventScroll: true })
   }
-  _hideRubyPanel()   { this._rubyPanel?.classList.remove('kuro-popm__sizes--visible') }
+  _hideRubyPanel()   { this._rubyPanel?.classList.remove('kuro-popm__sizes--visible'); this._reflow() }
   _toggleRubyPanel() {
     this._rubyPanel?.classList.contains('kuro-popm__sizes--visible')
       ? this._hideRubyPanel() : this._showRubyPanel()
@@ -2484,10 +2515,11 @@ export class PopupMenu {
     }
   }
 
-  _showListStyles()   { this._listStylePanel?.classList.add('kuro-popm__sizes--visible') }
+  _showListStyles()   { this._listStylePanel?.classList.add('kuro-popm__sizes--visible'); this._reflow() }
   _hideListStyles()   {
     this._listStylePanel?.classList.remove('kuro-popm__sizes--visible')
     this._olMarkerColorSection?.classList.remove('kuro-marker-color-section--visible')
+    this._reflow()
   }
   _toggleListStyles() {
     this._listStylePanel?.classList.contains('kuro-popm__sizes--visible')
@@ -2628,10 +2660,11 @@ export class PopupMenu {
     }
   }
 
-  _showULStyles()   { this._ulStylePanel?.classList.add('kuro-popm__sizes--visible') }
+  _showULStyles()   { this._ulStylePanel?.classList.add('kuro-popm__sizes--visible'); this._reflow() }
   _hideULStyles()   {
     this._ulStylePanel?.classList.remove('kuro-popm__sizes--visible')
     this._ulMarkerColorSection?.classList.remove('kuro-marker-color-section--visible')
+    this._reflow()
   }
   _toggleULStyles() {
     this._ulStylePanel?.classList.contains('kuro-popm__sizes--visible')
@@ -2654,6 +2687,16 @@ export class PopupMenu {
     // どけた意味がない）。閉じれば自動配置に戻る。
     if (this._dragged) { this.el.classList.add('kuro-popm--visible'); return }
 
+    this._placeAt(rect)
+  }
+
+  /**
+   * 実測の矩形を基準に置く。`show()` と `_reflow()` の共通部分。
+   *
+   * **切り出したのは、追加枠で背が変わったときに同じ計算を通すため**（v2.39.3）。
+   * 別々に書くと、片方だけが OS のメニューを避ける、が起きる。
+   */
+  _placeAt(rect) {
     // ── Width constraint ───────────────────────────────────────────────────
     // popm を pane (constraintEl) の幅に合わせて max-width 制約をかける。
     // 中身ボタン群は既に flex-wrap なので、 全ボタンが横並びに入りきらない
@@ -2678,8 +2721,12 @@ export class PopupMenu {
     // Android では OS のテキスト選択ツールバー(コピー/貼り付け…)も「選択のすぐ上」に
     // 浮くため、その帯ぶんさらに上へ逃がす(nativeSelectionBarClearance)。
     const GAP = 18
-    let top = rect.top - popH - GAP - nativeSelectionBarClearance()
-    if (top < 4) top = rect.bottom + 6   // flip below when too close to viewport top
+    const BAR = nativeSelectionBarClearance()
+    let top = rect.top - popH - GAP - BAR
+    // 上に入らないときは下へ回す。**下でも帯ぶん空ける**（v2.39.3）——
+    // 上に入らないということは OS のメニューも下へ回っているということで、
+    // ここを 0 のままにすると、逃がした先で正面から重なる。
+    if (top < 4) top = rect.bottom + 6 + BAR
     // mmenu（下部バー）に食い込まないよう下限をクランプ
     const bLimit = popupBottomLimit(this._editor?.mmenu)
     if (top + popH > bLimit) top = Math.max(4, bLimit - popH)
@@ -8144,6 +8191,17 @@ export class KuroEditor {
   _onSelectionChange() {
     // 閲覧モードでは選択できても書式ポップアップは出さない（コピーの邪魔をしない）
     if (this._mode !== 'wysiwyg') { this.popm.hide(); return }
+    // ⚠ **自分の入力欄に焦点があるあいだは畳まない**（v2.39.3）。
+    //
+    // ルビの読みや色の欄へ焦点が移ると、本文の選択は browser 側で解かれる
+    // ——「選択が無い＝畳む」で判定すると、**打ち始めた瞬間に欄ごと消える**。
+    // 文字も入らないので、利用者からは「入力できない」としか見えない。
+    //
+    // ⚠ ここは `_onDocSelChange` と**別の入り口**である。あちらには同じ番が
+    //   あったが、こちらは mouseup / keyup 起点で素通しだった。KuroNote は
+    //   タッチ選択で mouseup が出ないため `selectionchange` からこちらを直に
+    //   呼んでおり、**アプリでだけ再現していた**（2026-09-05 実機）。
+    if (this.popm.el.contains(document.activeElement)) return
     hasSelection() ? this.popm.show() : this.popm.hide()
   }
 
@@ -10909,9 +10967,17 @@ export class KuroEditor {
 
   _insertRoundbox() {
     this.wysiwyg.focus()
+    // 選んでいた文字は**箱の中へ入れる**（v2.39.3）。
+    //
+    // `insertHTML` は選択範囲を置き換えるので、選んだまま押すと**本文が消えて
+    // いた**。囲みたくて選んでいるのだから、消すのは常に間違いである。
+    //
+    // ⚠ `data-bid` は落とす。写したまま入れると**同じ id のブロックが2つ**でき、
+    //   共同編集・多端末同期の突き合わせが壊れる（id は入れ直しで振られる）。
+    const moved = this._selectionForBox()
     execFormat('insertHTML',
       '<div class="kuro-roundbox" data-align="center" data-width="100%"' +
-      ' style="width:100%;display:block;margin:0 auto"><p><br></p></div>' +
+      ' style="width:100%;display:block;margin:0 auto">' + (moved || '<p><br></p>') + '</div>' +
       '<p><br></p>'
     )
     // Drop the caret INSIDE the new box so its settings menu (kmenu) appears right
@@ -10929,14 +10995,47 @@ export class KuroEditor {
         : n?.parentElement?.previousElementSibling?.classList?.contains('kuro-roundbox')
           ? n.parentElement.previousElementSibling : null)
     if (box) {
-      const p = box.querySelector('p') || box
       const r = document.createRange()
-      r.setStart(p, 0)
-      r.collapse(true)
+      if (moved) {
+        // 入れた文字の**後ろ**に置く。先頭に置くと、続きを打つと頭に入る。
+        r.selectNodeContents(box)
+        r.collapse(false)
+      } else {
+        const p = box.querySelector('p') || box
+        r.setStart(p, 0)
+        r.collapse(true)
+      }
       sel.removeAllRanges()
       sel.addRange(r)
       this._updateRoundboxContext()
     }
+  }
+
+  /**
+   * いま選んでいる範囲を、箱の中に入れられる HTML にして返す。
+   * 選んでいなければ null。
+   *
+   * ブロックで始まっていなければ段落で包む —— 生のインラインを直に入れると、
+   * 箱の中に「行」が無い状態になり、後から中で改行できない。
+   */
+  _selectionForBox() {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return null
+    const range = sel.getRangeAt(0)
+    if (range.collapsed) return null
+    // 本文の外の選択には触らない（別の入力欄を掴んでいることがある）。
+    if (!this.wysiwyg.contains(range.commonAncestorContainer)) return null
+    const holder = document.createElement('div')
+    holder.appendChild(range.cloneContents())
+    for (const el of holder.querySelectorAll('[data-bid],[data-cbid]')) {
+      el.removeAttribute('data-bid')
+      el.removeAttribute('data-cbid')
+    }
+    const html = holder.innerHTML.trim()
+    if (!html) return null
+    return /^<(p|h[1-6]|ul|ol|blockquote|pre|div|table|figure)\b/i.test(html)
+      ? html
+      : `<p>${html}</p>`
   }
 
   // Returns the nearest .kuro-roundbox ancestor of the current caret, or null.
