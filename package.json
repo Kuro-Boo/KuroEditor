@@ -37,7 +37,7 @@
   "scripts": {
     "dev": "vite",
     "build:site": "tailwindcss -i build-scripts/landing-tailwind.css -o public/assets/compiled_tailwind_4_1_7.css --minify",
-    "build": "node build-scripts/bump.js sync && npm run build:site && vite build && rm -rf dist/src && node build-scripts/copy-assets.js && node build-scripts/emit-version.js",
+    "build": "node build-scripts/bump.js sync --no-commit && npm run build:site && vite build && rm -rf dist/src && node build-scripts/copy-assets.js && node build-scripts/emit-version.js",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

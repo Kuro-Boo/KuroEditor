@@ -26,6 +26,9 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 
+/** commit を飛ばすための合図（失敗ではない）。 */
+class SkipCommit extends Error {}
+
 const __dir = dirname(fileURLToPath(import.meta.url))
 const root  = resolve(__dir, '..')
 
@@ -98,8 +101,22 @@ console.log(`  sample/index   ?v=${next}`)
 console.log(`  public/index   hero.badge v${next}`)
 
 // ── 8. Git commit (no push — remote may not be configured) ───────────────────
+//
+// ⚠ **build から呼ばれたときは commit しない**（2026-09-05）。
+//
+// `npm run build` は毎回 `bump.js sync` を通す（版の写しを VERSION に揃えるため）。
+// そこで commit すると、**リリースのたびに commit が1つ取り残される** ——
+// lib_release.sh は既に push を済ませたあとに build が走るので、押されないまま
+// 木に残り、次のリリースまで気付かれない。
+//
+// 版を書き換える仕事はそのまま。commit するかどうかだけを呼び手が決める。
+const NO_COMMIT = process.argv.includes('--no-commit') || process.env.BUMP_NO_COMMIT === '1'
 const label = bump === 'sync' ? `sync version to ${next}` : `bump version ${prev} → ${next}`
+if (NO_COMMIT) {
+  console.log(`✓ ${label}（commit はしません）`)
+}
 try {
+  if (NO_COMMIT) throw new SkipCommit()
   // Stage the version-sync files PLUS the active editor source (editor.js +
   // the stylesheets editor.css / content.css) PLUS the READMEs PLUS tests/,
   // so a normal "edit code+tests → npm run bup" flow commits the whole change
@@ -112,5 +129,7 @@ try {
   console.log('✓ Committed')
 } catch (e) {
   // Not fatal — files are already written correctly
-  console.warn('⚠ git commit skipped (nothing to commit or error):', e.message.split('\n')[0])
+  if (!(e instanceof SkipCommit)) {
+    console.warn('⚠ git commit skipped (nothing to commit or error):', e.message.split('\n')[0])
+  }
 }
