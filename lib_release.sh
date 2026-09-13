@@ -1,1 +1,1 @@
-/Users/yas/Developer/Entamy/ops/lib_release.sh
+../../ops/lib_release.sh

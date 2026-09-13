@@ -1,1 +1,1 @@
-/Users/yas/Developer/Entamy/ops/OPS.md
+../../ops/OPS.md

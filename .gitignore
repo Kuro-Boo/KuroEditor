@@ -10,7 +10,7 @@ coverage/
 #   deploy/ … Cloudflare Worker の設定 (kuroeditor-promotion)。インフラ情報なので非公開
 #   共有 asset は ../asset に置き、private push 時にだけ取り込む
 /docs/
-/deploy/
+/LP/
 
 # AI assistant local notes / memory (per-developer, do not commit)
 .claude/
