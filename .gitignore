@@ -8,10 +8,9 @@ coverage/
 # KuroEditor_Private へ force-add してバックアップする）
 #   docs/   … 仕様書・告知資料
 #   deploy/ … Cloudflare Worker の設定 (kuroeditor-promotion)。インフラ情報なので非公開
-#   asset/  … ロゴ・スクリーンショット等の素材（旧 screen/）
+#   共有 asset は ../asset/KuroEditor に置き、private push 時にだけ取り込む
 /docs/
 /deploy/
-/asset/
 
 # AI assistant local notes / memory (per-developer, do not commit)
 .claude/
