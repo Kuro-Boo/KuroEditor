@@ -9,13 +9,10 @@ coverage/
 #   docs/   … 仕様書・告知資料
 #   deploy/ … Cloudflare Worker の設定 (kuroeditor-promotion)。インフラ情報なので非公開
 #   共有 asset は ../asset に置き、private push 時にだけ取り込む
-/docs/
-/LP/
 
 # AI assistant local notes / memory (per-developer, do not commit)
 .claude/
 .codex/
-CLAUDE.md
 CLAUDE.local.md
 AGENTS.md
 AGENTS.local.md
@@ -23,4 +20,8 @@ AGENTS.local.md
 
 # Local helper scripts (per-developer / 公開 main では追跡しない)
 # ※ リリーススクリプト自身が private ブランチへ force-add してバックアップする
-deploy_and_private_push.sh
+
+# 配布物の証跡（ops/release_common.sh が作る）。
+# NOTICE.txt は配るものなので追跡するが、**sbom.cdx.json は公開しない** ——
+# 選定書 §7 は「release artifact として残す」であって「公開する」ではない。
+release/

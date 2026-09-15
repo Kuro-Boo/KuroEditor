@@ -124,8 +124,11 @@ try {
   // (new test files ride along too) — 以前はリスト外で、リリース時に毎回
   // 「deploy 前ガードで中断 → 手で別コミット → 再実行(版がもう1つ進む)」に
   // なっていた。
-  execSync('git add VERSION package.json src/editor.js src/blocks.js src/kuro-links.js src/kuro-links.d.ts src/normalize.js src/kuro-normalize.d.ts src/recipe.js src/kuro-recipe.d.ts src/kuro-blocks.d.ts src/editor.css src/content.css build-scripts/copy-assets.js build-scripts/bump.js public/sample/index.html public/index.html README.md README.ja.md tests', { cwd: root, stdio: 'inherit' })
-  execSync(`git commit -m "chore: ${label}"`, { cwd: root, stdio: 'inherit' })
+  const files = 'VERSION package.json src/editor.js src/blocks.js src/kuro-links.js src/kuro-links.d.ts src/normalize.js src/kuro-normalize.d.ts src/recipe.js src/kuro-recipe.d.ts src/kuro-blocks.d.ts src/editor.css src/content.css build-scripts/copy-assets.js build-scripts/bump.js public/sample/index.html public/index.html README.md README.ja.md tests'
+  execSync(`git add ${files}`, { cwd: root, stdio: 'inherit' })
+  // ★モノレポ(2026-09-15)。commit を**この束に限る**(`-- <道>`)。
+  //   道を付けないと、他の部分で索引に載っている変更まで一緒に commit される。
+  execSync(`git commit -m "chore: ${label}" -- ${files}`, { cwd: root, stdio: 'inherit' })
   console.log('✓ Committed')
 } catch (e) {
   // Not fatal — files are already written correctly
