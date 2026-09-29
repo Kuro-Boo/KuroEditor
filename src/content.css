@@ -178,8 +178,15 @@ h5[id^='kuro-h-'] {
 .kuro-content a:hover {
   color: var(--kuro-link-hover);
 }
-.kuro-content strong {
+/* 太字は【周りの色を継ぐ】。⚠ 書かないと、公開ページのテンプレート（Tailwind
+   Typography の `.prose :where(strong) { color: var(--tw-prose-bold) }`）が太字だけ
+   本文用の濃い色に塗り替え、色付きの枠・文字の中で太字にした所だけ黒くなる
+   （編集画面では継いで見えるので WYSIWYG が崩れる）。`.kuro-content strong` は
+   (0,1,1) で `.prose :where(strong)` の (0,1,0) に勝つ。 */
+.kuro-content strong,
+.kuro-content b {
   font-weight: 700;
+  color: inherit;
 }
 .kuro-content em {
   font-style: italic;
