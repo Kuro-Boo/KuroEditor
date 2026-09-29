@@ -262,7 +262,7 @@ describe('チェックリスト', () => {
     expect(box).not.toMatch(/cursor\s*:/)
 
     // editor.css 側でキャンバス限定に付け、閲覧モードでは戻す
-    const chrome = read('editor.css')
+    const chrome = read('editor-core.css')
     expect(chrome).toMatch(
       /\.kuro-pane__wysiwyg ul\.kuro-ul-check > li::before\s*\{[^}]*cursor:\s*pointer/)
     expect(chrome).toMatch(

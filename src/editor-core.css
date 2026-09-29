@@ -1,0 +1,1916 @@
+/* KuroEditor のエディタ UI スタイル（Tailwind を含まない本体）。
+   editor.css は `@import "tailwindcss"` の後にこれを読む。Tailwind を自分で読み込んでいる
+   ホスト（KuroNote の web など）は、二重に読まないよう**こちらを直接** import する。 */
+@import "./content.css";
+
+/* ──────────────────────────────────────────────────────────────────────────
+   CANVAS THEME. The editor chrome (toolbar/menus) is always dark, but the
+   editing CANVAS (.kuro-pane__wysiwyg) has two modes, toggled by the
+   `.kuro-editor--canvas-dark` modifier on the editor root:
+
+   - 通常 (default, no modifier): light/site-like. content.css keeps its
+     theme-neutral :root variable defaults — the same values the PUBLIC page
+     uses — so what you see is what publishes. The canvas surface colors come
+     from the --kuro-canvas-* variables below; an embedding host can override
+     them to match its actual site palette (each site's "normal" differs).
+   - ダーク (modifier present): the classic dark canvas. The --kuro-* content
+     variables are overridden to the dark palette, scoped to the modifier so
+     they never leak into 通常 mode. UNLAYERED so it beats content.css's
+     (also unlayered) :root defaults. The --kuro-canvas-* surface colors below
+     are likewise host-overridable (options.canvasDarkColors); unset keys keep
+     these stylesheet defaults.
+   ────────────────────────────────────────────────────────────────────────── */
+.kuro-editor {
+  /* 通常モードのキャンバス配色（サイト相当）。ホストが実サイトの配色に
+     合わせたいときはこの変数を上書きする。 */
+  --kuro-canvas-bg: #ffffff;
+  --kuro-canvas-text: #0f172a; /* slate-900 */
+  --kuro-canvas-caret: #4f46e5; /* indigo-600 */
+  --kuro-canvas-placeholder: #9ca3af; /* gray-400 */
+  --kuro-canvas-cellfocus-bg: #eef2ff; /* indigo-50 */
+  --kuro-canvas-dragover-bg: rgba(224, 231, 255, 0.5); /* indigo-100/50 */
+}
+.kuro-editor.kuro-editor--canvas-dark {
+  --kuro-canvas-bg: #171717; /* neutral-900 (shell bg) */
+  --kuro-canvas-text: #f5f5f5; /* neutral-100 */
+  --kuro-canvas-caret: #818cf8; /* indigo-400 */
+  --kuro-canvas-placeholder: #525252; /* neutral-600 */
+  --kuro-canvas-cellfocus-bg: #1e1b4b; /* indigo-950 */
+  --kuro-canvas-dragover-bg: rgba(30, 27, 75, 0.4); /* indigo-950/40 */
+
+  /* Content-block variables — dark palette (was the global :root override). */
+  --kuro-box-border: #525252; /* neutral-600 */
+  --kuro-box-bg: #1a1a1e;
+  --kuro-box-border-nested: #737373; /* neutral-500 */
+  --kuro-box-bg-nested: #262626; /* neutral-800 */
+  --kuro-table-border: #525252; /* neutral-600 */
+  --kuro-table-head-bg: #262626; /* neutral-800 */
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   TAP / CLICK FEEDBACK — flash the pressed control's region.
+   On touch the finger hides the button, so it's hard to tell exactly what was
+   hit; a brief flood makes the tapped region unmistakable (and sharpens mouse
+   feedback too). The delegated pointerdown handler (editor.js _bindEvents) adds
+   `.kuro-tap-flash` to ANY <button> in the chrome or a body-level float — all
+   KuroEditor controls are <button>s — and removes it on animationend.
+   Implemented as an inset box-shadow flood so it covers the region over any base
+   colour WITHOUT touching layout, and renders under the icon/label so they stay
+   legible. UNLAYERED + global so it applies to floating menus (outside
+   .kuro-editor) and isn't overridden by layered button rules. Chrome is always
+   dark, so a bright indigo flood reads on every button. Host-overridable via
+   --kuro-tap-flash. Honors prefers-reduced-motion (kept, but shorter — it is
+   functional feedback, not decoration).
+   ────────────────────────────────────────────────────────────────────────── */
+@keyframes kuro-tap-flash {
+  from { box-shadow: inset 0 0 0 999px var(--kuro-tap-flash, rgba(129, 140, 248, 0.6)); }
+  to   { box-shadow: inset 0 0 0 999px transparent; }
+}
+.kuro-tap-flash { animation: kuro-tap-flash 220ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .kuro-tap-flash { animation-duration: 120ms; }
+}
+
+/* KuroEditor — dark mode only */
+@layer kuroeditor {
+  :root { color-scheme: dark; }
+
+  /* ── Scrollbar ── */
+  * { scrollbar-width: thin; scrollbar-color: #374151 transparent; }
+  *::-webkit-scrollbar       { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+}
+
+@layer components {
+
+  /* ════════════════════════════════════════════════════════
+     SHELL
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-editor {
+    @apply relative flex flex-col
+           bg-neutral-900 text-neutral-100
+           rounded-xl border border-neutral-700
+           overflow-hidden font-sans shadow-2xl;
+    font-size: 15px;
+    /* 埋め込み先（kurocms 等）のレイアウトに依存せず、常にホストの列幅へ
+       自分を閉じ込める。これが無いと flex/grid アイテムとしてマウントされた
+       際にエディタが親より広がり、本文が見えない幅で折り返して overflow:hidden
+       に切り取られる（＝枠からはみ出して見える）。 */
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     EMBED HARDENING（埋め込み耐性）
+     埋め込み先（kurocms 等）のグローバル CSS が、editor 内部の構造 flex を
+     上書きして本文がはみ出す事例があった（computed flex が 1 → none に化けて
+     pane が body 幅を埋めず、本文の max-content に縮んで overflow:hidden で
+     切られる）。構造に必須な flex/min-width だけを、ホスト CSS に負けない
+     高優先度（.kuro-editor 子孫 + !important）で固定する。
+     ※ ToC(.kuro-toc) と resizer は対象外（意図的に flex-shrink:0）。
+     ════════════════════════════════════════════════════════ */
+  .kuro-editor .kuro-body,
+  .kuro-editor .kuro-pane,
+  .kuro-editor .kuro-pane__wysiwyg {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     MODAL MENU (mmenu)
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-mmenu {
+    @apply fixed z-50 flex flex-wrap items-center gap-2
+           px-4 py-2
+           bg-neutral-800 border border-neutral-600
+           rounded-2xl shadow-2xl;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 2rem);   /* 狭い画面でも overflow しない */
+    /* Indigo glow subtly brands the floating toolbar (#6366f1 = indigo-500 @ 40%) */
+    box-shadow: 0 0 0 1px rgba(99,102,241,.4), 0 8px 32px rgba(0,0,0,.5);
+  }
+
+  .kuro-mmenu__actions {
+    @apply flex flex-wrap items-center gap-0.5;
+  }
+
+  .kuro-mmenu__divider {
+    @apply w-px h-4 bg-neutral-600 mx-1 flex-shrink-0;
+  }
+
+  .kuro-mmenu__btn {
+    @apply flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+           text-sm text-neutral-200
+           hover:bg-neutral-700 hover:text-white
+           transition-colors cursor-pointer select-none;
+  }
+
+  /* キャレットがそのブロックの中にある間の点灯（今は角丸ボックスのみ）。
+     見た目は popm の --active（コールアウト）と揃える。 */
+  .kuro-mmenu__btn--active,
+  .kuro-mmenu__btn--active:hover {
+    @apply bg-neutral-500 text-white;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
+  }
+
+  .kuro-mmenu__autosave {
+    @apply flex items-center gap-1.5 flex-shrink-0;
+  }
+
+  .kuro-mmenu__autosave-check {
+    @apply w-3.5 h-3.5 rounded cursor-pointer
+           accent-indigo-500;
+  }
+
+  .kuro-mmenu__autosave-label {
+    @apply text-xs text-neutral-400 cursor-pointer select-none;
+  }
+
+  .kuro-mmenu__save {
+    @apply px-4 py-1.5 rounded-lg
+           bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700
+           text-sm font-semibold text-white
+           transition-colors cursor-pointer flex-shrink-0;
+  }
+  /* 未保存の変更が無い間は暗くして押せなくする */
+  .kuro-mmenu__save:disabled {
+    @apply bg-neutral-700 text-neutral-500 cursor-default pointer-events-none;
+  }
+
+  /* ── Slotted mode: mounted inside host modalToolbar, not fixed to viewport ── */
+  .kuro-mmenu--slotted {
+    position: static;
+    transform: none;
+    bottom: auto;
+    left: auto;
+    box-shadow: none;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+  }
+  /* Slotted buttons: revert to host (@layer kurocms) so the host styles apply cleanly */
+  .kuro-mmenu--slotted .kuro-mmenu__btn,
+  .kuro-mmenu--slotted .kuro-mmenu__btn:hover {
+    all: revert;
+  }
+  /* slotted 時は見た目を host に譲る（上の all: revert）が、「今このブロックの
+     中にいる」は見た目でなく状態の表示なので残す。all: revert と同じ詳細度で
+     後に置くことで打ち消されないようにする。 */
+  .kuro-mmenu--slotted .kuro-mmenu__btn--active {
+    outline: 2px solid rgb(129 140 248);   /* indigo-400 */
+    outline-offset: -2px;
+    border-radius: 0.5rem;
+  }
+  /* Save / divider are host's responsibility in slotted mode */
+  .kuro-mmenu--slotted .kuro-mmenu__save,
+  .kuro-mmenu--slotted .kuro-mmenu__divider {
+    display: none;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     TAB BAR
+     ════════════════════════════════════════════════════════ */
+
+  /* ── 2 段固定 ──────────────────────────────────────────────
+     row1 (top)   : タブ ┃ 自動保存・保存・ToC を両端配置
+     row2 (bottom): 基本アクション群 — 必要に応じて折り返し
+  */
+  .kuro-tabs {
+    @apply flex flex-col
+           border-b border-neutral-700 bg-neutral-800 flex-shrink-0;
+  }
+
+  .kuro-tabs__row {
+    @apply flex items-center w-full min-w-0;
+  }
+  .kuro-tabs__row--top {
+    @apply justify-between flex-wrap;
+    row-gap: 0.125rem;
+  }
+  .kuro-tabs__row--bottom {
+    @apply flex-wrap;
+    border-top: 1px solid theme('colors.neutral.700');
+    row-gap: 0.125rem;
+  }
+
+  /* 左右グループ */
+  .kuro-tabs__group {
+    @apply flex flex-wrap items-center;
+  }
+  .kuro-tabs__group--right {
+    @apply ml-auto;
+  }
+
+  /* Version badge — leftmost element in the tab bar */
+  .kuro-tabs__version {
+    @apply px-3 py-2 text-xs text-neutral-600 select-none;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    /* Subtle right separator */
+    border-right: 1px solid theme('colors.neutral.700');
+    margin-right: 0.25rem;
+  }
+
+  .kuro-tab {
+    @apply px-3 py-2 text-sm text-neutral-400 cursor-pointer
+           border-b-2 border-transparent
+           hover:text-neutral-200 transition-colors select-none
+           flex items-center justify-center;
+    min-width: 2.5rem;
+  }
+  .kuro-tab svg { display: block; }
+
+  .kuro-tab--active {
+    @apply text-neutral-100 border-indigo-500;
+  }
+
+  /* Vertical separator between tabs and inline action buttons */
+  .kuro-tabs__sep {
+    @apply self-stretch border-l border-neutral-700 mx-2 my-1;
+  }
+
+  /* Inline action buttons container — wraps to next row on narrow screens */
+  .kuro-tabs__actions {
+    @apply flex flex-wrap items-center;
+    column-gap: 0.125rem;
+    row-gap: 0.125rem;
+  }
+
+  /* Individual inline action button */
+  .kuro-tabs__action {
+    @apply px-2.5 py-1.5 text-sm text-neutral-400 cursor-pointer rounded
+           hover:text-neutral-200 hover:bg-neutral-700
+           transition-colors select-none;
+  }
+
+  /* mmenu 側と同じ「今このブロックの中にいる」表示 */
+  .kuro-tabs__action--active,
+  .kuro-tabs__action--active:hover {
+    @apply bg-neutral-600 text-white;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
+  }
+
+  /* Autosave wrap in tab bar (shares checkbox/label styles with mmenu) */
+  .kuro-tabs__autosave {
+    @apply flex items-center gap-1.5 px-2 text-xs text-neutral-500 select-none;
+  }
+
+  /* ToC toggle button */
+  .kuro-tabs__toc-btn {
+    @apply px-2 py-1.5 mx-1 my-1 text-neutral-600 cursor-pointer rounded
+           hover:text-neutral-300 hover:bg-neutral-700
+           transition-colors flex-shrink-0;
+  }
+  /* Help（？）— 目次ボタンの左。操作ガイドを別タブで開く。
+     見た目は目次ボタンと揃える（同じ列の同じ大きさのアイコンボタン）が、
+     こちらは常に非アクティブ表示（トグルではなくリンクなので点灯しない）。 */
+  .kuro-tabs__help-btn {
+    @apply px-2 py-1.5 mx-1 my-1 text-neutral-600 cursor-pointer rounded
+           hover:text-neutral-300 hover:bg-neutral-700
+           transition-colors flex-shrink-0;
+  }
+  .kuro-tabs__toc-btn--active {
+    @apply text-indigo-400;
+  }
+  .kuro-tabs__toc-btn--active:hover {
+    @apply text-indigo-300;
+  }
+
+  /* Save button in tab bar */
+  .kuro-tabs__save {
+    @apply px-4 py-1.5 mx-2 my-1 text-sm font-semibold text-white
+           bg-indigo-600 hover:bg-indigo-500 rounded
+           transition-colors cursor-pointer flex-shrink-0;
+  }
+  /* 未保存の変更が無い間は暗くして押せなくする */
+  .kuro-tabs__save:disabled {
+    @apply bg-neutral-700 text-neutral-500 cursor-default pointer-events-none;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     BODY = pane + ToC
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-body {
+    @apply flex flex-1 min-h-0 overflow-hidden;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     EDIT PANE
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-pane {
+    @apply flex-1 flex flex-col overflow-hidden min-w-0;
+  }
+
+  .kuro-pane__wysiwyg {
+    @apply flex-1 overflow-y-auto p-5 outline-none
+           leading-relaxed;
+    background: var(--kuro-canvas-bg);
+    color: var(--kuro-canvas-text);
+    caret-color: var(--kuro-canvas-caret);
+    min-height: 16rem;
+    /* flex 子としても縮めるようにし、本文は見えている幅で折り返す。
+       長い英字列/URL など分割不能なトークンも枠内に収める。 */
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* Drag-over: dashed indigo border as drop-target indicator */
+  .kuro-pane__wysiwyg.kuro-drag-over {
+    outline: 2px dashed theme('colors.indigo.500');
+    outline-offset: -3px;
+    background: var(--kuro-canvas-dragover-bg);
+  }
+
+  /* Placeholder via CSS */
+  .kuro-pane__wysiwyg:empty::before {
+    content: attr(data-placeholder);
+    @apply pointer-events-none;
+    color: var(--kuro-canvas-placeholder);
+  }
+
+  .kuro-pane__source {
+    @apply hidden flex-1 p-4 bg-neutral-950 text-green-400
+           font-mono text-sm resize-none outline-none border-0 overflow-auto;
+    min-height: 16rem;
+  }
+
+  /* Source mode: swap panels */
+  .kuro-pane--source .kuro-pane__wysiwyg { @apply hidden; }
+  .kuro-pane--source .kuro-pane__source  { @apply block; }
+
+  /* ── 文字数カウンター(オドメーター) ─────────────────────────────
+     ツールバー2段目(kuro-tabs__row--bottom)の右端に常設(v2.18〜)。
+     ラベル文言を持たない代わりに、桁がリールのように回る動きで
+     「数えている」ことを伝える。
+     v2.15〜v2.18 は本文の上に position:fixed で浮かせていたが、本文が
+     縦に長い(スクロールが要る)ときは本文の実際の下端が画面外に出て
+     mmenu 際まで押し出され、可視中の本文と重なって読みにくくなる欠陥が
+     あったため撤回。ツールバーという常に本文と重ならない予約領域に置く
+     ことで、位置追従の JS が丸ごと不要になった。 */
+  .kuro-charcount {
+    display: inline-flex;
+    align-items: center;
+    margin: 0.25rem 0.5rem;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0.3em 0.6em;
+    border-radius: 9999px;
+    font-variant-numeric: tabular-nums;
+    color: theme('colors.neutral.300');
+    background: theme('colors.neutral.900');
+    border: 1px solid theme('colors.neutral.600');
+    user-select: none;
+    white-space: nowrap;
+  }
+  /* source モードは生 HTML 編集中でカウントが本文入力と連動しないので隠す */
+  .kuro-charcount--hidden { display: none; }
+
+  /* スマホ幅で 2 段目に収まらないとき、1 段目（目次ボタンの左）へ逃がした状態。
+     すぐ右に区切り線 (.kuro-tabs__sep) が来るので右マージンだけ詰める。
+     移動そのものは JS (_syncCharCountSlot) — 実際に折り返したかを測って決める */
+  .kuro-charcount--in-top { margin-right: 0; }
+
+  .kuro-charcount__col {
+    display: inline-block;
+    height: 1em;
+    overflow: hidden;
+    vertical-align: top;
+  }
+  .kuro-charcount__reel {
+    display: block;
+    transition: transform 0.35s cubic-bezier(0.25, 0.6, 0.3, 1);
+  }
+  .kuro-charcount__reel > span {
+    display: block;
+    height: 1em;
+    text-align: center;
+  }
+  .kuro-charcount__sep { vertical-align: top; }
+  @media (prefers-reduced-motion: reduce) {
+    .kuro-charcount__reel { transition: none; }
+  }
+
+  /* ── View mode (閲覧・編集不可) ─────────────────────────────────────────
+     編集の気配を消す: プレースホルダ・キャレット・リサイズ用ハンドル類を出さず、
+     リンクだけがクリックできる読み物として振る舞わせる */
+  .kuro-pane--view .kuro-pane__wysiwyg {
+    caret-color: transparent;
+  }
+  .kuro-pane--view .kuro-pane__wysiwyg:empty::before { content: none; }
+  /* コードブロックの 🗑 は編集用なので隠す（📋 コピーは閲覧でも使うので残す） */
+  .kuro-pane--view .kuro-code__del { display: none; }
+  /* ── 編集画面でだけ反応する要素の cursor はここに置く ────────────────────
+     規約: 反応させているのは editor.js のハンドラなので、公開ページでは同じ要素も
+     ただの静的な表示。content.css（公開ページにも当たる）に cursor: pointer を
+     書くと、読者に「押せそうなのに何も起きない」と見せてしまう。閲覧モードも
+     操作できないので default に戻す。要素ごとに機能は別物で、共通なのはこの
+     置き場所の規約だけ。 */
+  /* レシピカード — クリックで編集モーダルが開く。カードの上にボタン類は一切
+     置かない（WYSIWYG＝公開ページと同じ見た目）ので、手触りは cursor だけ。 */
+  .kuro-pane__wysiwyg [data-kuro-block="recipe-card"] { cursor: pointer; }
+  .kuro-pane--view [data-kuro-block="recipe-card"] { cursor: default; }
+  /* チェックリストの箱 — タップで data-checked をトグルする */
+  .kuro-pane__wysiwyg ul.kuro-ul-check > li::before { cursor: pointer; }
+  .kuro-pane--view .kuro-pane__wysiwyg ul.kuro-ul-check > li::before { cursor: default; }
+  .kuro-pane--view a { cursor: pointer; }
+
+  /* 閲覧モード中は編集アクション (挿入系・Undo/Redo) が disabled になる */
+  .kuro-tabs__action:disabled,
+  .kuro-mmenu__btn:disabled {
+    @apply opacity-40 pointer-events-none cursor-default;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     TABLE OF CONTENTS (right panel)
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-toc {
+    @apply w-52 flex-shrink-0 overflow-y-auto
+           border-l border-neutral-700 bg-neutral-900 py-3;
+  }
+
+  .kuro-toc--hidden,
+  .kuro-toc--user-hidden {
+    @apply hidden;
+  }
+
+  /* ── ToC resizer ─────────────────────────────────────────────────── */
+  /* Sits between the edit pane and the ToC. Drag to resize the ToC width.
+     Hover shows an indigo highlight band; the hit area is wider than the
+     visible line for easier grabbing. */
+  .kuro-toc-resizer {
+    flex-shrink: 0;
+    width: 6px;
+    cursor: col-resize;
+    position: relative;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .kuro-toc-resizer::before {
+    content: '';
+    position: absolute;
+    inset: 0 2px;
+    background: theme('colors.neutral.700');
+    transition: background 0.15s;
+  }
+  .kuro-toc-resizer:hover::before {
+    background: theme('colors.indigo.500');
+  }
+
+  /* When the ToC is hidden, hide the resizer too.
+     :has() is supported in Chrome 105+, Safari 15.4+, Firefox 121+ — which
+     covers all KuroEditor target browsers. */
+  .kuro-body:has(.kuro-toc.kuro-toc--hidden) .kuro-toc-resizer,
+  .kuro-body:has(.kuro-toc.kuro-toc--user-hidden) .kuro-toc-resizer {
+    display: none;
+  }
+
+  /* Freeze cursor + disable text selection while dragging */
+  body.kuro-toc-resizing,
+  body.kuro-toc-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
+  .kuro-toc__title {
+    @apply px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-neutral-500;
+  }
+
+  /* 目次の行。v2.37.0 で <a href="#id"> から <button> に変えた（本文の見出しに
+     id を書き込むのをやめ、飛び先を要素参照で持つようにしたため）。ボタンの
+     既定（中央寄せ・下地・枠・独自フォント）を打ち消してリンクの見た目に戻す。 */
+  .kuro-toc__item {
+    @apply block py-1 pr-3 text-xs text-left text-neutral-400
+           hover:text-indigo-400 hover:bg-neutral-800
+           transition-colors truncate cursor-pointer no-underline flex-1 min-w-0
+           bg-transparent border-0;
+    /* 大きさは @apply text-xs のまま。ボタン既定の UA フォントだけ本文に戻す */
+    font-family: inherit;
+    font-weight: inherit;
+  }
+
+  .kuro-toc__item--h1 { @apply font-semibold text-neutral-300; }
+  .kuro-toc__item--h2 { @apply font-medium; }
+
+  /* ── Hierarchical collapse ── */
+  .kuro-toc__row {
+    @apply flex items-center;
+  }
+  .kuro-toc__row--hidden { display: none; }
+
+  .kuro-toc__toggle {
+    @apply w-4 h-4 mr-1 flex-shrink-0
+           text-neutral-500 hover:text-indigo-400
+           transition-transform cursor-pointer
+           bg-transparent border-0 text-xs leading-none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .kuro-toc__toggle--collapsed { transform: rotate(-90deg); }
+
+  .kuro-toc__toggle-spacer {
+    @apply w-4 h-4 mr-1 flex-shrink-0;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     POPUP MENU (popm) — fixed position, over selection
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-popm {
+    @apply fixed z-50 flex flex-col
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl
+           opacity-0 pointer-events-none
+           transition-opacity duration-100;
+    /* Prevent layout shift during measuring */
+    visibility: hidden;
+  }
+
+  .kuro-popm--measuring {
+    opacity: 0 !important;
+    visibility: visible !important;
+    pointer-events: none !important;
+  }
+
+  .kuro-popm--visible {
+    @apply opacity-100 pointer-events-auto;
+    visibility: visible;
+  }
+
+  .kuro-popm__main {
+    @apply flex items-center gap-0.5 px-1.5 py-1 flex-wrap;
+  }
+
+  .kuro-popm__btn {
+    @apply px-2 py-1 rounded-md text-sm text-neutral-400
+           hover:bg-neutral-700 hover:text-neutral-100
+           transition-colors cursor-pointer select-none;
+    min-width: 1.75rem;
+    text-align: center;
+  }
+
+  /* Active = formatting is ON for current selection.
+     Neutral-600 background is clearly brighter than the panel (neutral-800)
+     and distinct from hover (neutral-700). White text confirms "on". */
+  .kuro-popm__btn--active {
+    @apply bg-neutral-500 text-white font-semibold;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
+  }
+
+  /* Active + hover should stay active-looking */
+  .kuro-popm__btn--active:hover {
+    @apply bg-neutral-500 text-white;
+  }
+
+  .kuro-popm__btn--color {
+    @apply font-bold;
+  }
+
+  .kuro-color-indicator {
+    @apply font-bold underline;
+    text-decoration-color: #ef4444;
+    text-decoration-thickness: 2px;
+  }
+
+  /* Size button ("A" with a tiny down-arrow hint) */
+  .kuro-popm__btn--size { @apply font-bold; }
+  .kuro-size-indicator {
+    @apply font-bold;
+    font-size: 0.85em;
+    letter-spacing: -0.02em;
+  }
+
+  .kuro-popm__divider {
+    @apply w-px h-4 bg-neutral-600 mx-0.5 flex-shrink-0;
+  }
+
+  /* Font size picker sub-panel — same pattern as colour panel */
+  .kuro-popm__sizes {
+    @apply hidden flex-wrap gap-1 px-2.5 pb-2 pt-1 border-t border-neutral-700;
+  }
+  .kuro-popm__sizes--visible { @apply flex; }
+
+  /* "Web-Fonts" main-panel button — wider, ellipsis when label is "Web-Fonts: ..." */
+  .kuro-size-btn--webfonts {
+    max-width: 16rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kuro-size-btn--disabled {
+    @apply opacity-40 cursor-not-allowed pointer-events-none;
+  }
+
+  /* Scrollable web-font list — pinned to the right edge of the Web-Fonts button.
+     Position (top / left) is set by _showWebFontList() dynamically. */
+  .kuro-popm__web-fonts {
+    display: none;
+    position: fixed;
+    max-height: 16.5rem;            /* ~10 行 (each row ≈ 1.65rem) */
+    overflow-y: auto;
+    background: theme('colors.neutral.800');
+    border: 1px solid theme('colors.neutral.600');
+    border-radius: 0.5rem;
+    padding: 0.375rem;
+    min-width: 12rem;
+    max-width: 18rem;
+    z-index: 60;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+  .kuro-popm__web-fonts--visible {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .kuro-web-font-btn {
+    @apply px-3 py-1.5 rounded text-sm text-neutral-200
+           hover:bg-neutral-700 hover:text-white
+           text-left cursor-pointer transition-colors whitespace-nowrap;
+    border: 0;
+    background: transparent;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* overflow:hidden makes a flex item's automatic min-height 0, so in the
+       flex-column list each row would be squashed (instead of the list
+       scrolling) once there are more fonts than fit — clipping the previews.
+       flex-shrink:0 keeps every row at its natural height. */
+    flex: 0 0 auto;
+  }
+  /* Currently active web font (matches the selection) */
+  .kuro-web-font-btn--active {
+    @apply bg-indigo-600 text-white;
+  }
+
+  .kuro-size-btn {
+    @apply px-2 py-0.5 rounded text-xs text-neutral-300
+           bg-neutral-700 hover:bg-neutral-600 hover:text-white
+           transition-colors cursor-pointer select-none;
+  }
+  /* 100% is marked as the baseline (permanent ring) */
+  .kuro-size-btn--base {
+    @apply ring-1 ring-indigo-500 text-indigo-300;
+  }
+
+  /* Currently active size — highlighted when selection matches this size */
+  .kuro-size-btn--active {
+    @apply bg-indigo-600 text-white font-semibold;
+  }
+
+  /* Colour sub-panel */
+  .kuro-popm__colors {
+    @apply hidden flex-col gap-2 px-2.5 pb-2 border-t border-neutral-700;
+  }
+
+  .kuro-popm__colors--visible {
+    @apply flex;
+  }
+
+  .kuro-color-picker {
+    @apply flex flex-col gap-2;
+  }
+
+  /* Header row: [× 色削除] on left, [＋ カラー追加] on right */
+  .kuro-color-picker__header {
+    @apply flex items-center justify-between;
+  }
+
+  /* Groups flex row — wraps by 3×3 block unit on narrow viewports */
+  .kuro-color-picker__groups {
+    @apply flex flex-wrap gap-2;
+  }
+
+  /* Custom groups row — same flex-wrap behaviour, separator above */
+  .kuro-color-picker__custom {
+    @apply flex flex-wrap gap-2;
+    border-top: 1px solid theme('colors.neutral.700');
+    padding-top: 0.375rem;
+  }
+
+  /* Each 3×3 colour block */
+  .kuro-color-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1.25rem);
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .kuro-color-swatch {
+    @apply w-5 h-5 rounded cursor-pointer
+           border-2 border-transparent
+           hover:border-white transition-all;
+  }
+
+  /* Empty custom slot — same size, dashed border only */
+  .kuro-color-slot--empty {
+    @apply w-5 h-5 rounded;
+    border: 1px dashed theme('colors.neutral.600');
+  }
+
+  /* "+ カラー追加" button — border + bright text */
+  .kuro-color-add-btn {
+    @apply text-xs text-neutral-200 hover:text-indigo-300
+           cursor-pointer transition-colors
+           border border-neutral-500 hover:border-indigo-400
+           rounded px-1.5 py-0.5;
+    background: none;
+  }
+
+  /* Hidden native color picker */
+  .kuro-color-add-input {
+    display: none;
+  }
+
+  /* Marker color toggle button (● circle in list style panel) */
+  /* 開始番号（番号リストのサブパネル）— <ol start="N"> を指定する小さな入力。
+     サブパネルの他のボタンと同じ高さ・同じ角丸で並べる。 */
+  .kuro-ol-start {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs
+           text-neutral-300 bg-neutral-700 select-none;
+  }
+  /* ⚠ 数値入力ではなく <select>。スマホでは type=number の上下ボタンが出ず
+     実質使えないが、select ならネイティブのドラムで指だけで選べる。 */
+  .kuro-ol-start__select {
+    @apply rounded px-1 py-0.5 text-xs text-neutral-100
+           bg-neutral-900 border border-neutral-600 cursor-pointer;
+  }
+  .kuro-ol-start__select:focus {
+    @apply outline-none border-indigo-500;
+  }
+
+  /* ルビの読み入力（popm のルビパネル）。
+     ⚠ この入力欄だけは mousedown を潰さない（潰すと文字を打てない）ので、
+        フォーカスが popm の中にある間 popm は閉じない、という規約に乗っている。 */
+  .kuro-ruby-field {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs
+           text-neutral-300 bg-neutral-700 select-none;
+  }
+  .kuro-ruby-field__input {
+    @apply rounded px-1.5 py-0.5 text-xs text-neutral-100
+           bg-neutral-900 border border-neutral-600;
+    width: 9rem;
+  }
+  .kuro-ruby-field__input:focus {
+    @apply outline-none border-indigo-500;
+  }
+  .kuro-ruby-field__input::placeholder {
+    @apply text-neutral-500;
+  }
+
+  .kuro-marker-color-btn {
+    color: #ef4444;
+    font-size: 1.1em;
+    line-height: 1;
+  }
+
+  /* Embedded color picker section inside UL/OL style panel.
+     Uses flex: 0 0 100% to force a full-width new row inside the flex-wrap panel. */
+  .kuro-marker-color-section {
+    display: none;
+    flex: 0 0 100%;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-top: 0.375rem;
+    margin-top: 0.125rem;
+    border-top: 1px solid theme('colors.neutral.700');
+  }
+  .kuro-marker-color-section--visible { display: flex; }
+
+  /* ════════════════════════════════════════════════════════
+     TABLE INSERTER — "+" buttons on row / column borders
+     ════════════════════════════════════════════════════════ */
+
+  /* Transparent fixed wrapper — only acts as a DOM ancestor for hit-testing.
+     z-index はキャンバス装飾として【全フローターより下】に置く: ✋/−/＋ は
+     テーブル本体に付く飾りであって、TBL設定メニュー (z-40) やカラーピッカー・
+     mmenu・各ポップアップ (z-50) の上に乗ってはならない (旧値 55 は全部の
+     上に描画され、カラーピッカーに ✋/− が重なるバグの原因だった)。 */
+  .kuro-table-inserter {
+    position: fixed;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 30;
+  }
+
+  .kuro-table-insert-btn {
+    position: absolute;
+    pointer-events: auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    @apply bg-indigo-500 hover:bg-indigo-400 text-white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    transition: transform 0.12s, background-color 0.12s;
+    user-select: none;
+  }
+  .kuro-table-insert-btn:hover {
+    transform: scale(1.25);
+  }
+
+  /* Delete buttons — red, appear at the cursor's row (right) / column (bottom) */
+  .kuro-table-delete-btn {
+    position: absolute;
+    pointer-events: auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    @apply bg-red-600 hover:bg-red-500 text-white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    transition: transform 0.12s, background-color 0.12s;
+    user-select: none;
+  }
+  .kuro-table-delete-btn:hover { transform: scale(1.25); }
+
+  /* Inline SVG は baseline 配置になるため、flex 中央寄せでも実測上わずかに
+     上にずれる。block 化すると leading space が消えて確実に中央に揃う。 */
+  .kuro-table-insert-btn svg,
+  .kuro-table-delete-btn svg {
+    display: block;
+  }
+
+  /* Border cycle button — placed further out than the delete button */
+  .kuro-table-border-btn {
+    position: absolute;
+    pointer-events: auto;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    @apply bg-neutral-700 hover:bg-neutral-600 text-neutral-200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 1px solid theme('colors.neutral.500');
+    padding: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    transition: transform 0.12s, background-color 0.12s;
+    user-select: none;
+  }
+  .kuro-table-border-btn:hover { transform: scale(1.1); }
+
+  /* Move (drag-to-reorder) handles — hand icon, same footprint as the
+     delete button but neutral colour so it doesn't read as destructive. */
+  .kuro-table-move-btn {
+    position: absolute;
+    pointer-events: auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    @apply bg-neutral-700 hover:bg-indigo-500 text-neutral-300 hover:text-white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    border: none;
+    padding: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    transition: transform 0.12s, background-color 0.12s;
+    user-select: none;
+  }
+  .kuro-table-move-btn:hover  { transform: scale(1.25); }
+  .kuro-table-move-btn:active { cursor: grabbing; }
+  .kuro-table-move-btn svg    { display: block; }
+
+  /* Dragged row/column cells: bold inset outline = "grabbed" feedback.
+     outline (not border) so cell box size / table layout never shifts. */
+  .kuro-table-row--grabbed > td,
+  .kuro-table-row--grabbed > th,
+  td.kuro-table-col--grabbed,
+  th.kuro-table-col--grabbed {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid theme('colors.indigo.400');
+    outline-offset: -2px;
+    background-color: rgba(99, 102, 241, 0.08);
+  }
+
+  /* Drop-position indicator bars, shown while dragging a row (horizontal)
+     or a column (vertical). No transition — instant tracking reads smoother
+     than an animated chase. */
+  .kuro-table-row-indicator,
+  .kuro-table-col-indicator {
+    position: fixed;
+    background: theme('colors.indigo.400');
+    border-radius: 1.5px;
+    pointer-events: none;
+    z-index: 56;
+  }
+  .kuro-table-row-indicator { height: 3px; }
+  .kuro-table-col-indicator { width: 3px; }
+
+  /* During row/col drag: freeze the grab cursor across the entire page */
+  /* スワイプ削除 — しきい値を越えた（＝離せば消える）状態。色の濃さは JS が
+     指の進み具合に応じて付けるので、ここでは「もう消える」枠だけを担当する。 */
+  .kuro-table-row--will-delete > td,
+  .kuro-table-row--will-delete > th {
+    outline: 2px solid theme('colors.red.500');
+    outline-offset: -2px;
+  }
+
+  /* 並び替えモード（行の長押しで入る）— 見た目で「いま掴める」と分かるように。
+     このモード中は table が touch-action:none なので、指の縦移動が行の移動になる。
+     タップすれば抜ける。 */
+  .kuro-table--reorder {
+    outline: 2px dashed theme('colors.indigo.400');
+    outline-offset: 3px;
+  }
+  .kuro-table--reorder tr {
+    cursor: grab;
+  }
+
+  body.kuro-row-dragging, body.kuro-row-dragging *,
+  body.kuro-col-dragging, body.kuro-col-dragging * {
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     LINK EDIT POPUP — caret on / next to a link
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-link-edit {
+    @apply fixed z-50 p-2 flex flex-col gap-1.5
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl
+           opacity-0 pointer-events-none
+           transition-opacity duration-100;
+    width: 18rem;
+  }
+
+  .kuro-link-edit--visible {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .kuro-link-edit__row {
+    @apply flex flex-col gap-0.5;
+  }
+
+  /* カード表示中は表示テキスト欄を隠す。 .kuro-link-edit__row の display:flex が
+     UA の [hidden]{display:none} に勝ってしまうので、明示的に打ち消す */
+  .kuro-link-edit__row[hidden] {
+    display: none;
+  }
+
+  /* カード表示チェック + 🗑 を 1 行に（🗑 は右端） */
+  .kuro-link-edit__card-row {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  /* 🗑 — リンク削除。破壊的操作なので白ではなく赤寄りのピンクで示す */
+  .kuro-link-edit__delete {
+    @apply flex flex-shrink-0 items-center justify-center
+           w-6 h-6 rounded-md
+           text-rose-500 hover:text-rose-300 hover:bg-rose-500/20
+           cursor-pointer transition-colors;
+  }
+
+  .kuro-link-edit__label {
+    @apply px-0.5 text-neutral-400;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .kuro-link-edit__input {
+    @apply w-full px-2 py-1 text-xs
+           bg-neutral-900 text-neutral-100
+           border border-neutral-600 rounded-md
+           outline-none;
+  }
+
+  .kuro-link-edit__input:focus {
+    @apply border-neutral-400;
+  }
+
+  .kuro-link-edit__jump-btn {
+    @apply w-full px-3 py-1.5 mt-0.5 rounded-lg
+           text-xs text-white bg-indigo-600
+           hover:bg-indigo-500
+           cursor-pointer select-none transition-colors;
+  }
+
+  /* カード表示を明示するチェックボックス行 */
+  .kuro-link-edit__card-toggle {
+    @apply flex items-center gap-1.5 px-0.5 py-0.5
+           text-neutral-300 cursor-pointer select-none;
+    font-size: 11px;
+  }
+
+  .kuro-link-edit__card-toggle input {
+    @apply cursor-pointer accent-indigo-500;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     LINE POPUP MENU
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-line-popm {
+    @apply fixed z-50 p-2 flex flex-col gap-2
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl
+           opacity-0 pointer-events-none
+           transition-opacity duration-100;
+    min-width: 13rem;
+  }
+
+  .kuro-line-popm--visible {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .kuro-line-popm__row {
+    @apply flex items-center gap-1;
+  }
+
+  .kuro-line-popm__scope-row {
+    @apply justify-around pb-2 border-b border-neutral-700;
+  }
+
+  .kuro-line-popm__scope-btn {
+    @apply w-9 h-9 flex items-center justify-center
+           rounded-md text-neutral-300
+           bg-neutral-700 hover:bg-neutral-600
+           cursor-pointer transition-colors;
+    border: 1px solid theme('colors.neutral.600');
+  }
+
+  .kuro-line-popm__scope-btn--active {
+    @apply bg-indigo-700 text-neutral-100;
+    border-color: theme('colors.indigo.400');
+  }
+
+  .kuro-line-popm__colors {
+    @apply pb-2 border-b border-neutral-700;
+  }
+
+  .kuro-line-popm__styles {
+    @apply flex flex-col gap-0.5;
+  }
+
+  .kuro-line-popm__style-btn {
+    @apply flex items-center gap-2 px-2 py-1.5
+           rounded-md text-sm text-neutral-200
+           hover:bg-neutral-700 cursor-pointer
+           transition-colors text-left;
+  }
+
+  .kuro-line-popm__preview {
+    @apply inline-flex items-center justify-center
+           w-12 h-4 text-neutral-300;
+  }
+
+  .kuro-line-popm__label {
+    @apply flex-1;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     TABLE MANAGER (floating toolbar)
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-table-menu {
+    @apply fixed z-40 flex flex-col px-1.5 py-1
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-xl
+           opacity-0 pointer-events-none
+           transition-opacity duration-100;
+    /* スマホ等でボタン列が画面幅に入らないときは折り返す(はみ出して
+       ボタンが押せなくなるのを防ぐ)。折返しは __main の flex-wrap が担う */
+    max-width: calc(100vw - 8px);
+  }
+
+  .kuro-table-menu--visible {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .kuro-table-menu__main {
+    @apply flex items-center gap-0.5 flex-wrap;
+  }
+
+  .kuro-table-menu__btn {
+    @apply px-2 py-1 rounded-md text-xs text-neutral-300
+           hover:bg-neutral-700 hover:text-neutral-100
+           transition-colors cursor-pointer select-none whitespace-nowrap;
+  }
+
+  .kuro-table-menu__btn:disabled {
+    @apply opacity-30 cursor-not-allowed pointer-events-none;
+  }
+
+  .kuro-table-menu__btn--color {
+    @apply px-1.5 inline-flex items-center gap-1;
+  }
+
+  .kuro-table-menu__btn-label {
+    @apply text-xs text-neutral-300;
+  }
+
+  /* 浮遊メニュー共通の「つまみ」— 本文に重なったときに、どけるための取っ手。
+     ⚠ 掴んでも文字の選択を消さないこと（JS 側で mousedown を preventDefault）。
+     見た目は控えめに。押すボタンではないので、色もホバーも弱くする。 */
+  .kuro-drag-grip {
+    @apply flex items-center px-1 text-neutral-500 flex-shrink-0;
+    cursor: grab;
+    align-self: stretch;
+  }
+  .kuro-drag-grip:hover { @apply text-neutral-300; }
+  .kuro-drag-grip--active { cursor: grabbing; @apply text-indigo-400; }
+  /* popm 用の広いつまみ。popm だけ目印アイコン（A）を置かない（同じ列に文字色・
+     ルビの A が並び、押せない目印が機能ボタンに見えるため）ので、アイコンが
+     兼ねていた取っ手の幅をこちらで補う。指で掴める大きさを保つのが目的。 */
+  .kuro-drag-grip--wide { @apply px-2; }
+
+  /* 浮遊メニューの目印アイコン（つまみの隣）— 上部ツールバーと同じ絵を出す。
+     押せるボタンではないので、色は控えめ・カーソルもドラッグ用のまま。 */
+  .kuro-menu-icon {
+    @apply flex items-center px-1 text-neutral-400 flex-shrink-0;
+    cursor: grab;
+    align-self: center;
+    line-height: 1;
+    user-select: none;
+  }
+  .kuro-menu-icon:hover { @apply text-neutral-200; }
+
+  .kuro-table-menu__label {
+    @apply text-xs font-semibold text-neutral-400 pl-1 pr-0.5;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .kuro-table-menu__divider {
+    @apply w-px h-3.5 bg-neutral-600 mx-0.5 flex-shrink-0;
+  }
+
+  .kuro-table-menu__colors {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-top: 0.375rem;
+    margin-top: 0.25rem;
+    border-top: 1px solid theme('colors.neutral.600');
+  }
+
+  .kuro-table-menu__colors--visible {
+    display: flex;
+  }
+
+  .kuro-table-menu__btn--active {
+    @apply bg-indigo-700 text-neutral-100;
+  }
+
+  .kuro-table-menu__btn--valign {
+    @apply px-1.5 inline-flex items-center;
+  }
+
+  .kuro-table-menu__btn--deltbl {
+    @apply text-red-500;
+  }
+  .kuro-table-menu__btn--deltbl:hover {
+    @apply bg-red-950 text-red-300;
+    border-color: theme('colors.red.700');
+  }
+
+  /* ════════════════════════════════════════════════════════
+     EMOJI PANEL
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-emoji-panel {
+    @apply fixed z-50 p-2
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl
+           max-w-xs max-h-72 overflow-y-auto
+           opacity-0 pointer-events-none
+           transition-opacity duration-100;
+  }
+
+  .kuro-emoji-panel--visible {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .kuro-emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1.75rem);
+    gap: 0.125rem;
+  }
+
+  .kuro-emoji-btn {
+    @apply flex items-center justify-center w-7 h-7 rounded-md
+           text-lg cursor-pointer
+           hover:bg-neutral-700 transition-colors;
+  }
+
+  /* ── Link Open Dialog (閲覧モードでリンクを踏んだときの確認) ── */
+  .kuro-link-open {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4
+           opacity-0 pointer-events-none;
+    background: rgba(0, 0, 0, .55);
+    visibility: hidden;
+    transition: opacity 120ms;
+  }
+  .kuro-link-open--visible {
+    @apply opacity-100 pointer-events-auto;
+    visibility: visible;
+  }
+  .kuro-link-open__box {
+    @apply flex flex-col gap-2 p-4
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl;
+    width: 24rem;
+    max-width: 100%;
+  }
+  .kuro-link-open__msg {
+    @apply text-sm text-neutral-100;
+  }
+  .kuro-link-open__url {
+    @apply px-2 py-1.5 rounded-lg
+           bg-neutral-900 border border-neutral-700
+           text-xs text-indigo-300 break-all;
+  }
+  .kuro-link-open__footer {
+    @apply flex items-center justify-end gap-2 mt-1;
+  }
+  .kuro-link-open__btn {
+    @apply px-3 py-1.5 rounded-lg
+           text-xs text-neutral-300 bg-neutral-700
+           hover:bg-neutral-600 hover:text-white
+           cursor-pointer select-none transition-colors;
+  }
+  .kuro-link-open__btn--primary {
+    @apply text-white bg-indigo-600 hover:bg-indigo-500;
+  }
+
+  /* 押せない状態のボタン（理由は title で示す）。
+     ⚠ `disabled` + `pointer-events:none`（閲覧モードの流儀）は使わない —
+       tooltip すら出ず「押せないのに理由が分からない」状態になる。
+       見た目だけ淡くし、クリックはハンドラ側で無視する。 */
+  .kuro-btn-locked {
+    @apply opacity-35;
+    cursor: not-allowed;
+  }
+
+  /* ── 削除ボタンの表現（エディタ共通）──────────────────────────────
+     ブロックを消す操作は【SVG ゴミ箱 + 「削除」】で統一する。
+     ⚠ 絵文字（🗑）は使わない — フォント差で大きさ・ベースラインがずれる。
+     ⚠ アイコンだけの列（テーブルメニュー・リンク編集ポップアップ・コード
+       ブロックの chrome）は例外的にアイコン単独のまま（文字を混ぜると列が崩れる）。
+     ⚠ 「削除」の語はそのブロックを消すとき専用。リンクを外す等は別の語にする。 */
+  .kuro-del-btn {
+    @apply inline-flex items-center gap-1.5;
+  }
+  .kuro-del-btn > svg { @apply flex-none; }
+
+  /* ── Recipe Dialog（RecipeCard の唯一の編集手段）──
+     LinkOpenDialog と同じオーバーレイ + ボックス方式。行が増える入力なので
+     ボックス自体を縦スクロールさせ、フッターは常に見える位置に置く。 */
+  .kuro-recipe-dialog {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4
+           opacity-0 pointer-events-none;
+    background: rgba(0, 0, 0, .55);
+    visibility: hidden;
+    transition: opacity 120ms;
+  }
+  .kuro-recipe-dialog--visible {
+    @apply opacity-100 pointer-events-auto;
+    visibility: visible;
+  }
+  .kuro-recipe-dialog__box {
+    @apply flex flex-col gap-3 p-4
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl overflow-y-auto;
+    width: 34rem;
+    max-width: 100%;
+    max-height: 85vh;
+  }
+  /* タイトル行: 左に見出し、右にカードの設定（表示サイズ / 寄せ / 削除） */
+  .kuro-recipe-dialog__head {
+    @apply flex items-center justify-between gap-3;
+  }
+  .kuro-recipe-dialog__title {
+    @apply text-sm font-semibold text-neutral-100;
+  }
+  .kuro-recipe-dialog__tools {
+    @apply flex flex-none items-center gap-1;
+  }
+  .kuro-recipe-dialog__size {
+    @apply px-1.5 py-1 rounded-lg
+           bg-neutral-900 border border-neutral-700
+           text-xs text-neutral-200 outline-none
+           focus:border-neutral-500 cursor-pointer;
+  }
+  .kuro-recipe-dialog__tool {
+    @apply flex items-center justify-center px-2 py-1.5 rounded-lg
+           bg-neutral-900 border border-neutral-700 text-neutral-300
+           hover:border-neutral-500 hover:text-white
+           cursor-pointer transition-colors;
+  }
+  .kuro-recipe-dialog__tool.active {
+    @apply bg-indigo-600 border-indigo-500 text-white;
+  }
+  .kuro-recipe-dialog__tool--danger {
+    @apply text-red-300 border-red-900/60 hover:bg-red-950/40 hover:text-red-200;
+  }
+  .kuro-recipe-dialog__note {
+    @apply m-0 text-xs leading-relaxed text-neutral-400;
+  }
+  .kuro-recipe-dialog__row {
+    @apply flex flex-wrap gap-2;
+  }
+  .kuro-recipe-dialog__field {
+    @apply flex min-w-0 flex-1 flex-col gap-1;
+  }
+  .kuro-recipe-dialog__label {
+    @apply text-xs text-neutral-400;
+  }
+  .kuro-recipe-dialog__input {
+    @apply w-full min-w-0 px-2 py-1.5 rounded-lg
+           bg-neutral-900 border border-neutral-700
+           text-sm text-neutral-100 outline-none
+           focus:border-neutral-500;
+  }
+  .kuro-recipe-dialog__input--amount { @apply flex-none; width: 8rem; }
+  .kuro-recipe-dialog__section {
+    @apply flex flex-col gap-1.5;
+  }
+  .kuro-recipe-dialog__h {
+    @apply m-0 text-xs font-semibold text-neutral-300;
+  }
+  .kuro-recipe-dialog__list {
+    @apply flex flex-col gap-1.5;
+  }
+  .kuro-recipe-dialog__item {
+    @apply flex items-center gap-1.5;
+  }
+  .kuro-recipe-dialog__row-del {
+    @apply flex-none px-2 py-1.5 rounded-lg text-neutral-500
+           hover:bg-neutral-700 hover:text-red-300
+           cursor-pointer transition-colors;
+  }
+  .kuro-recipe-dialog__add {
+    @apply self-start px-2 py-1 rounded-lg text-xs text-neutral-300
+           border border-neutral-700 hover:border-neutral-500 hover:text-white
+           cursor-pointer transition-colors;
+  }
+  .kuro-recipe-dialog__errors {
+    @apply m-0 list-disc pl-5 rounded-lg p-2 text-xs leading-relaxed;
+    color: theme('colors.red.200');
+    background: rgba(127, 29, 29, .35);
+    border: 1px solid rgba(153, 27, 27, .6);
+  }
+  .kuro-recipe-dialog__footer {
+    @apply flex items-center justify-end gap-2;
+  }
+  .kuro-recipe-dialog__btn {
+    @apply px-3 py-1.5 rounded-lg
+           text-xs text-neutral-300 bg-neutral-700
+           hover:bg-neutral-600 hover:text-white
+           cursor-pointer select-none transition-colors;
+  }
+  .kuro-recipe-dialog__btn--primary {
+    @apply text-white bg-indigo-600 hover:bg-indigo-500;
+  }
+
+  /* ── Media Dialog ── */
+  .kuro-media-dialog {
+    @apply fixed z-50 flex flex-col gap-2 p-3
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-2xl
+           opacity-0 pointer-events-none;
+    width: 20rem;
+    visibility: hidden;
+    transition: opacity 100ms;
+  }
+  .kuro-media-dialog--visible {
+    @apply opacity-100 pointer-events-auto;
+    visibility: visible;
+  }
+  .kuro-media-dialog__url {
+    @apply w-full px-3 py-2 rounded-lg
+           bg-neutral-700 border border-neutral-600
+           text-sm text-neutral-100 placeholder-neutral-500
+           outline-none transition-colors;
+  }
+  .kuro-media-dialog__url:focus {
+    @apply border-indigo-500;
+  }
+  .kuro-media-dialog__footer {
+    @apply flex items-center justify-between gap-2;
+  }
+  .kuro-media-dialog__file-btn {
+    @apply flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+           text-xs text-neutral-300 bg-neutral-700
+           hover:bg-neutral-600 hover:text-white
+           cursor-pointer select-none transition-colors;
+  }
+  .kuro-media-dialog__link-btn {
+    @apply px-3 py-1.5 rounded-lg
+           text-xs text-white bg-indigo-600
+           hover:bg-indigo-500
+           cursor-pointer select-none transition-colors;
+  }
+
+  /* ── Media placeholder (uploading) ── */
+  .kuro-media-placeholder {
+    @apply flex items-center gap-2 px-4 py-3 my-2
+           rounded-lg border border-dashed border-neutral-500
+           bg-neutral-800 text-neutral-400 text-sm select-none;
+    min-height: 3.5rem;
+  }
+  .kuro-media-placeholder__spinner {
+    @apply inline-block w-4 h-4 rounded-full border-2 border-neutral-500 border-t-indigo-400;
+    animation: kuro-spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes kuro-spin { to { transform: rotate(360deg); } }
+  .kuro-media-placeholder__label { @apply truncate; }
+
+  /* ── Media error (upload failure) ── */
+  .kuro-media-error {
+    @apply flex items-center gap-2 px-4 py-3 my-2
+           rounded-lg border border-dashed border-red-700
+           bg-red-950 text-red-400 text-sm select-none;
+  }
+
+  /* ── Broken media affordance ──
+     基本の見た目は content.css（.kuro-content .kuro-media-broken）に移動し公開ページ
+     と共有。ここは編集キャンバス専用のアフォーダンス（選択・修正できるよう pointer/
+     hover）だけを足す。 */
+  .kuro-media-broken {
+    @apply cursor-pointer transition-colors;
+  }
+  .kuro-media-broken:hover {
+    @apply border-indigo-500 text-indigo-400;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     CONTENT TYPOGRAPHY (inside .kuro-content)
+     ════════════════════════════════════════════════════════ */
+
+  /* CONTENT TYPOGRAPHY lives in content.css now (single source of truth, shared
+     with the published page → WYSIWYG). Colors:
+     - 通常モード: content.css の theme-neutral な既定値をそのまま使う
+       （公開ページと同一の変数値 = 真の WYSIWYG）。ここでは何も上書きしない。
+     - ダークモード (.kuro-editor--canvas-dark): 従来のダークパレットに上書き。 */
+  .kuro-content {
+    color: var(--kuro-canvas-text);
+  }
+  .kuro-editor--canvas-dark .kuro-content {
+    --kuro-h1-color: theme('colors.neutral.50');
+    --kuro-h2-color: theme('colors.neutral.100');
+    --kuro-h3-color: theme('colors.neutral.100');
+    --kuro-h4-color: theme('colors.neutral.200');
+    --kuro-h5-color: theme('colors.neutral.300');
+    --kuro-link: theme('colors.indigo.400');
+    --kuro-link-hover: theme('colors.indigo.300');
+    --kuro-quote-text: theme('colors.neutral.300');
+    --kuro-quote-border: theme('colors.indigo.500');
+    --kuro-hr: theme('colors.neutral.600');
+    --kuro-list-color: theme('colors.neutral.200');
+    --kuro-check-border: theme('colors.neutral.500');
+    --kuro-check-on: theme('colors.indigo.400');
+    --kuro-check-mark: theme('colors.neutral.900');
+    --kuro-kbd-bg: theme('colors.neutral.800');
+    --kuro-kbd-text: theme('colors.neutral.100');
+    --kuro-kbd-border: theme('colors.neutral.500');
+    --kuro-table-cell-text: theme('colors.neutral.200');
+    --kuro-table-head-text: theme('colors.neutral.100');
+    --kuro-callout-tip-bg: rgba(30, 58, 138, 0.25);
+    --kuro-callout-tip-border: theme('colors.blue.400');
+    --kuro-callout-tip-text: theme('colors.blue.100');
+    --kuro-callout-warn-bg: rgba(120, 53, 15, 0.25);
+    --kuro-callout-warn-border: theme('colors.yellow.400');
+    --kuro-callout-warn-text: theme('colors.yellow.100');
+    --kuro-callout-danger-bg: rgba(127, 29, 29, 0.3);
+    --kuro-callout-danger-border: theme('colors.red.400');
+    --kuro-callout-danger-text: theme('colors.red.100');
+    --kuro-callout-note-bg: rgba(38, 38, 38, 0.65);
+    --kuro-callout-note-border: theme('colors.neutral.400');
+    --kuro-callout-note-text: theme('colors.neutral.200');
+  }
+
+  /* <kbd> and callout (admonition) appearance moved to content.css (single
+     source of truth). Their colors are themed via --kuro-kbd-* / --kuro-callout-*
+     variables set on .kuro-content above. */
+
+  /* Inline / lists / list-marker / justified text / horizontal rule typography
+     moved to content.css (single source of truth, shared with the public page).
+     Their colors are themed via the --kuro-* variables set on .kuro-content above. */
+
+  /* 行のスワイプ削除（指）— 横方向のジェスチャを【ブラウザに取られない】ようにする。
+     touch-action が既定のままだと、横に振った瞬間にブラウザがスクロールと判断して
+     pointercancel を投げるので、スワイプ判定が始まる前に毎回終わってしまう。
+     pan-y にすると縦スクロールは今までどおり効き、横だけこちらへ来る。 */
+  /* ⚠ touch-action は【表の行（table-row）には効かない】— CSS 仕様の適用外
+     （非置換インライン・table-row・row-group・column・column-group は対象外）。
+     <table> 側（ブロックボックス）に置くこと。 */
+  .kuro-pane__wysiwyg table {
+    touch-action: pan-y;
+  }
+
+  /* ── Code block ──
+     Structure (textarea-based):
+       <div.kuro-code-wrap contenteditable="false">
+         <div.kuro-code__gutter>1\n2\n3</div>
+         <textarea.kuro-code__area>...</textarea>
+     The <textarea> is the actual editor; the contenteditable wrap protects
+     it from wysiwyg-level selection/keyboard behaviour. */
+  .kuro-code-wrap {
+    @apply my-4 rounded-xl overflow-hidden
+           bg-neutral-950 border border-neutral-700;
+    /* grid is strict about column widths. minmax(0, 1fr) bypasses the implicit
+       min-content (= textarea's internal content width) so the gutter column
+       never grows beyond 3rem regardless of how long lines in the textarea get. */
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    align-items: stretch;
+    position: relative;
+  }
+
+  /* Delete button — left of copy button */
+  .kuro-code__del {
+    position: absolute;
+    top: 0.375rem;
+    right: 2.5rem;
+    z-index: 5;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid theme('colors.neutral.600');
+    border-radius: 0.3rem;
+    background: rgba(23, 23, 27, 0.85);
+    color: theme('colors.red.500');
+    cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .kuro-code__del:hover {
+    background: theme('colors.red.950');
+    color: theme('colors.red.400');
+    border-color: theme('colors.red.700');
+  }
+
+  /* Copy button — pinned to the top-right of the code wrap */
+  .kuro-code__copy {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.5rem;
+    z-index: 5;
+    padding: 0.125rem 0.4rem;
+    border: 1px solid theme('colors.neutral.600');
+    border-radius: 0.3rem;
+    background: rgba(23, 23, 27, 0.85);
+    color: theme('colors.neutral.200');
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
+  }
+  .kuro-code__copy:hover {
+    background: theme('colors.neutral.700');
+    color: theme('colors.white');
+  }
+  .kuro-code__copy--flash {
+    background: theme('colors.emerald.700');
+    color: theme('colors.white');
+  }
+
+  /* Both gutter and textarea must share identical font / line-height / padding-top
+     so their lines align exactly. box-sizing: border-box keeps padding inside the
+     measured height. */
+  .kuro-code__gutter,
+  .kuro-code__area {
+    box-sizing: border-box;
+    font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 0.875rem;
+    line-height: 1.5rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    margin: 0;
+  }
+
+  .kuro-code__gutter {
+    cursor: grab;
+    /* In grid, the column is fixed at 3rem above — no flex tweaks needed */
+    padding-left: 0.75rem;
+    padding-right: 0.5rem;
+    background-color: #0c0c0f;
+    border-right: 1px solid theme('colors.neutral.700');
+    color: theme('colors.neutral.600');
+    text-align: right;
+    white-space: pre;
+    user-select: none;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .kuro-code__area {
+    width: 100%;        /* fill the grid cell */
+    min-width: 0;       /* allow shrinking inside grid cell */
+    padding-left: 1rem;
+    padding-right: 1rem;
+    background: transparent;
+    color: theme('colors.green.300');
+    border: 0;
+    outline: 0;
+    resize: none;
+    overflow-x: auto;   /* long lines scroll horizontally inside the cell */
+    overflow-y: hidden; /* height is JS-managed */
+    white-space: pre;
+    word-wrap: normal;
+    tab-size: 2;
+    -moz-tab-size: 2;
+    caret-color: theme('colors.green.300');
+    vertical-align: top;
+    display: block;
+  }
+
+  .kuro-code-wrap--dragging {
+    opacity: 0.45;
+    cursor: grabbing;
+  }
+
+  .kuro-code-drop-indicator {
+    height: 2px;
+    margin: 2px 0;
+    background: theme('colors.indigo.400');
+    border-radius: 1px;
+    pointer-events: none;
+  }
+
+  /* Legacy <pre.kuro-code> fallback (for HTML content rendered as-is) */
+  pre.kuro-code:not(.kuro-code-wrap pre.kuro-code) {
+    @apply my-4 rounded-xl overflow-hidden
+           bg-neutral-950 border border-neutral-700
+           p-4 text-sm font-mono text-green-300 overflow-x-auto;
+    white-space: pre;
+    tab-size: 2;
+  }
+
+  /* ── Rounded Box (kuro-roundbox) ──
+     The .kuro-roundbox presentation lives in content.css (theme-neutral, var
+     based) so it renders on the public site too; the editor's dark palette
+     comes from the --kuro-box-* overrides at the top of this file. Only the
+     floating settings menu (editor-only) stays here. */
+
+  /* RoundboxMenu — 浮かぶ kmenu (fixed, document.body に置く) */
+  .kuro-roundbox-menu {
+    position: fixed;
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: 0.5rem;
+    border: 1px solid theme('colors.neutral.600');
+    background: theme('colors.neutral.800');
+    box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    user-select: none;
+    /* スマホ等で画面幅に入らないときはコントロール列を折り返す */
+    flex-wrap: wrap;
+    max-width: calc(100vw - 8px);
+  }
+  .kuro-roundbox-menu__label {
+    @apply text-xs font-semibold text-neutral-400 pr-1;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .kuro-roundbox-menu__select {
+    @apply rounded px-1.5 py-0.5 text-xs border border-neutral-600 bg-neutral-700 text-neutral-200 cursor-pointer;
+  }
+  .kuro-roundbox-menu__aligns {
+    @apply flex gap-0.5;
+  }
+  .kuro-roundbox-menu__aligns button {
+    @apply rounded px-2 py-0.5 text-xs border border-neutral-600 bg-neutral-700 text-neutral-300 cursor-pointer;
+    transition: background 0.1s, color 0.1s;
+    min-width: 2rem;
+    text-align: center;
+  }
+  .kuro-roundbox-menu__aligns button:hover,
+  .kuro-roundbox-menu__aligns button.active {
+    @apply bg-indigo-700 border-indigo-500 text-white;
+  }
+  .kuro-roundbox-menu__del {
+    @apply ml-1 text-xs px-2 py-0.5 rounded border border-neutral-600 bg-neutral-700 text-red-400 cursor-pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .kuro-roundbox-menu__del:hover {
+    @apply bg-red-950 border-red-700;
+  }
+
+  /* ── Table ── */
+  /* Table content appearance (border-collapse, widths, cell borders/padding/
+     colors via --kuro-table-* vars, table-layout:fixed) moved to content.css.
+     Below are EDITING-only affordances. */
+
+  /* During column resize: freeze cursor across entire page */
+  body.kuro-col-resizing,
+  body.kuro-col-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
+  .kuro-table td:focus,
+  .kuro-table th:focus,
+  .kuro-content td:focus,
+  .kuro-content th:focus {
+    @apply outline-none;
+    background: var(--kuro-canvas-cellfocus-bg);
+    box-shadow: inset 0 0 0 2px theme('colors.indigo.500');
+  }
+
+  /* ── List style classes (.kuro-ul-* / .kuro-list-*) ──
+     The list-marker rules and their @counter-style definitions live in
+     content.css (unlayered → they beat both `.kuro-content ul/ol` here and the
+     public template's `.prose` lists, with no specificity tricks needed). */
+
+  /* ════════════════════════════════════════════════════════
+     IMAGE MENU (ipopm)
+     ════════════════════════════════════════════════════════ */
+
+  .kuro-image-menu {
+    @apply fixed z-40 flex flex-col gap-1 p-1.5
+           bg-neutral-800 border border-neutral-600
+           rounded-xl shadow-xl
+           opacity-0 pointer-events-none
+           transition-opacity duration-100;
+    /* スマホ等で画面幅に入らないときは各行(__row の flex-wrap)が折り返す */
+    max-width: calc(100vw - 8px);
+  }
+
+  .kuro-image-menu--visible {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .kuro-image-menu__row {
+    @apply flex items-center gap-0.5 flex-wrap;
+  }
+
+  .kuro-image-menu__btn {
+    @apply px-2 py-1 rounded-md text-xs text-neutral-300
+           hover:bg-neutral-700 hover:text-neutral-100
+           transition-colors cursor-pointer select-none whitespace-nowrap;
+    min-width: 2.25rem;
+    text-align: center;
+  }
+
+  .kuro-image-menu__btn--active {
+    @apply bg-indigo-700 text-white;
+  }
+
+  .kuro-image-menu__btn--delete {
+    @apply text-red-400 hover:bg-red-900 hover:text-red-300;
+  }
+
+  .kuro-image-menu__btn--link {
+    @apply hover:bg-indigo-900 hover:text-indigo-200;
+  }
+
+  .kuro-image-menu__sep {
+    @apply h-px bg-neutral-700 mx-0.5 my-0.5;
+  }
+
+  /* Link input sub-panel */
+  .kuro-image-menu__link-panel {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .kuro-image-menu__link-panel--visible {
+    display: flex;
+  }
+
+  .kuro-image-menu__link-input-row {
+    @apply flex items-center gap-1;
+  }
+
+  .kuro-image-menu__link-input {
+    @apply flex-1 min-w-0 px-2 py-1 rounded-md
+           bg-neutral-700 border border-neutral-600
+           text-xs text-neutral-100 placeholder-neutral-500
+           outline-none;
+    &:focus { @apply border-indigo-500; }
+  }
+
+  /* ── Media ──
+     figure / img / video / audio / iframe の LAYOUT（サイズ・float・16:9 枠・
+     open-link ボタンの見た目）は content.css（.kuro-content …）に一本化した。
+     公開ページは editor.css を読まないため、ここに置くと本番だけ回り込みも
+     16:9 も効かない、というズレになる。ここには編集時だけのアフォーダンス
+     （2 段階クリックの ::before オーバーレイ、選択アウトライン、cursor）を残す。 */
+
+  /*
+   * Two-click selection for interactive media (video / audio / iframe).
+   * ::before overlay sits on top of the element and intercepts the first click
+   * so the ImageMenu is shown instead of starting playback.
+   * When the figure is selected (kuro-media-wrap--selected) the overlay is
+   * hidden, letting the native controls receive the second click.
+   * pointer-events cannot be used here because browser shadow-DOM controls
+   * (e.g. <audio controls>) ignore CSS pointer-events on the host element.
+   */
+  .kuro-media-wrap--audio,
+  .kuro-media-wrap--video,
+  .kuro-media-wrap--iframe { position: relative; }
+
+  .kuro-media-wrap--audio::before,
+  .kuro-media-wrap--video::before,
+  .kuro-media-wrap--iframe::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    cursor: pointer;
+  }
+
+  .kuro-media-wrap--selected::before { display: none; }
+
+  /* Base wrapper / alignment / 16:9 iframe / float clearfix は content.css。 */
+
+  /* ── Click-through link button — 見た目は content.css
+     (.kuro-content .kuro-media-open-link)。ここは編集側の操作性だけ。 */
+  .kuro-media-open-link {
+    cursor: pointer;
+    /* Prevent text editing inside the contenteditable wysiwyg */
+    -webkit-user-modify: read-only;
+  }
+
+  /* ── Selected state (shown while ImageMenu is open) ── */
+  .kuro-media-wrap--selected {
+    outline: 2px solid theme('colors.indigo.500');
+    outline-offset: 2px;
+    border-radius: theme('borderRadius.lg');
+  }
+
+  /* Atomic-block wrapper — editor-only box that gives a top-level inline card /
+     bare <br> a block so the caret can navigate around it (see editor.js
+     _wrapAtomicBlocks). Purely structural: no margin of its own, so spacing is
+     the card's / blank line's own. getContent() strips it, so it never reaches
+     the published page. */
+  [data-kuro-block] {
+    display: block;
+    margin: 0;
+  }
+
+  /* ── Card link ── */
+  /* .kuro-card-link の見た目は content.css（.kuro-content .kuro-card-link）。
+     公開ページは editor.css を読まないため、ここに置くと本番だけ素のリンクになる。 */
+}

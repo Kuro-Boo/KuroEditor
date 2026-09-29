@@ -113,11 +113,13 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.12'
+export const VERSION = '2.39.13'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
 const HIST_LIMIT = 200
+/** Undo でキャレットを戻す先の「行」。キャレットはこの要素の番号 + 中の文字数で持つ */
+const CARET_LINE_SELECTOR = 'td, th, li, p, h1, h2, h3, h4, h5, h6, pre, blockquote, div'
 
 /** Special link regex patterns — processed in this order: card > wiki > hyper */
 export const LINK_RE = {
@@ -6560,7 +6562,7 @@ export class KuroEditor {
       // ホストは 'image/*' に絞ることで「フォトライブラリ / 写真を撮る」のシートが出る。
       mediaAccept: 'image/*,video/*,audio/*',
       // ホストが表示に対応するメディア種別（'image' | 'video' | 'audio'）。
-      // null = 全対応（既定）。画像しか扱えないホスト（KuroNotes）は ['image'] を渡す。
+      // null = 全対応（既定）。画像しか扱えないホスト（KuroNote）は ['image'] を渡す。
       // 非対応種別の [[…]] トークンは再生要素でなく中立プレースホルダで描画し、
       // トークン自体は保持したままクリックで削除できる（renderSpecialLinks 参照）。
       mediaKinds: null,
@@ -10619,7 +10621,11 @@ export class KuroEditor {
     if (this._mode !== 'wysiwyg') return
     this._commitSnapshot()      // 打ちかけのタイピングを 1 手として確定
     if (this._histIdx <= 0) return
-    this._restoreSnapshot(this._hist[--this._histIdx])
+    // 起点のエントリはキャレットを持たない（setContent 直後）。そこへ戻るときは
+    // 【取り消した手の位置】に置く — 末尾へ飛ばすと、続けて打った文字が表の外へ出る
+    const undone = this._hist[this._histIdx]
+    const target = this._hist[--this._histIdx]
+    this._restoreSnapshot({ html: target.html, caret: target.caret ?? undone.caret })
   }
 
   _redo() {
@@ -10657,41 +10663,61 @@ export class KuroEditor {
     this._markDirty()
   }
 
-  /** キャレット位置を本文先頭からの文字数で表す（DOM 構造が変わっても復元できる）。 */
+  /**
+   * キャレット位置を「何番目の行（セル・段落・項目…）か ＋ その中の文字数」で表す。
+   * 行は文書順の番号で持つので、スナップショットの HTML から作り直した DOM でも引ける。
+   * ⚠ 本文先頭からの文字数だけで持たないこと。セルの境目では「左のセルの末尾」と
+   *   「右のセルの先頭」が同じ数になり、空のセルは文字が無いので数では指せない —
+   *   undo のたびにキャレットが隣のセルや表の外へ飛ぶ（打った文字がそこへ入る）。
+   * @returns {{ line: number, offset: number } | null}  line = -1 は本文直下
+   */
   _caretOffset() {
     const sel = window.getSelection()
     if (!sel?.rangeCount) return null
     const r = sel.getRangeAt(0)
     if (!this.wysiwyg.contains(r.startContainer)) return null
+    const start = r.startContainer instanceof Element ? r.startContainer : r.startContainer.parentElement
+    const found = start?.closest(CARET_LINE_SELECTOR)
+    const lineEl = found && found !== this.wysiwyg && this.wysiwyg.contains(found) ? found : this.wysiwyg
     const pre = document.createRange()
-    pre.selectNodeContents(this.wysiwyg)
+    pre.selectNodeContents(lineEl)
     try { pre.setEnd(r.startContainer, r.startOffset) } catch { return null }
-    return pre.toString().length
+    const line = lineEl === this.wysiwyg
+      ? -1
+      : Array.prototype.indexOf.call(this.wysiwyg.querySelectorAll(CARET_LINE_SELECTOR), lineEl)
+    return { line, offset: pre.toString().length }
   }
 
-  _restoreCaretOffset(offset) {
+  _restoreCaretOffset(caret) {
     const sel = window.getSelection()
     if (!sel) return
-    if (offset == null) {
+    const toEnd = () => {
       // 位置不明: 末尾に置く（何も選択していない状態を作らない）
       const last = this.wysiwyg.lastChild
       if (last) sel.setBaseAndExtent(last, 0, last, 0)
-      return
     }
-    const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_TEXT)
+    if (caret == null) return toEnd()
+    const lineEl = caret.line < 0
+      ? this.wysiwyg
+      : this.wysiwyg.querySelectorAll(CARET_LINE_SELECTOR)[caret.line]
+    if (!lineEl) return toEnd()
+    const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT)
     let acc = 0
     let node = null
+    let last = null
     while ((node = walker.nextNode())) {
       const len = node.textContent.length
-      if (acc + len >= offset) {
-        const at = offset - acc
+      if (acc + len >= caret.offset) {
+        const at = caret.offset - acc
         sel.setBaseAndExtent(node, at, node, at)
         return
       }
       acc += len
+      last = node
     }
-    const last = this.wysiwyg.lastChild
-    if (last) sel.setBaseAndExtent(last, 0, last, 0)
+    // 数が行の文字より多い → 行の末尾。文字の無い行（空のセル・空行）→ 行の先頭
+    if (last) sel.setBaseAndExtent(last, last.length, last, last.length)
+    else      sel.setBaseAndExtent(lineEl, 0, lineEl, 0)
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

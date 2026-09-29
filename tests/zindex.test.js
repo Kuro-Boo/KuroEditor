@@ -20,7 +20,7 @@ import { resolve } from 'node:path'
 let css
 
 beforeAll(() => {
-  css = readFileSync(resolve(__dirname, '../src/editor.css'), 'utf8')
+  css = readFileSync(resolve(__dirname, '../src/editor-core.css'), 'utf8')
 })
 
 /**

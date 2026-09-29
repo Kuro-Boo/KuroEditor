@@ -14,7 +14,7 @@
  * （Plan A = Yjs の LWW は敗者を無音で失う。その対比が本テストの主張の裏返し）。
  *
  * サーバーの版採番・changeId 冪等・ログからの再構築は同期層（ホスト = KuroCMS /
- * KuroNotes）の責務でありエディタ契約の外なので、ここでは扱わない。
+ * KuroNote）の責務でありエディタ契約の外なので、ここでは扱わない。
  */
 import { describe, it, expect } from 'vitest'
 import {

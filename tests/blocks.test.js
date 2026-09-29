@@ -1,6 +1,6 @@
 /**
  * Shared block utilities (src/blocks.js) — DOM-independent pure functions used
- * by the editor, KuroCMS Worker, KuroNotes sync, and the Plan B sync server.
+ * by the editor, KuroCMS Worker, KuroNote sync, and the Plan B sync server.
  */
 import { describe, it, expect } from 'vitest'
 import {
@@ -80,7 +80,7 @@ describe('normalizeBlockIds', () => {
   })
 })
 
-describe('resolveConflictsAsDuplicates (KuroNotes 案C / オフライン復帰)', () => {
+describe('resolveConflictsAsDuplicates (KuroNote 案C / オフライン復帰)', () => {
   it('keeps local and re-inserts each remote conflict as a new block (no loss)', () => {
     const base = '<p data-bid="1">original</p>'
     const local = '<p data-bid="1">mine</p>'

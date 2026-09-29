@@ -29,7 +29,7 @@ describe('カラーピッカー', () => {
       expect(block.className).toContain('kuro-color-group')
     }
     const css = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'editor.css'), 'utf8')
+      join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'editor-core.css'), 'utf8')
     expect(css).toMatch(/\.kuro-color-group\s*\{[^}]*grid-template-columns:\s*repeat\(3,/)
     // 幅が足りないときはブロック単位で折り返す（スマホ対応）
     expect(css).toMatch(/\.kuro-color-picker__custom\s*\{[^}]*flex-wrap/)

@@ -1227,6 +1227,47 @@ describe('KuroEditor', () => {
       expect(editor.getContent()).not.toContain('after')
     })
 
+    // ── キャレットの戻り先（表のセル） ──────────────────────────────────────
+    // ⚠ 本文先頭からの文字数だけで持つと、セルの境目は左のセルの末尾へ、空のセルは
+    //   次の文字のある場所へ、起点（キャレット無し）は本文末尾へ飛んでいた。
+    const TABLE3 = '<table class="kuro-table"><tbody><tr><td>AB</td><td>CD</td><td>EF</td></tr></tbody></table><p>after</p>'
+    const cells = () => [...editor.wysiwyg.querySelectorAll('td')]
+    const caretAt = (node, offset) => window.getSelection().setBaseAndExtent(node, offset, node, offset)
+    const caretCell = () => {
+      const n = window.getSelection().anchorNode
+      return (n instanceof Element ? n : n?.parentElement)?.closest('td')
+    }
+
+    it('空にしたセルへ undo で戻ると、キャレットはそのセルに入る', () => {
+      editor.setContent(TABLE3)
+      const mid = cells()[1]
+      mid.innerHTML = '<br>'; caretAt(mid, 0); commit()          // 真ん中のセルを空に
+      mid.textContent = 'xy'; caretAt(mid.firstChild, 2); commit()
+
+      editor._undo()
+      expect(cells().map((c) => c.textContent)).toEqual(['AB', '', 'EF'])
+      expect(caretCell()).toBe(cells()[1])
+    })
+
+    it('セルの先頭にあったキャレットは、左のセルの末尾ではなくそのセルへ戻る', () => {
+      editor.setContent(TABLE3)
+      cells()[1].firstChild.data = 'CDz'; caretAt(cells()[1].firstChild, 0); commit()
+      cells()[1].firstChild.data = 'CDzz'; caretAt(cells()[1].firstChild, 4); commit()
+
+      editor._undo()
+      expect(caretCell()).toBe(cells()[1])
+      expect(window.getSelection().anchorOffset).toBe(0)
+    })
+
+    it('起点まで undo しても表の外へ飛ばず、取り消した場所に残る', () => {
+      editor.setContent(TABLE3)
+      cells()[1].firstChild.data = 'CDz'; caretAt(cells()[1].firstChild, 3); commit()
+
+      editor._undo()
+      expect(cells()[1].textContent).toBe('CD')
+      expect(caretCell()).toBe(cells()[1])
+    })
+
     it('閲覧モードでは undo / redo が効かない', () => {
       editor.setContent('<p>base</p>')
       domEdit('<hr class="kuro-hr">'); commit()
