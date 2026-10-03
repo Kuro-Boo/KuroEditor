@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.14'
+export const VERSION = '2.39.15'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -10664,12 +10664,17 @@ export class KuroEditor {
   }
 
   /**
-   * キャレット位置を「何番目の行（セル・段落・項目…）か ＋ その中の文字数」で表す。
-   * 行は文書順の番号で持つので、スナップショットの HTML から作り直した DOM でも引ける。
+   * キャレット位置を「ブロック ID ＋ブロック内の行（セル・段落・項目…）
+   * ＋その中の文字数」で表す。blockIds が無いときだけ文書全体の行番号へ戻る。
+   * AI / API 由来の本文は、保存用の正規化で先行ブロックの <div> が <p> に
+   * なったり外枠が外れたりする。文書先頭からの行番号だと、Undo で DOM を
+   * 作り直した瞬間に番号がずれ、別の段落または本文末尾へ飛ぶ。安定 ID から
+   * 対象ブロックを引けば、それより前の HTML 構造が変わっても影響を受けない。
    * ⚠ 本文先頭からの文字数だけで持たないこと。セルの境目では「左のセルの末尾」と
    *   「右のセルの先頭」が同じ数になり、空のセルは文字が無いので数では指せない —
    *   undo のたびにキャレットが隣のセルや表の外へ飛ぶ（打った文字がそこへ入る）。
-   * @returns {{ line: number, offset: number } | null}  line = -1 は本文直下
+   * @returns {{ bid: string|null, line: number, docLine: number, offset: number } | null}
+   *   bid ありの line=-1 はブロック自身、bid なしの line=-1 は本文直下
    */
   _caretOffset() {
     const sel = window.getSelection()
@@ -10679,13 +10684,21 @@ export class KuroEditor {
     const start = r.startContainer instanceof Element ? r.startContainer : r.startContainer.parentElement
     const found = start?.closest(CARET_LINE_SELECTOR)
     const lineEl = found && found !== this.wysiwyg && this.wysiwyg.contains(found) ? found : this.wysiwyg
+    let blockEl = start
+    while (blockEl && blockEl.parentElement !== this.wysiwyg) blockEl = blockEl.parentElement
+    if (!blockEl || blockEl === this.wysiwyg) blockEl = null
+    const bid = blockEl?.getAttribute?.('data-bid') || null
     const pre = document.createRange()
     pre.selectNodeContents(lineEl)
     try { pre.setEnd(r.startContainer, r.startOffset) } catch { return null }
-    const line = lineEl === this.wysiwyg
+    const scope = bid ? blockEl : this.wysiwyg
+    const line = lineEl === scope
+      ? -1
+      : Array.prototype.indexOf.call(scope.querySelectorAll(CARET_LINE_SELECTOR), lineEl)
+    const docLine = lineEl === this.wysiwyg
       ? -1
       : Array.prototype.indexOf.call(this.wysiwyg.querySelectorAll(CARET_LINE_SELECTOR), lineEl)
-    return { line, offset: pre.toString().length }
+    return { bid, line, docLine, offset: pre.toString().length }
   }
 
   _restoreCaretOffset(caret) {
@@ -10697,9 +10710,14 @@ export class KuroEditor {
       if (last) sel.setBaseAndExtent(last, 0, last, 0)
     }
     if (caret == null) return toEnd()
-    const lineEl = caret.line < 0
-      ? this.wysiwyg
-      : this.wysiwyg.querySelectorAll(CARET_LINE_SELECTOR)[caret.line]
+    // CMS (blockIds:true) では安定 ID を優先。履歴中にブロックが無く
+    // なった場合だけ、従来の文書全体の行番号へフォールバックする。
+    const blockEl = caret.bid ? this._blockElByBid(caret.bid) : null
+    const scope = blockEl || this.wysiwyg
+    const line = blockEl ? caret.line : (caret.docLine ?? caret.line)
+    const lineEl = line < 0
+      ? scope
+      : scope.querySelectorAll(CARET_LINE_SELECTOR)[line]
     if (!lineEl) return toEnd()
     const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT)
     let acc = 0

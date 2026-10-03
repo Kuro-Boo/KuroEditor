@@ -1268,6 +1268,29 @@ describe('KuroEditor', () => {
       expect(caretCell()).toBe(cells()[1])
     })
 
+    it('AI 由来 HTML の正規化で先行構造が変わっても undo のキャレットは編集ブロックに残る', () => {
+      document.body.innerHTML = ''
+      const ed = new KuroEditor(makeMount(), {
+        blockIds: true,
+        // 先頭の bare div 外枠は getContent() で外れる。従来の文書全体の
+        // 行番号は、生 DOM=4 番目 → 復元 DOM=3 番目となり本文末尾へ飛んだ。
+        initialContent:
+          '<div data-bid="lead"><p>one</p><p>two</p></div>' +
+          '<p data-bid="target">abcdef</p>',
+      })
+      const target = ed.wysiwyg.querySelector('[data-bid="target"]')
+      target.firstChild.data = 'abcdf' // e を削除した直後
+      caretAt(target.firstChild, 4)
+      ed._commitSnapshot()
+
+      ed._undo()
+
+      const restored = ed.wysiwyg.querySelector('[data-bid="target"]')
+      expect(restored.textContent).toBe('abcdef')
+      expect(restored.contains(window.getSelection().anchorNode)).toBe(true)
+      expect(window.getSelection().anchorOffset).toBe(4)
+    })
+
     it('閲覧モードでは undo / redo が効かない', () => {
       editor.setContent('<p>base</p>')
       domEdit('<hr class="kuro-hr">'); commit()
