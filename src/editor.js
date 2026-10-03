@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.15'
+export const VERSION = '2.39.16'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -7659,6 +7659,23 @@ export class KuroEditor {
     })
     // キャレット離脱時の確定マージは既存の _onDocSelChange に相乗り（下で登録）。
 
+    // OS のメニュー・スマホの取り消し／やり直しを拾う（2026-10-03）。
+    //
+    // Ctrl/⌘+Z と Y だけを見ていたので、**鍵盤を持たない経路**からの取り消しが
+    // 素通りしていた — iOS の3本指スワイプ・編集メニュー、Android の操作、
+    // macOS の「編集 ▸ 取り消す」はキーを伴わず `beforeinput` の
+    // `historyUndo` / `historyRedo` として来る。素通りすると、ブラウザ自身が
+    // contenteditable を巻き戻し、**こちらの履歴と中身が食い違う**
+    // （以後の Undo が別物を指す）。だから必ず止めて、こちらの手で戻す。
+    this.wysiwyg.addEventListener('beforeinput', (e) => {
+      if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') return
+      // コードブロック (<textarea>) は自分の履歴を持つ（keydown と同じ扱い）。
+      if (e.target.closest?.('.kuro-code-wrap')) return
+      e.preventDefault()
+      if (e.inputType === 'historyUndo') this._undo()
+      else this._redo()
+    })
+
     // Content change → ToC + auto-list + special-link detection
     this.wysiwyg.addEventListener('input', (e) => {
       // コードブロック textarea の入力はここへは届かない（_wireCodeBlock が
@@ -10630,6 +10647,13 @@ export class KuroEditor {
 
   _redo() {
     if (this._mode !== 'wysiwyg') return
+    // 打ちかけのタイピングを 1 手として確定する（_undo と同じ）。
+    // ⚠ これが無いと、Undo の直後に打った字が消える — 400ms の畳み込みの
+    //   内側で Redo を押すと、まだ積まれていない入力の上に古い redo 先が
+    //   被さり、履歴にも無いので Undo でも戻せない（打った字の消失）。
+    //   確定すれば redo 先は捨てられる（_commitSnapshot が未来を切る）ので、
+    //   「Undo のあとに打ったら、やり直しは効かない」という普通の形になる。
+    this._commitSnapshot()
     if (this._histIdx >= this._hist.length - 1) return
     this._restoreSnapshot(this._hist[++this._histIdx])
   }
@@ -10639,6 +10663,12 @@ export class KuroEditor {
     try {
       this._suspendDirty(() => {
         this.wysiwyg.innerHTML = renderSpecialLinks(html, this.options.urlResolver, this._supportedKinds)
+        // setContent と**同じ順**で組み直す。囲い（data-kuro-block）は
+        // URL カードや裸の <br> をキャレットで通り抜けるための足場で、
+        // ここを飛ばすと Undo / Redo の後だけカードの前後で矢印・
+        // Backspace が効かなくなる（id 付けより先に置く＝囲いは id を持たない）。
+        this._wrapAtomicBlocks(this.wysiwyg)
+        this._dropStaleFrameIndent(this.wysiwyg)
         this._initAllCodeBlocks()
         if (this.options.blockIds) this._refreshBlockIds()
       })
@@ -10692,13 +10722,30 @@ export class KuroEditor {
     pre.selectNodeContents(lineEl)
     try { pre.setEnd(r.startContainer, r.startOffset) } catch { return null }
     const scope = bid ? blockEl : this.wysiwyg
+    const lineEls = scope.querySelectorAll(CARET_LINE_SELECTOR)
     const line = lineEl === scope
       ? -1
-      : Array.prototype.indexOf.call(scope.querySelectorAll(CARET_LINE_SELECTOR), lineEl)
+      : Array.prototype.indexOf.call(lineEls, lineEl)
     const docLine = lineEl === this.wysiwyg
       ? -1
       : Array.prototype.indexOf.call(this.wysiwyg.querySelectorAll(CARET_LINE_SELECTOR), lineEl)
-    return { bid, line, docLine, offset: pre.toString().length }
+    // 行番号が使えなくなったときの戻り道（scope の先頭からの文字数）。
+    // ⚠ こちらを主にはしない — セルの境目では「左の末尾」と「右の先頭」が
+    //   同じ数になり、空のセルは数で指せない。行数 lines が変わったときだけ、
+    //   番号より文字数の方が当たる（下の _restoreCaretOffset を参照）。
+    const scopePre = document.createRange()
+    scopePre.selectNodeContents(scope)
+    let scopeOffset = null
+    try {
+      scopePre.setEnd(r.startContainer, r.startOffset)
+      scopeOffset = scopePre.toString().length
+    } catch { /* 取れなければ行番号だけで戻す */ }
+    return {
+      bid, line, docLine,
+      offset: pre.toString().length,
+      scopeOffset,
+      lines: lineEls.length,
+    }
   }
 
   _restoreCaretOffset(caret) {
@@ -10715,9 +10762,19 @@ export class KuroEditor {
     const blockEl = caret.bid ? this._blockElByBid(caret.bid) : null
     const scope = blockEl || this.wysiwyg
     const line = blockEl ? caret.line : (caret.docLine ?? caret.line)
-    const lineEl = line < 0
-      ? scope
-      : scope.querySelectorAll(CARET_LINE_SELECTOR)[line]
+    const lineEls = scope.querySelectorAll(CARET_LINE_SELECTOR)
+    // ブロックは見つかっても、**中の形が変わっている**ことがある。
+    // 保存の正規化で内側の <div> が外れる／段落が <p> に変わると、
+    // ブロック内の行番号が別の行を指すか、どの行も指さなくなる
+    // （文字位置 4 が 0 へ飛ぶ・利用者の報告で確認・2026-10-03）。
+    // 行の数が控えた時と違えば、番号は当てにならない。
+    // そのときだけ「ブロックの先頭からの文字数」で置く。
+    const shapeChanged = caret.lines != null && lineEls.length !== caret.lines
+    const target = shapeChanged || line < 0 ? scope : lineEls[line]
+    const want = shapeChanged
+      ? (caret.scopeOffset ?? caret.offset)
+      : caret.offset
+    const lineEl = target
     if (!lineEl) return toEnd()
     const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT)
     let acc = 0
@@ -10725,8 +10782,8 @@ export class KuroEditor {
     let last = null
     while ((node = walker.nextNode())) {
       const len = node.textContent.length
-      if (acc + len >= caret.offset) {
-        const at = caret.offset - acc
+      if (acc + len >= want) {
+        const at = want - acc
         sel.setBaseAndExtent(node, at, node, at)
         return
       }
