@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.16'
+export const VERSION = '2.39.17'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -7885,22 +7885,26 @@ export class KuroEditor {
         }
       }
 
-      // ② テキストペースト — CSV / TSV ならテーブルに変換
-      const text = e.clipboardData?.getData('text/plain') ?? ''
-      if (text && this._looksLikeTabularData(text)) {
-        e.preventDefault()
-        this._pasteTabularData(text)
-        return
-      }
-
-      // ③ リッチテキスト (HTML) — 色などテーマに反するインラインスタイルを除去して貼付。
+      // ② リッチテキスト (HTML) — 色などテーマに反するインラインスタイルを除去して貼付。
       //   外部 (特に暗いテーマのページ) からのコピーは color/background が焼き込まれ、
       //   そのままだと公開ページ (明背景) で白文字→読めない、になる。除去して文書の
-      //   テーマ色を継承させる。 (text/html が無い純テキストはブラウザ既定に委ねる)
+      //   テーマ色を継承させる。
+      //
+      //   ⚠ text/html がある場合は text/plain の CSV / TSV 判定より先に
+      //   扱う。KuroEditor 内の複数行コピーは両方を持ち、plain 側にタブや
+      //   半角カンマが含まれると、本文や callout の構造を捨てて表にしてしまう。
       const html = e.clipboardData?.getData('text/html') ?? ''
       if (html) {
         e.preventDefault()
         this._pasteSanitizedHTML(html)
+        return
+      }
+
+      // ③ 純テキストペースト — CSV / TSV ならテーブルに変換
+      const text = e.clipboardData?.getData('text/plain') ?? ''
+      if (text && this._looksLikeTabularData(text)) {
+        e.preventDefault()
+        this._pasteTabularData(text)
         return
       }
       // それ以外 (純テキスト) は通常のテキストペーストを通す
@@ -8133,7 +8137,7 @@ export class KuroEditor {
 
   /**
    * 「CSV / TSV っぽいテキスト」かどうかを判定する。
-   * 条件: 2 行以上 + 全行がほぼ同じ区切り数 (tab か comma) を持つ。
+   * 条件: 2 行以上 + 全行が同じ区切り数 (tab か comma) を持つ。
    */
   _looksLikeTabularData(text) {
     const lines = text.split(/\r?\n/).filter(l => l.length > 0)
@@ -8147,8 +8151,9 @@ export class KuroEditor {
     const firstCount = lines[0].split(sep).length
     if (firstCount < 2) return false
 
-    // 全行で区切り数がほぼ一致 (1 個までの差を許容)
-    return lines.every(l => Math.abs(l.split(sep).length - firstCount) <= 1)
+    // 通常の複数行本文に偶然カンマ / タブが 1 つあっても表にしない。
+    // 各行の列数が完全に一致するときだけ表とみなす。
+    return lines.every(l => l.split(sep).length === firstCount)
   }
 
   /** CSV / TSV テキストをテーブルに変換して挿入。 */
