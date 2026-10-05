@@ -92,13 +92,16 @@ describe('リストごとの字下げ', () => {
     expect(ul.style.marginLeft).toBe('2em')
   })
 
-  it('2 番目以降の行頭 Backspace は横取りしない（項目の結合を邪魔しない）', () => {
+  it('2 番目の行頭 Backspace は、その項目だけをリストから外す', () => {
     const ed = makeEditor(LIST)
     const b = ed.wysiwyg.querySelector('#b')
     caret(ed, b, 'start')
     const ev = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
     ed.wysiwyg.dispatchEvent(ev)
-    expect(ev.defaultPrevented).toBe(false)   // ブラウザ既定の結合に任せる
+    expect(ev.defaultPrevented).toBe(true)
+    expect([...ed.wysiwyg.children].map((el) => el.tagName)).toEqual(['UL', 'P'])
+    expect(ed.wysiwyg.querySelector('ul').textContent).toBe('牛乳')
+    expect(ed.wysiwyg.querySelector('p').textContent).toBe('卵')
   })
 
   it('動かすのは margin-left（padding-left はマーカーの居場所なので触らない）', () => {

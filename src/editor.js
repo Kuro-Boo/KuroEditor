@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.17'
+export const VERSION = '2.39.18'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -7984,7 +7984,93 @@ export class KuroEditor {
    */
   _pasteSanitizedHTML(html) {
     const clean = this._sanitizePastedHTML(html)
-    if (clean) execFormat('insertHTML', clean)
+    if (!clean) return
+    // A block fragment pasted at the edge of a line must stay a sibling block.
+    // execCommand('insertHTML') interprets it in the current editing context:
+    // at the end of an <li>, Chrome turns a copied <h3> + <ul> into styled
+    // inline text + a nested list and leaves an orphan <br>.  Besides changing
+    // the meaning, that is exactly the shape that later makes OL/UL operations
+    // and caret restoration fail.  Here we still have both pieces of intent —
+    // "this clipboard fragment contains blocks" and "the caret is at a line
+    // edge" — so insert the nodes as siblings before the browser can rewrite
+    // them.  The API cannot safely repair this later because a nested list is
+    // valid HTML and may be intentional.
+    if (this._insertBlockPasteAtLineEdge(clean)) return
+    execFormat('insertHTML', clean)
+  }
+
+  /**
+   * Insert a block-rich paste beside the current line when the caret is at its
+   * start/end. Returns true when handled. Mid-line paste keeps the browser path.
+   */
+  _insertBlockPasteAtLineEdge(html) {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount || !sel.isCollapsed) return false
+    const range = sel.getRangeAt(0)
+    if (!this.wysiwyg.contains(range.startContainer)) return false
+
+    const box = document.createElement('div')
+    box.innerHTML = html
+    const BLOCK = 'p,h1,h2,h3,h4,h5,h6,ul,ol,blockquote,pre,table,figure,hr,.kuro-callout,.kuro-roundbox,[data-kuro-block]'
+    if (![...box.children].some((el) => el.matches(BLOCK))) return false
+
+    const line = this._nearestLine(range.startContainer)
+    if (!line || line === this.wysiwyg) return false
+    const empty = !line.textContent?.trim() && !line.querySelector('img,video,audio,iframe,table,figure')
+    const atStart = empty || this._caretAtBlockEdge(line, range, 'start')
+    const atEnd   = empty || this._caretAtBlockEdge(line, range, 'end')
+    if (!atStart && !atEnd) return false
+
+    const nodes = [...box.childNodes]
+    const lastMeaningful = [...nodes].reverse().find((n) =>
+      n.nodeType === Node.ELEMENT_NODE || n.textContent?.trim())
+    if (!lastMeaningful) return false
+
+    if (line.tagName === 'LI') {
+      this._insertBlocksBesideListItem(line, nodes, empty ? 'replace' : atEnd ? 'after' : 'before')
+    } else {
+      if (empty) {
+        line.before(...nodes)
+        line.remove()
+      } else if (atEnd) {
+        line.after(...nodes)
+      } else {
+        line.before(...nodes)
+      }
+    }
+
+    try { sel.setBaseAndExtent(lastMeaningful.parentNode, [...lastMeaningful.parentNode.childNodes].indexOf(lastMeaningful) + 1,
+                               lastMeaningful.parentNode, [...lastMeaningful.parentNode.childNodes].indexOf(lastMeaningful) + 1) } catch {}
+    return true
+  }
+
+  /** Split a list around one item and insert block nodes between the halves. */
+  _insertBlocksBesideListItem(li, nodes, where) {
+    const list = li.parentElement
+    const parent = list?.parentNode
+    if (!list || !parent || !['UL', 'OL'].includes(list.tagName)) return
+
+    const tailFirst = where === 'before' ? li : li.nextElementSibling
+    let tail = null
+    if (tailFirst) {
+      tail = list.cloneNode(false)
+      tail.removeAttribute('data-bid')
+      tail.removeAttribute('data-cbid')
+      if (list.tagName === 'OL') this._setSplitOLStart(tail, list, tailFirst)
+      for (let n = tailFirst; n;) {
+        const next = n.nextElementSibling
+        tail.appendChild(n)
+        n = next
+      }
+    }
+    if (where === 'replace') li.remove()
+
+    const anchor = document.createComment('paste')
+    if (list.children.length) list.after(anchor)
+    else { list.before(anchor); list.remove() }
+    anchor.replaceWith(...nodes)
+    const last = nodes[nodes.length - 1]
+    if (tail) last.after(tail)
   }
 
   /**
@@ -8650,14 +8736,14 @@ export class KuroEditor {
       const sel = window.getSelection()
       if (sel?.rangeCount) {
         const range = sel.getRangeAt(0)
-        if (range.collapsed && range.startOffset === 0) {
+        if (range.collapsed) {
           // Tab と同じ土俵（行のみ）。枠やリスト項目の padding は触らない
           const line = this._nearestLine(range.startContainer)
+          if (!line || !this._caretAtBlockEdge(line, range, 'start')) return
           // リストごとの字下げ（Tab で先頭の項目を押したときに付くもの）は、
           // 段落と同じく【行頭 Backspace で 1 段戻せる】。
-          // ⚠ 反応するのは Tab で付けられるのと同じ「先頭の項目」だけ。ほかの項目の
-          //   行頭 Backspace は「前の項目と結合」というブラウザ既定の編集で、
-          //   そこを奪うと項目をくっつけられなくなる。
+          // 字下げを戻す余地が無ければ、行頭 Backspace はその項目だけを
+          // 段落へ戻す。前後の項目は別リストに分けて保ち、巻き込まない。
           if (line?.tagName === 'LI' && !line.previousElementSibling) {
             const list = line.parentElement
             if ((parseFloat(list?.style.marginLeft) || 0) > 0) {
@@ -8665,6 +8751,11 @@ export class KuroEditor {
               this._shiftListIndent([line], -1)
               return
             }
+          }
+          if (line?.tagName === 'LI') {
+            e.preventDefault()
+            this._unlistItem(line)
+            return
           }
           if (line && line.tagName !== 'LI') {
             const cur = parseFloat(line.style.paddingLeft) || 0
@@ -9061,6 +9152,93 @@ export class KuroEditor {
     }
   }
 
+  /** Change only a list's container tag; keep its live LI/text nodes and Range endpoints. */
+  _convertListType(list, tag) {
+    if (!list || list.tagName === tag) return list
+    const replacement = document.createElement(tag)
+    for (const attr of [...list.attributes]) {
+      if (attr.name === 'start' || attr.name === 'reversed') continue
+      replacement.setAttribute(attr.name, attr.value)
+    }
+    // Marker classes belong to one list type. Keeping the old prefix makes the
+    // new type depend on whichever CSS rule happens to win.
+    for (const c of [...replacement.classList]) {
+      if (c.startsWith('kuro-ul-') || c.startsWith('kuro-list-')) replacement.classList.remove(c)
+    }
+    if (!replacement.className) replacement.removeAttribute('class')
+    while (list.firstChild) replacement.appendChild(list.firstChild)
+    list.replaceWith(replacement)
+    return replacement
+  }
+
+  /** Preserve visible numbering when an OL is split before `firstLi`. */
+  _setSplitOLStart(tail, source, firstLi) {
+    if (source.tagName !== 'OL' || tail.tagName !== 'OL') return
+    let n = parseInt(source.getAttribute('start') || '1', 10)
+    if (!Number.isFinite(n)) n = 1
+    for (const li of [...source.children]) {
+      const explicit = parseInt(li.getAttribute('value') || '', 10)
+      if (Number.isFinite(explicit)) n = explicit
+      if (li === firstLi) break
+      n += 1
+    }
+    if (n === 1) tail.removeAttribute('start')
+    else tail.setAttribute('start', String(n))
+    tail.removeAttribute('data-bid')
+    tail.removeAttribute('data-cbid')
+  }
+
+  /** Turn one LI into a paragraph, splitting the surrounding list if needed. */
+  _unlistItem(li) {
+    const list = li?.parentElement
+    const parent = list?.parentNode
+    if (!list || !parent || !['UL', 'OL'].includes(list.tagName)) return false
+
+    const following = li.nextElementSibling
+    let tail = null
+    if (following) {
+      tail = list.cloneNode(false)
+      tail.removeAttribute('data-bid')
+      tail.removeAttribute('data-cbid')
+      if (list.tagName === 'OL') this._setSplitOLStart(tail, list, following)
+      for (let n = following; n;) {
+        const next = n.nextElementSibling
+        tail.appendChild(n)
+        n = next
+      }
+    }
+
+    const p = document.createElement('p')
+    const subLists = []
+    while (li.firstChild) {
+      const child = li.firstChild
+      if (child.nodeType === Node.ELEMENT_NODE && ['UL', 'OL'].includes(child.tagName)) {
+        subLists.push(child)
+        li.removeChild(child)
+      } else {
+        p.appendChild(child)
+      }
+    }
+    if (!p.childNodes.length) p.innerHTML = '<br>'
+
+    list.after(p)
+    let anchor = p
+    for (const sub of subLists) { anchor.after(sub); anchor = sub }
+    if (tail) anchor.after(tail)
+    li.remove()
+    if (!list.children.length) list.remove()
+
+    const firstText = p.firstChild?.nodeType === Node.TEXT_NODE
+      ? p.firstChild
+      : p.querySelector('*')?.firstChild
+    const sel = window.getSelection()
+    try {
+      if (firstText?.nodeType === Node.TEXT_NODE) sel.setBaseAndExtent(firstText, 0, firstText, 0)
+      else sel.setBaseAndExtent(p, 0, p, 0)
+    } catch {}
+    return true
+  }
+
   /**
    * Insert a list (UL or OL) using pure DOM manipulation — no execCommand.
    *
@@ -9112,13 +9290,10 @@ export class KuroEditor {
       targets = head
     }
 
-    // Last resort: no block containers — wrap loose content in a <p>
-    if (targets.length === 0) {
-      const p = document.createElement('p')
-      while (this.wysiwyg.firstChild) p.appendChild(this.wysiwyg.firstChild)
-      this.wysiwyg.appendChild(p)
-      targets.push(p)
-    }
+    // An LI is deliberately excluded above: changing UL ↔ OL must convert
+    // its list container, not gather the whole editor into a fallback paragraph.
+    // With no line target there is therefore nothing safe to create here.
+    if (targets.length === 0) return false
 
     // ── Build the list in place ───────────────────────────────────────────────
     // A comment-node marker gives us a stable insertion point that survives
@@ -9150,6 +9325,7 @@ export class KuroEditor {
         sel.addRange(r)
       } catch {}
     }
+    return true
   }
 
   /**
@@ -9777,21 +9953,26 @@ export class KuroEditor {
     let node = savedRange.startContainer
     if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
     let ol = null
+    let ul = null
     while (node && node !== this.wysiwyg) {
       if (node.tagName === 'OL') { ol = node; break }
+      if (!ul && node.tagName === 'UL') ul = node
       node = node.parentElement
     }
 
     // ── Not in an OL → insert one, then locate it via the saved position ──────
     if (!ol) {
-      this._insertList('OL')
+      if (ul) ol = this._convertListType(ul, 'OL')
+      else this._insertList('OL')
       // _insertList collapsed the caret; walk up from the saved text node
       // (now inside <li>) to find the freshly created <ol>.
-      let n = savedRange.startContainer
-      if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
-      while (n && n !== this.wysiwyg) {
-        if (n.tagName === 'OL') { ol = n; break }
-        n = n.parentElement
+      if (!ol) {
+        let n = savedRange.startContainer
+        if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
+        while (n && n !== this.wysiwyg) {
+          if (n.tagName === 'OL') { ol = n; break }
+          n = n.parentElement
+        }
       }
       if (!ol) return
     }
@@ -10047,20 +10228,25 @@ export class KuroEditor {
     let node = savedRange.startContainer
     if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
     let ul = null
+    let ol = null
     while (node && node !== this.wysiwyg) {
       if (node.tagName === 'UL') { ul = node; break }
+      if (!ol && node.tagName === 'OL') ol = node
       node = node.parentElement
     }
 
     // ── Not in a UL → insert one, then locate it via the saved position ───────
     if (!ul) {
-      this._insertList('UL')
+      if (ol) ul = this._convertListType(ol, 'UL')
+      else this._insertList('UL')
       // _insertList collapsed the caret; walk up from saved text node (now in <li>).
-      let n = savedRange.startContainer
-      if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
-      while (n && n !== this.wysiwyg) {
-        if (n.tagName === 'UL') { ul = n; break }
-        n = n.parentElement
+      if (!ul) {
+        let n = savedRange.startContainer
+        if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
+        while (n && n !== this.wysiwyg) {
+          if (n.tagName === 'UL') { ul = n; break }
+          n = n.parentElement
+        }
       }
       if (!ul) return
     }
