@@ -103,7 +103,9 @@ describe('KuroEditor blockIds ON — live editing (paste / add)', () => {
     const ed = new KuroEditor(makeMount(), { blockIds: true, initialContent: '<p data-bid="a">x</p>' })
     ed.wysiwyg.insertAdjacentHTML('beforeend', '<h2>h</h2><p>p1</p><blockquote>q</blockquote>')
     await flush()
-    const ids = [...ed.wysiwyg.children].map((el) => el.getAttribute('data-bid'))
+    const ids = [...ed.wysiwyg.children]
+      .filter((el) => !el.hasAttribute('data-kuro-caret-slot'))
+      .map((el) => el.getAttribute('data-bid'))
     expect(ids.length).toBe(4)
     expect(ids.every(Boolean)).toBe(true)
     expect(new Set(ids).size).toBe(4)

@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.18'
+export const VERSION = '2.39.19'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -7668,6 +7668,9 @@ export class KuroEditor {
     // contenteditable を巻き戻し、**こちらの履歴と中身が食い違う**
     // （以後の Undo が別物を指す）。だから必ず止めて、こちらの手で戻す。
     this.wysiwyg.addEventListener('beforeinput', (e) => {
+      // Editing-only caret slots become real paragraphs only when the user
+      // starts entering content into one.
+      if (e.inputType?.startsWith('insert')) this._promoteCaretSlotAtSelection()
       if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') return
       // コードブロック (<textarea>) は自分の履歴を持つ（keydown と同じ扱い）。
       if (e.target.closest?.('.kuro-code-wrap')) return
@@ -7688,6 +7691,7 @@ export class KuroEditor {
       this._detectSpecialLink(e)
       this._detectEmojiShortcode(e)
       this._resetSplitCheckItems(e)   // Enter で生まれた空項目のチェックを落とす
+      this._ensureCaretSlots()
       this._updateCharCount()
       this._syncRecipeBtn()   // 貼付・削除・undo/redo でカードの有無が変わる
       if (this.imageMenu.isVisible) this.imageMenu.deactivate()
@@ -7707,6 +7711,19 @@ export class KuroEditor {
     //  「読者がチェックできる Todo」は保存が絡むのでホスト側の責務）。
     this.wysiwyg.addEventListener('pointerdown', (e) => {
       if (this._mode !== 'wysiwyg') return
+      const tappedSlot = e.target.closest?.('[data-kuro-caret-slot]')
+      if (tappedSlot?.parentElement === this.wysiwyg) {
+        e.preventDefault()
+        this._placeCaretIn(this._promoteCaretSlot(tappedSlot))
+        return
+      }
+      // A tap on canvas whitespace (not inside an authored block) creates a
+      // paragraph at that vertical position. This is also the reliable escape
+      // hatch below terminal atomic/frame blocks on Android contenteditable.
+      if (e.target === this.wysiwyg && this._insertParagraphAtBlankPoint(e.clientY)) {
+        e.preventDefault()
+        return
+      }
       const li = this._checklistItemAt(e.target)
       if (!li || !this._checklistMarkerHit(li, e)) return
       e.preventDefault()
@@ -7968,6 +7985,7 @@ export class KuroEditor {
     this._serializeCodeBlocksToHtml(root)
     // RecipeCard の内側を正本(data-recipe)から作り直す = 編集用 chrome を保存しない
     this._serializeRecipeCards(root)
+    this._stripCaretSlots(root)
     // Strip the presentational atomic-block wrappers so the stored form is the
     // same token-based shape as before this feature (no migration, no drift).
     this._unwrapAtomicBlocks(root)
@@ -8638,6 +8656,9 @@ export class KuroEditor {
     // IME 変換中のキーは IME のもの。日本語入力の Enter (変換確定) で
     // 引用/コールアウトの抜け出しや Tab のインデント処理を走らせない。
     if (isImeComposing(e)) return
+    // Native contenteditable navigation can remain trapped in the last table
+    // cell / callout line on Android. Move into the explicit landing paragraph.
+    if (e.key === 'ArrowDown' && this._handleCaretBarrierExit(e)) return
     // Dismiss image menu on any meaningful key — before input fires
     // (catches Delete / Backspace / Enter / printable chars; ignores pure modifiers)
     if (this.imageMenu.isVisible && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -8800,6 +8821,7 @@ export class KuroEditor {
       const clone = this.wysiwyg.cloneNode(true)
       this._serializeCodeBlocksToHtml(clone)
       this._serializeRecipeCards(clone)   // HTML タブにも編集用ボタンを見せない
+      this._stripCaretSlots(clone)        // 編集専用の着地点は HTML タブへ出さない
       this.sourceArea.value = prettifyHTML(unrenderSpecialLinks(clone.innerHTML))
       this.pane.classList.add('kuro-pane--source')
       this.tocPanelEl.classList.add('kuro-toc--hidden')
@@ -8813,6 +8835,8 @@ export class KuroEditor {
         //  ソースモードで実際に編集していれば sourceArea の input で dirty 済み)
         this._suspendDirty(() => {
           this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver, this._supportedKinds)
+          this._wrapAtomicBlocks(this.wysiwyg)
+          this._ensureCaretSlots()
           this._initAllCodeBlocks()
         })
         this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
@@ -10675,7 +10699,8 @@ export class KuroEditor {
       let dropTarget = null
 
       const getDropTarget = (clientY) => {
-        const siblings = Array.from(wysiwyg.children).filter(c => c !== wrap && c !== indicator)
+        const siblings = Array.from(wysiwyg.children).filter(c =>
+          c !== wrap && c !== indicator && !c.hasAttribute('data-kuro-caret-slot'))
         for (const el of siblings) {
           const rect = el.getBoundingClientRect()
           if (clientY <= rect.top + rect.height / 2) return { el, before: true }
@@ -10859,6 +10884,7 @@ export class KuroEditor {
         // ここを飛ばすと Undo / Redo の後だけカードの前後で矢印・
         // Backspace が効かなくなる（id 付けより先に置く＝囲いは id を持たない）。
         this._wrapAtomicBlocks(this.wysiwyg)
+        this._ensureCaretSlots()
         this._dropStaleFrameIndent(this.wysiwyg)
         this._initAllCodeBlocks()
         if (this.options.blockIds) this._refreshBlockIds()
@@ -11389,6 +11415,7 @@ export class KuroEditor {
       // Done before block-id tagging so the wrappers (which never get an id) are
       // in place and the real blocks inside keep their ids.
       this._wrapAtomicBlocks(this.wysiwyg)
+      this._ensureCaretSlots()
       this._dropStaleFrameIndent(this.wysiwyg)
       if (this._mode === 'source') this.sourceArea.value = html ?? ''
       this.toc._doUpdate()
@@ -11678,6 +11705,7 @@ export class KuroEditor {
     }
     this._suspendDirty(() => {
       mutate()
+      this._ensureCaretSlots()
       this.toc._doUpdate()
       this._initAllCodeBlocks()
       this._updateCharCount()
@@ -11781,6 +11809,155 @@ export class KuroEditor {
   /** Selector for the inline cards that must be boxed at the top level. */
   static get ATOMIC_CARD_SEL() { return 'a.kuro-url-card, a.kuro-media-fallback-card' }
 
+  /** Top-level blocks whose boundary is not a reliable native caret position. */
+  static get CARET_BARRIER_SEL() {
+    return [
+      'hr', 'table', 'figure', 'blockquote', 'pre',
+      '.kuro-callout', '.kuro-roundbox', '.kuro-code-wrap',
+      '[contenteditable="false"]',
+    ].join(',')
+  }
+
+  _isCaretBarrier(el) {
+    return !!el?.matches?.(KuroEditor.CARET_BARRIER_SEL) &&
+      !el.hasAttribute('data-kuro-caret-slot')
+  }
+
+  _isEmptyCaretSlot(el) {
+    if (!el?.hasAttribute?.('data-kuro-caret-slot')) return false
+    if (el.textContent.trim() !== '') return false
+    return !el.querySelector('img, video, audio, iframe, table, hr, textarea')
+  }
+
+  _newCaretSlot() {
+    const p = document.createElement('p')
+    p.setAttribute('data-kuro-caret-slot', '')
+    p.appendChild(document.createElement('br'))
+    return p
+  }
+
+  /**
+   * Keep an editable landing point after a terminal caret barrier and between
+   * adjacent barriers. Slots are live-editor UI and are stripped on export.
+   */
+  _ensureCaretSlots() {
+    const root = this.wysiwyg
+    if (!root) return
+    const sel = typeof window !== 'undefined' ? window.getSelection?.() : null
+
+    // Remove obsolete empty slots. Never delete the active one out from under
+    // the IME/caret; promote it to an authored paragraph instead.
+    for (const slot of [...root.children].filter((el) => el.hasAttribute('data-kuro-caret-slot'))) {
+      const prev = slot.previousElementSibling
+      const next = slot.nextElementSibling
+      const required = this._isCaretBarrier(prev) && (!next || this._isCaretBarrier(next))
+      if (required || !this._isEmptyCaretSlot(slot)) continue
+      const active = !!sel?.rangeCount && slot.contains(sel.anchorNode)
+      if (active) this._promoteCaretSlot(slot)
+      else slot.remove()
+    }
+
+    for (const block of [...root.children]) {
+      if (!this._isCaretBarrier(block)) continue
+      const next = block.nextElementSibling
+      if (!next || this._isCaretBarrier(next)) block.after(this._newCaretSlot())
+    }
+  }
+
+  /** Remove unused editing-only slots from a detached export clone. */
+  _stripCaretSlots(root) {
+    for (const slot of [...root.querySelectorAll('[data-kuro-caret-slot]')]) {
+      if (this._isEmptyCaretSlot(slot)) slot.remove()
+      else slot.removeAttribute('data-kuro-caret-slot')
+    }
+  }
+
+  _promoteCaretSlot(slot) {
+    if (!slot?.hasAttribute?.('data-kuro-caret-slot')) return slot
+    slot.removeAttribute('data-kuro-caret-slot')
+    if (this.options.blockIds) this._tagBlock(slot, true)
+    return slot
+  }
+
+  _promoteCaretSlotAtSelection() {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return null
+    let el = sel.anchorNode
+    if (el?.nodeType === Node.TEXT_NODE) el = el.parentElement
+    const slot = el?.closest?.('[data-kuro-caret-slot]')
+    return slot && this.wysiwyg.contains(slot) ? this._promoteCaretSlot(slot) : null
+  }
+
+  _placeCaretIn(el) {
+    if (!el) return false
+    this.wysiwyg.focus()
+    const sel = window.getSelection()
+    try {
+      sel.setBaseAndExtent(el, 0, el, 0)
+      this._savedRange = sel.getRangeAt(0).cloneRange()
+      el.scrollIntoView?.({ block: 'nearest' })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** ArrowDown at the textual end of a frame moves to its following paragraph. */
+  _handleCaretBarrierExit(e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return false
+    const sel = window.getSelection()
+    if (!sel?.rangeCount || !sel.isCollapsed) return false
+    const range = sel.getRangeAt(0)
+    let block = range.startContainer
+    if (block.nodeType === Node.TEXT_NODE) block = block.parentElement
+    while (block && block.parentElement !== this.wysiwyg) block = block.parentElement
+    if (!this._isCaretBarrier(block) || !this._caretAtBlockEdge(block, range, 'end')) return false
+    this._ensureCaretSlots()
+    const landing = block.nextElementSibling
+    if (!landing || this._isCaretBarrier(landing)) return false
+    e.preventDefault()
+    return this._placeCaretIn(landing)
+  }
+
+  /**
+   * Insert an authored paragraph where the user taps genuine canvas whitespace.
+   * A tap beside an existing block (inside its vertical band) is left native.
+   */
+  _insertParagraphAtBlankPoint(clientY) {
+    const children = [...this.wysiwyg.children]
+    let ref = null
+    if (children.length) {
+      const rects = children.map((el) => [el, el.getBoundingClientRect()])
+      if (clientY < rects[0][1].top) {
+        ref = rects[0][0]
+      } else {
+        let foundGap = false
+        for (let i = 0; i < rects.length - 1; i++) {
+          if (clientY >= rects[i][1].bottom && clientY <= rects[i + 1][1].top) {
+            ref = rects[i + 1][0]
+            foundGap = true
+            break
+          }
+        }
+        if (!foundGap && clientY <= rects[rects.length - 1][1].bottom) return false
+      }
+    }
+
+    // Reuse a slot already occupying the chosen gap/tail; the explicit tap
+    // turns it into authored content even before text is entered.
+    const candidate = ref?.hasAttribute('data-kuro-caret-slot')
+      ? ref
+      : (!ref && this.wysiwyg.lastElementChild?.hasAttribute('data-kuro-caret-slot')
+          ? this.wysiwyg.lastElementChild : null)
+    if (candidate) return this._placeCaretIn(this._promoteCaretSlot(candidate))
+
+    const p = document.createElement('p')
+    p.appendChild(document.createElement('br'))
+    this.wysiwyg.insertBefore(p, ref)
+    if (this.options.blockIds) this._tagBlock(p, true)
+    return this._placeCaretIn(p)
+  }
+
   /** Wrap top-level inline cards and bare <br>s in <div data-kuro-block>. */
   _wrapAtomicBlocks(root) {
     const sel = KuroEditor.ATOMIC_CARD_SEL
@@ -11848,6 +12025,7 @@ export class KuroEditor {
    */
   _tagBlock(el, isNew = false) {
     if (!el || el.nodeType !== Node.ELEMENT_NODE) return
+    if (el.hasAttribute('data-kuro-caret-slot')) return
     // Atomic-block wrappers (<div data-kuro-block="">) are presentational: they
     // only exist in the live DOM to give a top-level card / blank line a block box
     // so the caret can sit around it, and getContent() strips them. They must never
@@ -12038,6 +12216,7 @@ export class KuroEditor {
     // 発火しない DOM 直接操作も、ここを通れば必ず履歴に載る。
     this._dirtyObserver = new MutationObserver((records) => {
       if (!records.some((r) => this._isContentMutation(r))) return
+      this._ensureCaretSlots()
       this._markDirty()         // 既に dirty なら no-op
       this._scheduleSnapshot()
       this._scheduleBlockEmit() // W2: block 変更を onBlockChange へ（設定時のみ）
@@ -12064,6 +12243,12 @@ export class KuroEditor {
 
   /** 編集由来の変異か。自動付与される属性・UI ハイライトの class は除外。 */
   _isContentMutation(r) {
+    if (r.type === 'childList') {
+      const changed = [...r.addedNodes, ...r.removedNodes]
+      if (changed.length && changed.every((n) =>
+        n.nodeType === Node.ELEMENT_NODE && n.hasAttribute?.('data-kuro-caret-slot'))) return false
+      return true
+    }
     if (r.type !== 'attributes') return true
     if (r.target === this.wysiwyg) return false  // kuro-drag-over 等ルート自身の属性
     const a = r.attributeName

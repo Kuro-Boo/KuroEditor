@@ -363,6 +363,17 @@
     overflow-wrap: anywhere;
   }
 
+  /* Live-editor-only caret landing point after terminal tables/HR/frames.
+     It must have a real tap target on mobile; export removes the element. */
+  .kuro-pane__wysiwyg > [data-kuro-caret-slot] {
+    min-height: 1.5em;
+    margin-block: 0.35rem;
+  }
+
+  .kuro-editor--view .kuro-pane__wysiwyg > [data-kuro-caret-slot] {
+    display: none;
+  }
+
   /* Drag-over: dashed indigo border as drop-target indicator */
   .kuro-pane__wysiwyg.kuro-drag-over {
     outline: 2px dashed theme('colors.indigo.500');
