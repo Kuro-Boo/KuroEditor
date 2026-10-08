@@ -49,23 +49,62 @@ describe('リストの入れ子（Tab / Shift+Tab）', () => {
     expect(ed.wysiwyg.querySelector('ul ul')).toBe(null)
   })
 
-  it('子リストはマーカーを親から継承する', () => {
-    const ed = makeEditor('<ul class="kuro-ul-check"><li>親</li><li>子</li></ul>')
+  it('UL の子リストはポップアップ順の次のマーカーになる', () => {
+    const ed = makeEditor('<ul class="kuro-ul-disc"><li>親</li><li>子</li></ul>')
     const [, second] = ed.wysiwyg.querySelectorAll('li')
     select(second)
     tab(ed)
     const sub = ed.wysiwyg.querySelector('ul ul')
-    expect(sub.classList.contains('kuro-ul-check')).toBe(true)
+    expect(sub.className).toBe('kuro-ul-circle')
   })
 
-  it('OL の子リストは <ol> になる', () => {
+  it('OL の子リストは <ol> のままポップアップ順の次のマーカーになる', () => {
     const ed = makeEditor('<ol class="kuro-list-alpha"><li>a</li><li>b</li></ol>')
     const [, second] = ed.wysiwyg.querySelectorAll('li')
     select(second)
     tab(ed)
     const sub = ed.wysiwyg.querySelector('ol ol')
     expect(sub).toBeTruthy()
-    expect(sub.classList.contains('kuro-list-alpha')).toBe(true)
+    expect(sub.className).toBe('kuro-list-paren-alpha')
+  })
+
+  it('クラス無しは既定マーカーとして扱い、UL は ●→○、OL は 1.→① になる', () => {
+    const ul = makeEditor('<ul><li>親</li><li>子</li></ul>')
+    select(ul.wysiwyg.querySelectorAll('li')[1])
+    tab(ul)
+    expect(ul.wysiwyg.querySelector('ul ul').className).toBe('kuro-ul-circle')
+
+    const ol = makeEditor('<ol><li>親</li><li>子</li></ol>')
+    select(ol.wysiwyg.querySelectorAll('li')[1])
+    tab(ol)
+    expect(ol.wysiwyg.querySelector('ol ol').className).toBe('kuro-list-circled')
+  })
+
+  it('最後のマーカーの次はポップアップ先頭へ循環する', () => {
+    const ed = makeEditor('<ul class="kuro-ul-check"><li>親</li><li>子</li></ul>')
+    const [, second] = ed.wysiwyg.querySelectorAll('li')
+    select(second)
+    tab(ed)
+    expect(ed.wysiwyg.querySelector('ul ul').className).toBe('kuro-ul-disc')
+  })
+
+  it('既存の子リストへ追加するときは、その子のマーカーを維持する', () => {
+    const ed = makeEditor(
+      '<ul class="kuro-ul-disc"><li>親<ul class="kuro-ul-star"><li>既存</li></ul></li><li>追加</li></ul>')
+    const added = [...ed.wysiwyg.querySelectorAll('li')].find((li) => li.firstChild?.textContent === '追加')
+    select(added)
+    tab(ed)
+    const sub = ed.wysiwyg.querySelector('ul ul')
+    expect(sub.className).toBe('kuro-ul-star')
+    expect([...sub.children].map((li) => li.firstChild.textContent)).toEqual(['既存', '追加'])
+  })
+
+  it('マーカーなしの親は子でもマーカーなしを保つ', () => {
+    const ed = makeEditor('<ul class="kuro-ul-none"><li>親</li><li>子</li></ul>')
+    const [, second] = ed.wysiwyg.querySelectorAll('li')
+    select(second)
+    tab(ed)
+    expect(ed.wysiwyg.querySelector('ul ul').className).toBe('kuro-ul-none')
   })
 
   it('Shift+Tab で 1 段浅くなる', () => {

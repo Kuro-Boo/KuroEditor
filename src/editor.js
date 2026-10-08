@@ -113,7 +113,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.19'
+export const VERSION = '2.39.20'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -10139,16 +10139,31 @@ export class KuroEditor {
     }
   }
 
-  /** 親リストと同じ種類・同じマーカーの子リストを <li> の末尾に用意して返す。 */
+  /**
+   * 親の次に並ぶマーカーを返す。
+   *
+   * 順番の正本はポップアップ自身が描画に使う *_STYLE_OPTIONS。ここへ別の配列を
+   * 書くと、メニューを並べ替えたとき自動ネストだけ古い順番に取り残される。
+   * クラスが無いリストは先頭の既定マーカーとみなし、その次から始める。
+   * 「マーカーなし」は解除操作で明示された状態なので、子でも勝手に復活させない。
+   */
+  _nextNestedListStyle(sourceList) {
+    const ordered = sourceList.tagName === 'OL' ? OL_STYLE_OPTIONS : UL_STYLE_OPTIONS
+    const noneClass = sourceList.tagName === 'OL' ? OL_NONE_CLASS : UL_NONE_CLASS
+    if (sourceList.classList.contains(noneClass)) return noneClass
+
+    const current = ordered.findIndex(({ value }) => sourceList.classList.contains(value))
+    const next = current < 0 ? 1 % ordered.length : (current + 1) % ordered.length
+    return ordered[next]?.value ?? ordered[0]?.value ?? ''
+  }
+
+  /** 親と同じ種類・次のマーカーの子リストを <li> の末尾に用意して返す。 */
   _subListFor(parentLi, sourceList) {
     let sub = parentLi.lastElementChild
     if (sub && sub.tagName === sourceList.tagName) return sub
     sub = document.createElement(sourceList.tagName)
-    // マーカーは親から継承する（チェックリストの中は全部チェックリスト）。
-    // 子だけ既定の ● に戻ると、同じ意味の行が階層で別の記号になってしまう。
-    for (const c of sourceList.classList) {
-      if (c.startsWith('kuro-ul-') || c.startsWith('kuro-list-')) sub.classList.add(c)
-    }
+    const style = this._nextNestedListStyle(sourceList)
+    if (style) sub.classList.add(style)
     parentLi.appendChild(sub)
     return sub
   }
