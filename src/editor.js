@@ -39,6 +39,7 @@ import {
   normalizeMediaKinds,
   VIDEO_EXT_RE,
   AUDIO_EXT_RE,
+  isSafeUrl,
 } from './kuro-links.js'
 // 保存/取込み HTML の正規化（editor の paste・host の API・メンテナンス掃除で共通）。
 import { normalizeContentHtml, inspectContentHtml } from './normalize.js'
@@ -86,7 +87,7 @@ export {
   isMapEmbed,
   normalizeMediaKinds,
 }
-export { mediaKindFromSlug } from './kuro-links.js'
+export { mediaKindFromSlug, isSafeUrl } from './kuro-links.js'
 // RecipeCard の純関数（ホスト/サーバーが同じ実装で検証・生成できるよう公開する）
 export {
   RECIPE_BLOCK,
@@ -113,7 +114,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.20'
+export const VERSION = '2.39.21'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -832,6 +833,8 @@ export function readLinkParts(a) {
  */
 export function writeLinkParts(a, text, url, resolver = defaultResolver) {
   if (!url) return false
+  // javascript: などの押すと動く URL は書き込まない(2026-10-11・kuro-links の isSafeUrl)。
+  if (!isSafeUrl(url) || !isSafeUrl(resolver(url))) return false
   const isKuro = a.hasAttribute('data-kuro-wiki') || a.hasAttribute('data-kuro-link')
   if (!isKuro) {
     if (!text) return false
