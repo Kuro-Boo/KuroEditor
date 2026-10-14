@@ -114,7 +114,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.39.21'
+export const VERSION = '2.40.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -6569,6 +6569,10 @@ export class KuroEditor {
       // 非対応種別の [[…]] トークンは再生要素でなく中立プレースホルダで描画し、
       // トークン自体は保持したままクリックで削除できる（renderSpecialLinks 参照）。
       mediaKinds: null,
+      // アップロード失敗の印に出す文（v2.40.0〜）。(file, err) => string。
+      // 未指定なら「アップロード失敗: ファイル名」。エディタは言語を持たないので、
+      // 画面の言語で出したいホスト（KuroCMS の英語の画面など）がここで渡す。
+      uploadErrorText: null,
       ...options,
     }
     // 対応メディア種別を Set 化（null = 全対応）。renderSpecialLinks に渡す。
@@ -7435,7 +7439,7 @@ export class KuroEditor {
     this._restoreAndInsert(
       `<figure class="kuro-media-wrap kuro-media-placeholder" id="${uid}" contenteditable="false">` +
       `<span class="kuro-media-placeholder__spinner"></span>` +
-      `<span class="kuro-media-placeholder__label">${file.name}</span>` +
+      `<span class="kuro-media-placeholder__label">${_escapeHtml(file.name)}</span>` +
       `</figure><p><br></p>`,
     )
 
@@ -7472,7 +7476,13 @@ export class KuroEditor {
         ph.className = 'kuro-media-wrap kuro-media-error'
         ph.innerHTML =
           `<span class="kuro-media-error__icon">❌</span>` +
-          `<span class="kuro-media-error__msg">アップロード失敗: ${file.name}</span>`
+          `<span class="kuro-media-error__msg"></span>`
+        // ⚠ 文は textContent で入れる。ファイル名は利用者が付けた任意の文字列で、
+        //   innerHTML に混ぜるとタグとして動く（v2.39 まではそうなっていた）。
+        let text = ''
+        try { text = this.options.uploadErrorText?.(file, err) ?? '' } catch { text = '' }
+        ph.querySelector('.kuro-media-error__msg').textContent =
+          text || `アップロード失敗: ${file.name}`
       }
       console.error('[KuroEditor] onMediaUpload error:', err)
     }
