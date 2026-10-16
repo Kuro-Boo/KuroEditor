@@ -42,7 +42,7 @@ import {
   isSafeUrl,
 } from './kuro-links.js'
 // 保存/取込み HTML の正規化（editor の paste・host の API・メンテナンス掃除で共通）。
-import { normalizeContentHtml, inspectContentHtml } from './normalize.js'
+import { normalizeContentHtml, inspectContentHtml, sanitizeContentHtml } from './normalize.js'
 // RecipeCard（レシピの構造化ブロック）。DOM 非依存の純関数だけを持つ（recipe.js）。
 import {
   RECIPE_BLOCK,
@@ -66,6 +66,7 @@ import {
 export {
   normalizeContentHtml,
   inspectContentHtml,
+  sanitizeContentHtml,
   isValidBid,
   stripInternalIds,
   stripBlockIds,
@@ -114,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.40.1'
+export const VERSION = '2.41.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -8161,20 +8162,10 @@ export class KuroEditor {
     // that bloats saved HTML. Drop every CSS-wide-keyword declaration too.
     const NOISE_VALUES = new Set(['revert-layer', 'revert', 'initial', 'unset', 'inherit'])
 
-    // ── 本文に置けない要素は中身ごと落とす ──────────────────────────────────
-    // 属性の許可リストだけでは要素そのものが素通りする。<style> は公開ページ
-    // 全体に効き（StartFragment の印が無いクリップボードでは <head> ごと来る）、
-    // <script> / <object> は保存されて配信される。normalizeContentHtml は
-    // script / style を「中を触らない要素」として通すので、ここで落とす。
-    body.querySelectorAll(
-      'script, style, link, meta, base, title, noscript, template, object, embed, applet, frame, frameset',
-    ).forEach((el) => el.remove())
-    // iframe は KuroEditor の埋め込み（figure[data-kuro-media]）の中だけ残す。
-    // 保存時は data-kuro-media の [[…]] から作り直されるので、中の iframe は
-    // 表示用でしかない。それ以外の iframe は書き手が UI で作れない＝外部の持ち込み。
-    body.querySelectorAll('iframe').forEach((el) => {
-      if (!el.closest('[data-kuro-media]')) el.remove()
-    })
+    // 本文に置けない要素（script / style / 外部の iframe …）と危ない URL は、
+    // 最後に通す normalizeContentHtml の R0（sanitizeContentHtml）が落とす。
+    // API・保存・公開ページと同じ実装 —— ここに別の規則を置くと、貼り付けと
+    // API で残るものが割れる（貼り付けで消えた埋め込みが API では残る、など）。
     // Google ドキュメントは選択全体を <b style="font-weight:normal"> で包む。
     // 太字ではないので、R1 で <strong> にされる前に包みだけ外す（中身は残す）。
     body.querySelectorAll('b, strong').forEach((el) => {
@@ -8197,10 +8188,6 @@ export class KuroEditor {
       for (const attr of [...el.attributes]) {
         if (!keepAttr(attr.name)) el.removeAttribute(attr.name)
       }
-      // 行き先は枠組みで縛る（javascript: / vbscript: / data:text/html …）。
-      // 判定は [[…]] の描画と同じ isSafeUrl を使う。
-      if (el.hasAttribute('href') && !isSafeUrl(el.getAttribute('href'), 'href')) el.removeAttribute('href')
-      if (el.hasAttribute('src') && !isSafeUrl(el.getAttribute('src'), 'src')) el.removeAttribute('src')
       // class は kuro-* だけ残す（他所の CSS 前提のクラスは持ち込んでも効かず、
       // ホストのスタイルと衝突するだけ）
       if (el.hasAttribute('class')) {
@@ -8873,7 +8860,8 @@ export class KuroEditor {
         // (書き換え・コードブロック再配線は編集ではないので dirty 検知は止める。
         //  ソースモードで実際に編集していれば sourceArea の input で dirty 済み)
         this._suspendDirty(() => {
-          this.wysiwyg.innerHTML = renderSpecialLinks(this.sourceArea.value, this.options.urlResolver, this._supportedKinds)
+          // HTML タブで打たれたものも setContent と同じ守りを通す
+          this.wysiwyg.innerHTML = renderSpecialLinks(sanitizeContentHtml(this.sourceArea.value), this.options.urlResolver, this._supportedKinds)
           this._wrapAtomicBlocks(this.wysiwyg)
           this._ensureCaretSlots()
           this._initAllCodeBlocks()
@@ -11462,7 +11450,9 @@ export class KuroEditor {
    * @param {string} html
    */
   setContent(html) {
-    const rendered = renderSpecialLinks(html ?? '', this.options.urlResolver, this._supportedKinds)
+    // 保存済みの本文は古い版・API・他の道具が書いたものかもしれない。innerHTML は
+    // <img onerror> を動かし <style> を管理画面ごと塗り替えるので、入れる前に R0 を通す。
+    const rendered = renderSpecialLinks(sanitizeContentHtml(html ?? ''), this.options.urlResolver, this._supportedKinds)
     this._suspendDirty(() => {
       this.wysiwyg.innerHTML = rendered
       // Box top-level inline cards / bare <br>s so the caret can navigate them.
@@ -11721,7 +11711,8 @@ export class KuroEditor {
   /** Render a stored-form block html (with [[...]] tokens) into a DOM element. */
   _renderBlock(storedHtml) {
     const tmp = document.createElement('div')
-    tmp.innerHTML = renderSpecialLinks(storedHtml ?? '', this.options.urlResolver, this._supportedKinds)
+    // updateBlock / applyOps（他の端末・AI からの書き込み）も外から来る HTML
+    tmp.innerHTML = renderSpecialLinks(sanitizeContentHtml(storedHtml ?? ''), this.options.urlResolver, this._supportedKinds)
     return tmp.firstElementChild
   }
 

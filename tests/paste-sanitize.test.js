@@ -118,7 +118,8 @@ describe('貼り付けの掃除（許可リスト）', () => {
     expect(out).toBe('<p>文</p>')
   })
 
-  it('iframe は KuroEditor の埋め込みの中だけ残す', () => {
+  it('iframe は KuroEditor の埋め込みと同じ行き先だけ残す（API・公開ページと同じ R0 の規則）', () => {
+    expect(ed._sanitizePastedHTML('<iframe src="https://player.vimeo.com/video/1"></iframe>')).toContain('player.vimeo.com')
     const out = ed._sanitizePastedHTML(
       '<iframe src="https://evil.example/"></iframe>' +
       '<figure data-kuro-media="https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dx"><div class="kuro-iframe-wrap">' +
