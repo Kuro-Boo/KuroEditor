@@ -114,7 +114,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.40.0'
+export const VERSION = '2.40.1'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -8160,6 +8160,28 @@ export class KuroEditor {
     // `<prop>: revert-layer` (hundreds of props) plus the real color — pure noise
     // that bloats saved HTML. Drop every CSS-wide-keyword declaration too.
     const NOISE_VALUES = new Set(['revert-layer', 'revert', 'initial', 'unset', 'inherit'])
+
+    // ── 本文に置けない要素は中身ごと落とす ──────────────────────────────────
+    // 属性の許可リストだけでは要素そのものが素通りする。<style> は公開ページ
+    // 全体に効き（StartFragment の印が無いクリップボードでは <head> ごと来る）、
+    // <script> / <object> は保存されて配信される。normalizeContentHtml は
+    // script / style を「中を触らない要素」として通すので、ここで落とす。
+    body.querySelectorAll(
+      'script, style, link, meta, base, title, noscript, template, object, embed, applet, frame, frameset',
+    ).forEach((el) => el.remove())
+    // iframe は KuroEditor の埋め込み（figure[data-kuro-media]）の中だけ残す。
+    // 保存時は data-kuro-media の [[…]] から作り直されるので、中の iframe は
+    // 表示用でしかない。それ以外の iframe は書き手が UI で作れない＝外部の持ち込み。
+    body.querySelectorAll('iframe').forEach((el) => {
+      if (!el.closest('[data-kuro-media]')) el.remove()
+    })
+    // Google ドキュメントは選択全体を <b style="font-weight:normal"> で包む。
+    // 太字ではないので、R1 で <strong> にされる前に包みだけ外す（中身は残す）。
+    body.querySelectorAll('b, strong').forEach((el) => {
+      const w = el.style?.getPropertyValue('font-weight').trim().toLowerCase()
+      if (w === 'normal' || w === '400' || w === 'lighter') el.replaceWith(...el.childNodes)
+    })
+
     for (const el of body.querySelectorAll('*')) {
       el.removeAttribute('color')   // legacy <font color> / [color]
       el.removeAttribute('bgcolor')
@@ -8175,6 +8197,10 @@ export class KuroEditor {
       for (const attr of [...el.attributes]) {
         if (!keepAttr(attr.name)) el.removeAttribute(attr.name)
       }
+      // 行き先は枠組みで縛る（javascript: / vbscript: / data:text/html …）。
+      // 判定は [[…]] の描画と同じ isSafeUrl を使う。
+      if (el.hasAttribute('href') && !isSafeUrl(el.getAttribute('href'), 'href')) el.removeAttribute('href')
+      if (el.hasAttribute('src') && !isSafeUrl(el.getAttribute('src'), 'src')) el.removeAttribute('src')
       // class は kuro-* だけ残す（他所の CSS 前提のクラスは持ち込んでも効かず、
       // ホストのスタイルと衝突するだけ）
       if (el.hasAttribute('class')) {

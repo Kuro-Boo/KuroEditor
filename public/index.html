@@ -107,15 +107,17 @@
         <select id="lang-select"
                 class="lang-select text-sm font-medium text-amber-50 bg-neutral-900/80 hover:bg-neutral-900 border border-amber-700/50 rounded-lg pl-3 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-300/50"
                 aria-label="Language">
-          <option value="ja" class="bg-neutral-900 text-amber-50">🇯🇵 日本語</option>
-          <option value="en" class="bg-neutral-900 text-amber-50">🇬🇧 English</option>
-          <option value="de" class="bg-neutral-900 text-amber-50">🇩🇪 Deutsch</option>
-          <option value="fr" class="bg-neutral-900 text-amber-50">🇫🇷 Français</option>
-          <option value="es" class="bg-neutral-900 text-amber-50">🇪🇸 Español</option>
-          <option value="it" class="bg-neutral-900 text-amber-50">🇮🇹 Italiano</option>
-          <option value="uk" class="bg-neutral-900 text-amber-50">🇺🇦 Українська</option>
-          <option value="zh" class="bg-neutral-900 text-amber-50">🇨🇳 中文</option>
-          <option value="ko" class="bg-neutral-900 text-amber-50">🇰🇷 한국어</option>
+          <option value="ja" class="bg-neutral-900 text-amber-50">日本語</option>
+          <option value="en" class="bg-neutral-900 text-amber-50">English</option>
+          <option value="de" class="bg-neutral-900 text-amber-50">Deutsch</option>
+          <option value="fr" class="bg-neutral-900 text-amber-50">Français</option>
+          <option value="es" class="bg-neutral-900 text-amber-50">Español</option>
+          <option value="pt" class="bg-neutral-900 text-amber-50">Português</option>
+          <option value="it" class="bg-neutral-900 text-amber-50">Italiano</option>
+          <option value="uk" class="bg-neutral-900 text-amber-50">Українська</option>
+          <option value="zh" class="bg-neutral-900 text-amber-50">中文</option>
+          <option value="ko" class="bg-neutral-900 text-amber-50">한국어</option>
+          <option value="ar" class="bg-neutral-900 text-amber-50">العربية</option>
         </select>
       </div>
     </nav>
@@ -128,7 +130,7 @@
     <div class="max-w-6xl mx-auto px-6 py-24 sm:py-32 text-center">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-medium mb-6">
         <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
-        <span data-i18n="hero.badge">v2.40.0 — 公開中</span>
+        <span data-i18n="hero.badge">v2.40.1 — 公開中</span>
       </div>
 
       <h1 class="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6" data-i18n="hero.title">
@@ -506,8 +508,8 @@
         'qs.code_c2': '&lt;!-- 2. Mount-Punkt und JS --&gt;',
         'qs.code_c3': '&lt;!-- 3. Initialisierung --&gt;',
         'qs.read_guide': 'Vollständige Integrationsanleitung lesen →',
-        'cta.heading': '<span class="gradient-text">Probier es aus.</span>',
-        'cta.text': 'Selbst sehen ist besser als hundertmal hören. Teste den Editor selbst.',
+        'cta.heading': '<span class="gradient-text">Probieren Sie es aus.</span>',
+        'cta.text': 'Selbst sehen ist besser als hundertmal hören. Testen Sie den Editor selbst.',
         'cta.button': '🎮 Demo öffnen',
         'footer.powered': '— Powered by Kuro-Boo',
         'footer.sample': 'Demo',
@@ -617,6 +619,60 @@
         'cta.heading': '<span class="gradient-text">Pruébalo.</span>',
         'cta.text': 'Ver para creer. Compruébalo tú mismo.',
         'cta.button': '🎮 Abrir la demo',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'Demo',
+      },
+      pt: {
+        'meta.title': 'KuroEditor — Editor WYSIWYG em Vanilla JS',
+        'meta.desc': 'Um editor WYSIWYG sem dependências, incorporável como um único arquivo. A tela de edição segue por padrão a aparência do seu site, com modo escuro opcional em um clique. Feito com Vanilla JS + Tailwind CSS.',
+        'nav.features': 'Recursos',
+        'nav.quickstart': 'Início rápido',
+        'nav.sample': 'Demo',
+        'nav.guide': 'Manual (JA)',
+        'hero.badge': '{ver} — Disponível',
+        'hero.title': 'Zero dependências.<br><span class="gradient-text">Incorporável em um único arquivo.</span><br>Um editor WYSIWYG.',
+        'hero.subtitle': 'Um editor WYSIWYG para incorporar, escrito em Vanilla JS + Tailwind CSS.<br>Sem React, sem Vue. Funciona com uma única tag <code class="inline">&lt;script&gt;</code>.',
+        'hero.cta_demo': '🎮 Experimentar a demo',
+        'hero.cta_github': 'Ver no GitHub',
+        'hero.stat_deps': 'dependências em runtime',
+        'hero.stat_files': 'arquivos para incorporar',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'Alternância claro/escuro',
+        'features.heading': 'Principais recursos',
+        'features.sub': 'Um editor WYSIWYG cuidadosamente feito para ser incorporado.',
+        'features.f1_t': 'Sem bibliotecas',
+        'features.f1_d': 'Sem React, sem Vue, sem jQuery. Só Vanilla JS e Tailwind CSS. Carregue o único arquivo <code class="inline">kuro-editor.js</code> e pronto.',
+        'features.f2_t': 'Formatação completa',
+        'features.f2_d': 'Títulos H1–H4, citações, caixas de destaque (4 cores), listas, cor do texto, tamanho da fonte, entrelinha, alinhamento, blocos de código. Os blocos de código têm números de linha, copiar, excluir e reordenar arrastando. Os números de linha e o botão de copiar também aparecem na <strong>página publicada</strong>.',
+        'features.f3_t': 'Tabelas de verdade',
+        'features.f3_d': 'Mesclagem e divisão de células, estilo de borda individual, largura de coluna ajustável arrastando, cor de fundo da célula. Também há alinhamento vertical das células (topo/centro/base) e exclusão da tabela em um clique. Funciona também no celular: pressione e segure uma linha para reordená-la e deslize para a esquerda para excluí-la.',
+        'features.f4_t': 'Suporte a mídia',
+        'features.f4_d': 'Imagens, vídeos, áudio, embeds do YouTube e do Vimeo. Também aceita arrastar e soltar e colar da área de transferência. Cole uma URL do <strong>Google Maps</strong> para incorporar um mapa, com o mesmo tamanho e alinhamento de uma imagem.',
+        'features.f5_t': 'Sintaxe especial de links',
+        'features.f5_d': 'Links estilo wiki com <code class="inline">[[slug]]</code>, <code class="inline">[[[slug]]]</code> e <code class="inline">[[slug|texto]]</code>, além de <strong>cartões de URL</strong> com <code class="inline">[[url|]]</code>. Edite e crie links ali mesmo, com o popup de edição e o botão 🔗 da barra de ferramentas.',
+        'features.f6_t': 'Tela de edição clara/escura',
+        'features.f6_d': 'A tela de edição segue por padrão a aparência clara da página publicada. Para editar à noite, mude para o modo escuro com um clique — a escolha fica salva.',
+        'features.f7_t': 'Salvamento automático',
+        'features.f7_d': 'Dispara o callback <code class="inline">onSave</code> no intervalo que você escolher. Integração livre com o seu servidor.',
+        'features.f8_t': 'Três modos de exibição',
+        'features.f8_d': 'Alterne por abas entre ✏️ edição, 👁 leitura (sem edição) e &lt;/&gt; código HTML. O modo leitura deixa você focar na leitura, e usuários avançados podem ajustar detalhes no HTML puro.',
+        'features.f9_t': 'Sumário automático',
+        'features.f9_d': 'Um sumário é gerado automaticamente no painel direito a partir dos títulos. Clique para rolar suavemente.',
+        'qs.heading': 'Início rápido',
+        'qs.sub': 'Basta carregar dois arquivos.',
+        'qs.s1_t': 'Coloque os arquivos',
+        'qs.s1_d': 'Coloque <code class="inline">kuro-editor.js</code> e <code class="inline">kuro-editor.css</code> no seu servidor.',
+        'qs.s2_t': 'Cole no seu HTML',
+        'qs.s2_d': 'O CSS no <code class="inline">&lt;head&gt;</code>, o JS no fim do <code class="inline">&lt;body&gt;</code>.',
+        'qs.s3_t': 'Inicialize com um elemento',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. Só isso.',
+        'qs.code_c1': '&lt;!-- 1. Carregar o CSS no head --&gt;',
+        'qs.code_c2': '&lt;!-- 2. Ponto de montagem e JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. Inicializar --&gt;',
+        'qs.read_guide': 'Ler o guia de integração completo →',
+        'cta.heading': '<span class="gradient-text">Experimente.</span>',
+        'cta.text': 'Ver para crer. Confira você mesmo como funciona.',
+        'cta.button': '🎮 Abrir a demo',
         'footer.powered': '— Powered by Kuro-Boo',
         'footer.sample': 'Demo',
       },
@@ -836,11 +892,66 @@
         'footer.powered': '— Powered by Kuro-Boo',
         'footer.sample': '데모',
       },
+      ar: {
+        'meta.title': 'KuroEditor — محرر WYSIWYG بلغة Vanilla JS',
+        'meta.desc': 'محرر WYSIWYG بلا اعتماديات، يُدمج كملف واحد. تتبع شاشة التحرير افتراضيًا مظهر موقعك، مع وضع داكن اختياري بنقرة واحدة. مبني بـ Vanilla JS وTailwind CSS.',
+        'nav.features': 'المزايا',
+        'nav.quickstart': 'البدء السريع',
+        'nav.sample': 'العرض التجريبي',
+        'nav.guide': 'الدليل (باليابانية)',
+        'hero.badge': '{ver} — متاح الآن',
+        'hero.title': 'بلا أي اعتماديات.<br><span class="gradient-text">يُدمج في ملف واحد.</span><br>محرر WYSIWYG.',
+        'hero.subtitle': 'محرر WYSIWYG مخصص للدمج، مكتوب بـ Vanilla JS وTailwind CSS.<br>لا حاجة إلى React ولا Vue. يعمل بسطر <code class="inline">&lt;script&gt;</code> واحد.',
+        'hero.cta_demo': '🎮 جرّب العرض التجريبي',
+        'hero.cta_github': 'عرض على GitHub',
+        'hero.stat_deps': 'اعتماديات وقت التشغيل',
+        'hero.stat_files': 'ملفات الدمج',
+        'hero.stat_vanilla': 'Vanilla JS',
+        'hero.stat_dark': 'تبديل فاتح/داكن',
+        'features.heading': 'أبرز المزايا',
+        'features.sub': 'ما بداخل محرر WYSIWYG صُنع بعناية ليُدمج في موقعك.',
+        'features.f1_t': 'بلا مكتبات',
+        'features.f1_d': 'لا حاجة إلى React ولا Vue ولا jQuery. مبني بـ Vanilla JS وTailwind CSS فقط. يكفي تحميل الملف الواحد <code class="inline">kuro-editor.js</code>.',
+        'features.f2_t': 'تنسيق غني',
+        'features.f2_d': 'عناوين H1–H4، واقتباسات، ومربعات تنبيه (4 ألوان)، وقوائم، ولون النص، وحجم الخط، وتباعد الأسطر، والمحاذاة، وكتل الشيفرة. تدعم كتل الشيفرة أرقام الأسطر والنسخ والحذف وإعادة الترتيب بالسحب، وتظهر أرقام الأسطر وزر النسخ <strong>في الصفحة المنشورة أيضًا</strong>.',
+        'features.f3_t': 'جداول متكاملة',
+        'features.f3_d': 'دمج الخلايا وتقسيمها، وتحديد نمط كل حد على حدة، وتغيير عرض الأعمدة بالسحب، ولون خلفية الخلية. يدعم أيضًا المحاذاة الرأسية للخلايا (أعلى/وسط/أسفل) وحذف الجدول بنقرة واحدة. ويعمل على الهاتف أيضًا: اضغط مطولًا على صف لإعادة ترتيبه، واسحبه يسارًا لحذفه.',
+        'features.f4_t': 'دعم الوسائط',
+        'features.f4_d': 'صور وفيديو وصوت وتضمين YouTube وVimeo، مع دعم السحب والإفلات واللصق من الحافظة. الصق رابط <strong>خرائط Google</strong> لتضمين خريطة بنفس حجم الصورة ومحاذاتها.',
+        'features.f5_t': 'صيغة روابط خاصة',
+        'features.f5_d': 'روابط على نمط الويكي بـ <code class="inline">[[slug]]</code> و<code class="inline">[[[slug]]]</code> و<code class="inline">[[slug|نص]]</code>، إضافة إلى <strong>بطاقات الروابط</strong> بـ <code class="inline">[[url|]]</code>. حرّر الروابط وأنشئها في مكانها عبر نافذة التحرير وزر 🔗 في شريط الأدوات.',
+        'features.f6_t': 'شاشة تحرير فاتحة/داكنة',
+        'features.f6_d': 'تتبع شاشة التحرير افتراضيًا المظهر الفاتح للصفحة المنشورة. وللتحرير ليلًا، انتقل إلى الوضع الداكن بنقرة واحدة، ويُحفظ اختيارك.',
+        'features.f7_t': 'حفظ تلقائي',
+        'features.f7_d': 'يستدعي <code class="inline">onSave</code> بالفاصل الزمني الذي تختاره، ليتكامل مع خادمك بحرية.',
+        'features.f8_t': 'ثلاثة أوضاع للعرض',
+        'features.f8_d': 'بدّل عبر الألسنة بين ✏️ التحرير و👁 القراءة (بلا تحرير) و&lt;/&gt; شيفرة HTML. يتيح وضع القراءة التركيز على القراءة، ويمكن للمستخدمين المتقدمين ضبط التفاصيل في HTML مباشرة.',
+        'features.f9_t': 'فهرس تلقائي',
+        'features.f9_d': 'يُنشأ فهرس تلقائيًا من العناوين في اللوحة الجانبية، مع تمرير سلس عند النقر.',
+        'qs.heading': 'البدء السريع',
+        'qs.sub': 'يكفي تحميل ملفين.',
+        'qs.s1_t': 'ضع الملفات',
+        'qs.s1_d': 'ضع <code class="inline">kuro-editor.js</code> و<code class="inline">kuro-editor.css</code> على خادمك.',
+        'qs.s2_t': 'الصقها في HTML',
+        'qs.s2_d': 'ملف CSS في <code class="inline">&lt;head&gt;</code>، وملف JS في نهاية <code class="inline">&lt;body&gt;</code>.',
+        'qs.s3_t': 'حدّد العنصر وابدأ التشغيل',
+        'qs.s3_d': '<code class="inline">new KuroEditor(element, options)</code>. هذا كل شيء.',
+        'qs.code_c1': '&lt;!-- 1. تحميل CSS في head --&gt;',
+        'qs.code_c2': '&lt;!-- 2. عنصر التركيب وملف JS --&gt;',
+        'qs.code_c3': '&lt;!-- 3. التهيئة --&gt;',
+        'qs.read_guide': 'اقرأ دليل الدمج الكامل ←',
+        'cta.heading': '<span class="gradient-text">جرّبه بنفسك.</span>',
+        'cta.text': 'ليس الخبر كالمعاينة. تحقّق من طريقة عمله بنفسك.',
+        'cta.button': '🎮 افتح العرض التجريبي',
+        'footer.powered': '— Powered by Kuro-Boo',
+        'footer.sample': 'العرض التجريبي',
+      },
     }
 
     function applyLang(code) {
       const dict = I18N[code] || I18N.ja
       document.documentElement.lang = code
+      document.documentElement.dir = code === 'ar' ? 'rtl' : 'ltr'
       const ver = window.KUROEDITOR_VERSION ? 'v' + window.KUROEDITOR_VERSION : ''
       for (const el of document.querySelectorAll('[data-i18n]')) {
         const key = el.getAttribute('data-i18n')

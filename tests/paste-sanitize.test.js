@@ -105,4 +105,57 @@ describe('貼り付けの掃除（許可リスト）', () => {
     expect(out).toContain('data-kuro-wiki')   // 記法へ正規化＝以後は編集ポップアップで直せる
     expect(out).not.toContain('theirs')
   })
+  it('本文に置けない要素は中身ごと落とす（<style> はページ全体に効く）', () => {
+    const out = ed._sanitizePastedHTML(
+      '<style>body{display:none}</style><meta charset="utf-8"><link rel="stylesheet" href="https://x/a.css">' +
+      '<p>文</p><script>alert(1)</script><noscript>n</noscript><object data="x"></object><embed src="x">')
+    expect(out).toBe('<p>文</p>')
+  })
+
+  it('StartFragment の印が無いクリップボードでも <head> の <style> を持ち込まない', () => {
+    const out = ed._sanitizePastedHTML(
+      '<html><head><style>.a{color:red}</style><title>t</title></head><body><p>文</p></body></html>')
+    expect(out).toBe('<p>文</p>')
+  })
+
+  it('iframe は KuroEditor の埋め込みの中だけ残す', () => {
+    const out = ed._sanitizePastedHTML(
+      '<iframe src="https://evil.example/"></iframe>' +
+      '<figure data-kuro-media="https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dx"><div class="kuro-iframe-wrap">' +
+      '<iframe src="https://www.youtube.com/embed/x"></iframe></div></figure>')
+    expect(out).not.toContain('evil.example')
+    expect(out).toContain('youtube.com/embed/x')
+  })
+
+  it('危ない枠組みの href / src は落とす（javascript: など）', () => {
+    const out = ed._sanitizePastedHTML(
+      '<p><a href="javascript:alert(1)">a</a><a href="jav&#x09;ascript:alert(1)">b</a>' +
+      '<img src="javascript:alert(1)" alt=""><a href="data:text/html,x">c</a></p>')
+    expect(out).not.toMatch(/javascript|data:text/i)
+    expect(out).toContain('>a</a>')   // 文字は落とさない
+  })
+
+  it('安全な href / src はそのまま（mailto・相対パス・data:image）', () => {
+    const out = ed._sanitizePastedHTML(
+      '<p><a href="mailto:a@example.com">m</a><a href="/post/x">r</a>' +
+      '<img src="data:image/png;base64,AAAA" alt=""></p>')
+    expect(out).toContain('href="mailto:a@example.com"')
+    expect(out).toContain('href="/post/x"')
+    expect(out).toContain('src="data:image/png;base64,AAAA"')
+  })
+
+  it('Google ドキュメントの <b style="font-weight:normal"> の包みは外す（太字ではない）', () => {
+    const out = ed._sanitizePastedHTML(
+      '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1">' +
+      '<p dir="ltr"><span style="font-size:11pt;color:#000">一</span></p>' +
+      '<p dir="ltr"><span style="font-size:11pt;font-weight:700">二</span></p></b>')
+    expect(out).not.toMatch(/<strong[^>]*>\s*<p/)
+    expect(out).not.toContain('font-weight: normal')
+    expect(out).toContain('一')
+    expect(out).toMatch(/<strong>二<\/strong>|font-weight: 700/)   // 中の本物の太字は残る
+  })
+
+  it('本物の太字の <b> は <strong> になる（包みの判定に巻き込まない）', () => {
+    expect(ed._sanitizePastedHTML('<p><b>太</b></p>')).toBe('<p><strong>太</strong></p>')
+  })
 })
