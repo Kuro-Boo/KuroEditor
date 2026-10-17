@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.45.0'
+export const VERSION = '2.45.1'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -499,11 +499,14 @@ const ICON = {
     `<polyline points="10,6.5 11.8,9 10,11.5"/>` +
     `<line x1="8.6" y1="5.5" x2="7.4" y2="12.5" opacity="0.7"/>` +
   `</svg>`,
-  // Eraser — 斜めの消しゴム＋下の線（文字装飾をすべて外す）
-  clearFormat: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" aria-hidden="true">` +
-    `<path d="M5.2 12.2 1.6 8.6a1 1 0 0 1 0-1.4L7.4 1.4a1 1 0 0 1 1.4 0l3.8 3.8a1 1 0 0 1 0 1.4L7.2 12.2Z"/>` +
-    `<path d="M4.4 4.4 9.6 9.6" />` +
-    `<path d="M5.2 12.2H13" stroke-linecap="round"/>` +
+  // 弾けて消える（文字装飾をすべて外す）— 長短の光の筋＋飛び散る粒。
+  // ⚠ 筋を均等にすると読み込み中のくるくるに見える。長さを揃えず、粒を散らす
+  clearFormat: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true">` +
+    `<path d="M7 1v2.6M7 10.6V13M1 7h2.6M10.6 7H13"/>` +
+    `<path d="M3.2 3.2l1.1 1.1M9.7 9.7l1.1 1.1M10.8 3.2 9.7 4.3M4.3 9.7l-1.1 1.1" stroke-width="1.1"/>` +
+    `<circle cx="12" cy="1.8" r=".6" fill="currentColor" stroke="none"/>` +
+    `<circle cx="1.8" cy="12.2" r=".6" fill="currentColor" stroke="none"/>` +
+    `<circle cx="12.3" cy="11.6" r=".5" fill="currentColor" stroke="none"/>` +
   `</svg>`,
   // Blockquote — left vertical bar + three horizontal text lines
   quote: _icn(
@@ -1205,12 +1208,12 @@ export function findCell(node) {
   return null
 }
 
-/** 文字の装飾として外せるタグ（消しゴム）。リンク・ルビは文字の内容なので入れない。 */
+/** 文字の装飾として外せるタグ（装飾を消すボタン）。リンク・ルビは文字の内容なので入れない。 */
 const INLINE_FORMAT_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'INS', 'S', 'STRIKE', 'DEL', 'FONT',
   'KBD', 'CODE', 'MARK', 'SMALL', 'BIG', 'SUB', 'SUP', 'TT', 'SAMP', 'VAR'])
 
 /**
- * 消しゴムで外す要素か。<span> は style だけを持つもの（色・大きさ・書体）に限る —
+ * 装飾を消すボタンで外す要素か。<span> は style だけを持つもの（色・大きさ・書体）に限る —
  * クラスや data-* を持つ <span> はエディタの部品や機能の記法かもしれない。
  * <pre> の中の <code> はコードブロックの本体なので外さない。
  */
@@ -10483,7 +10486,7 @@ export class KuroEditor {
    * approach: remove only what was added, leave everything else intact.
    */
 /**
-   * 選択した文字の装飾をすべて外す（v2.45.0〜。popm の左端の消しゴム）。
+   * 選択した文字の装飾をすべて外す（v2.45.0〜。popm の左端の「弾けて消える」ボタン）。
    *
    * 外から貼った文字を「文字だけ」にして装飾をやり直すためのもの。外すのは
    * 文字の装飾（{@link INLINE_FORMAT_TAGS}・style だけの <span>）。**リンクとルビは

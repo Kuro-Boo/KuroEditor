@@ -1,5 +1,5 @@
 /**
- * popm の左端の消しゴム — 選択した文字の装飾をすべて外す（v2.45.0〜）。
+ * popm の左端の「弾けて消える」ボタン — 選択した文字の装飾をすべて外す（v2.45.0〜）。
  * 外から貼った文字を「文字だけ」にして、装飾をやり直すためのもの。
  */
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -24,7 +24,7 @@ function select(ed, from, to) {
   window.getSelection().setBaseAndExtent(s[0], s[1], e[0], e[1])
 }
 
-describe('消しゴム（文字装飾をすべて外す）', () => {
+describe('装飾を消すボタン（文字装飾をすべて外す）', () => {
   beforeEach(() => { document.body.innerHTML = '' })
 
   it('popm の一番左（つまみの次）にある', () => {
