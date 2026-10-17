@@ -56,7 +56,7 @@ describe('角丸ボックスと選択', () => {
     const ed = new KuroEditor(mount(), { initialContent: '<p>ここに<b>太字</b>あり</p>' })
     selectParagraph(ed)
     ed._insertRoundbox()
-    expect(lastInsertedHtml()).toContain('<b>太字</b>')
+    expect(lastInsertedHtml()).toContain('<strong>太字</strong>')   // 読み込みで <b> → <strong>
   })
 
   it('行になっていない選択は、段落で包んでから入れる', () => {

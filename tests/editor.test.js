@@ -543,7 +543,7 @@ describe('KuroEditor', () => {
       tap(clipBtn(ed, 'clipCopy'))
       expect(onClipCopy).toHaveBeenCalledTimes(1)
       const payload = onClipCopy.mock.calls[0][0]
-      expect(payload.html).toContain('<b>World</b>')
+      expect(payload.html).toContain('<strong>World</strong>')   // 読み込みで形へ写る
       expect(payload.text).toContain('Hello')
       // コピーは選択を消さない
       expect(ed.wysiwyg.textContent).toBe('Hello World')
@@ -559,7 +559,7 @@ describe('KuroEditor', () => {
       selectAll(ed, ed.wysiwyg.querySelector('p'))
       tap(clipBtn(ed, 'clipCut'))
       expect(onClipCut).toHaveBeenCalledTimes(1)
-      expect(onClipCut.mock.calls[0][0].html).toContain('<b>World</b>')
+      expect(onClipCut.mock.calls[0][0].html).toContain('<strong>World</strong>')
       expect(ed.wysiwyg.textContent).toBe('')
     })
 

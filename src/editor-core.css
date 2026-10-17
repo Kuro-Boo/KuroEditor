@@ -1269,6 +1269,23 @@
            hover:bg-neutral-700 transition-colors;
   }
 
+  /* ── 水平線の色（HrColorPanel）— 絵文字と同じ浮き板。色は文字色と同じパレット ── */
+  .kuro-hr-panel {
+    max-width: 22rem;
+    max-height: none;
+  }
+  .kuro-hr-panel__head {
+    @apply flex items-center justify-between gap-2 mb-2;
+  }
+  .kuro-hr-panel__title {
+    @apply text-xs text-neutral-300;
+  }
+  .kuro-hr-panel__base {
+    @apply px-2 py-1 rounded-md text-xs text-neutral-100
+           border border-neutral-600 cursor-pointer
+           hover:bg-neutral-700 transition-colors;
+  }
+
   /* ── Link Open Dialog (閲覧モードでリンクを踏んだときの確認) ── */
   .kuro-link-open {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4

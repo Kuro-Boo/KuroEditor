@@ -38,7 +38,8 @@ describe('renderSpecialLinks は属性の外へ出さない', () => {
     expect(html).not.toMatch(/javascript:/i)
   })
   it('URL カード・素のリンクも同じ', () => {
-    expect(renderSpecialLinks('[[https://x.example/"><b>|]]')).not.toContain('"><b>')
+    // タグを跨ぐ [[…]] はリンクにしない（v2.44.0〜）—— 属性の中へ入る機会そのものが無い
+    expect(renderSpecialLinks('[[https://x.example/"><b>|]]')).not.toContain('href=')
     expect(renderSpecialLinks('[[https://x.example/"x]]')).toContain('href="https://x.example/&quot;x"')
   })
   it('& は二重にしない(本文はすでに HTML)', () => {

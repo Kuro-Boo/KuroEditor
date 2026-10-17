@@ -64,22 +64,23 @@ describe('ブロックの中の形が変わっても、カーソルは同じ字�
    */
   it('内側の <div> が正規化で外れても、文字位置を保つ', () => {
     const ed = new KuroEditor(mount(), { blockIds: true })
-    ed.setContent('<div><div>abcdefg</div></div>')
-    const inner = ed.wysiwyg.firstElementChild.firstElementChild
-    window.getSelection().setBaseAndExtent(inner.firstChild, 4, inner.firstChild, 4)
+    // 読み込みはエディタの形へ写すので、形の違う版は復元の側で作る
+    ed.setContent('<p>abcdefg</p>')
+    const p = ed.wysiwyg.firstElementChild
+    window.getSelection().setBaseAndExtent(p.firstChild, 4, p.firstChild, 4)
     const caret = ed._caretOffset()
     expect(caret.offset).toBe(4)
 
-    // 同じブロック・同じ文字で、内側の <div> だけが無い形へ戻す
-    ed._restoreSnapshot({ html: `<div data-bid="${caret.bid}">abcdefg</div>`, caret })
+    // 同じブロック・同じ文字で、内側に <div> が挟まった形へ戻す
+    ed._restoreSnapshot({ html: `<div data-bid="${caret.bid}"><div>abcdefg</div></div>`, caret })
 
     expect(ed._caretOffset()?.offset).toBe(4)
   })
 
   it('形が変わらなければ、これまでどおり行番号で戻る', () => {
     const ed = new KuroEditor(mount(), { blockIds: true })
-    ed.setContent('<div><div>abcdefg</div></div>')
-    const inner = ed.wysiwyg.firstElementChild.firstElementChild
+    ed.setContent('<p>abcdefg</p>')
+    const inner = ed.wysiwyg.firstElementChild
     window.getSelection().setBaseAndExtent(inner.firstChild, 4, inner.firstChild, 4)
     const caret = ed._caretOffset()
     ed._restoreSnapshot({ html: ed.wysiwyg.innerHTML, caret })

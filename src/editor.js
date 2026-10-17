@@ -42,7 +42,7 @@ import {
   isSafeUrl,
 } from './kuro-links.js'
 // 保存/取込み HTML の正規化（editor の paste・host の API・メンテナンス掃除で共通）。
-import { normalizeContentHtml, inspectContentHtml, sanitizeContentHtml } from './normalize.js'
+import { normalizeContentHtml, inspectContentHtml, sanitizeContentHtml, conformContentHtml, cssColor } from './normalize.js'
 // RecipeCard（レシピの構造化ブロック）。DOM 非依存の純関数だけを持つ（recipe.js）。
 import {
   RECIPE_BLOCK,
@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.43.1'
+export const VERSION = '2.44.0'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -790,16 +790,24 @@ const IMAGE_SIZE_OPTIONS = ['25%', '33%', '50%', '60%', '75%', '100%']
 export function unrenderSpecialLinks(html) {
   const div = document.createElement('div')
   div.innerHTML = html
-  // Attributes are URI-encoded to avoid bracket conflicts — decode when restoring
+  // Attributes are URI-encoded to avoid bracket conflicts — decode when restoring.
+  // ⚠ 戻すトークンは【HTML の綴り】（renderSpecialLinks が HTML の文字から取った）。
+  //   文字として入れると `&amp;` がもう一度逃がされ、保存のたびに
+  //   `&amp;amp;amp;…` と増えていた（v2.44.0 で修正）。HTML として入れる。
+  const asHtml = (raw) => {
+    const t = document.createElement('template')
+    t.innerHTML = raw
+    return t.content
+  }
   div.querySelectorAll('[data-kuro-card]').forEach(el =>
-    el.replaceWith(decodeURIComponent(el.getAttribute('data-kuro-card'))))
+    el.replaceWith(asHtml(decodeURIComponent(el.getAttribute('data-kuro-card')))))
   div.querySelectorAll('[data-kuro-wiki]').forEach(el =>
-    el.replaceWith(decodeURIComponent(el.getAttribute('data-kuro-wiki'))))
+    el.replaceWith(asHtml(decodeURIComponent(el.getAttribute('data-kuro-wiki')))))
   div.querySelectorAll('[data-kuro-link]').forEach(el =>
-    el.replaceWith(decodeURIComponent(el.getAttribute('data-kuro-link'))))
+    el.replaceWith(asHtml(decodeURIComponent(el.getAttribute('data-kuro-link')))))
   // Media elements (img / video) inserted via mid or direct URL
   div.querySelectorAll('[data-kuro-media]').forEach(el =>
-    el.replaceWith(`[[${decodeURIComponent(el.getAttribute('data-kuro-media'))}]]`))
+    el.replaceWith(asHtml(`[[${decodeURIComponent(el.getAttribute('data-kuro-media'))}]]`)))
   return div.innerHTML
 }
 
@@ -1188,6 +1196,37 @@ export function findCell(node) {
     el = el.parentElement
   }
   return null
+}
+
+/** `16px` / `12pt` / `1.5rem` → px（相対の大きさは null）。 */
+function absFontPx(v) {
+  const m = /^([\d.]+)(px|pt|rem)$/i.exec(String(v ?? '').trim())
+  if (!m) return null
+  const n = parseFloat(m[1])
+  const u = m[2].toLowerCase()
+  return u === 'px' ? n : u === 'pt' ? n * 4 / 3 : n * 16
+}
+
+/**
+ * 貼った断片の「本文の大きさ」— 文字数でいちばん多い絶対値の文字サイズ（px）。
+ * 無ければ null（相対の大きさしか無い＝そのまま）。
+ */
+export function pasteBaseFontPx(root) {
+  const tally = new Map()
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let t = w.nextNode(); t; t = w.nextNode()) {
+    const len = t.data.trim().length
+    if (!len) continue
+    let px = null
+    for (let e = t.parentElement; e && e !== root && px === null; e = e.parentElement) {
+      if (/^H[1-6]$/.test(e.tagName)) break
+      px = absFontPx(e.style?.getPropertyValue('font-size'))
+    }
+    if (px !== null) tally.set(px, (tally.get(px) || 0) + len)
+  }
+  let best = null
+  for (const [px, n] of tally) if (best === null || n > tally.get(best)) best = px
+  return best
 }
 
 /**
@@ -5159,6 +5198,65 @@ export class EmojiPanel {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// HR COLOR PANEL — 水平線は色を選んでから引く
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 水平線ボタンで開く色の選び場。選んだ瞬間に線を引く（選ばずに閉じれば何も入らない）。
+ *
+ * 「標準」はテーマの線の色（`--kuro-hr`）。色を焼き込まないので、公開ページの
+ * テーマが変わっても線はそのテーマの色で出る。色を選んだときだけ
+ * `border-top-color` を書く — 文字色と同じく、書き手が選んだ色はそのまま残る。
+ */
+export class HrColorPanel {
+  /** @param {function(string|null): void} onPick  色（標準なら null） */
+  constructor(onPick) {
+    this.onPick = onPick
+    this.el = createElement('div', {
+      className: 'kuro-emoji-panel kuro-hr-panel',
+      attrs: { role: 'dialog', 'aria-label': '水平線の色' },
+    })
+    const head = createElement('div', { className: 'kuro-hr-panel__head' })
+    head.appendChild(createElement('span', { className: 'kuro-hr-panel__title', html: '水平線の色' }))
+    const base = createElement('button', {
+      className: 'kuro-hr-panel__base',
+      html: '標準の色',
+      attrs: { type: 'button', title: 'テーマの線の色で引く' },
+    })
+    base.addEventListener('mousedown', (e) => { e.preventDefault(); this.hide(); this.onPick(null) })
+    head.appendChild(base)
+    this.el.appendChild(head)
+    this.picker = new ColorPicker({
+      allowClear: false,
+      onPick: (color) => { this.hide(); this.onPick(color) },
+    })
+    this.el.appendChild(this.picker.el)
+    document.body.appendChild(this.el)
+  }
+
+  /** EmojiPanel と同じ置き方（下に入らなければ上へ返す）。 */
+  show(anchorEl) {
+    const rect = anchorEl.getBoundingClientRect()
+    const h = this.el.offsetHeight || 320
+    let top = rect.bottom + 8
+    if (top + h > window.innerHeight - 4) top = Math.max(4, rect.top - h - 8)
+    const w = this.el.offsetWidth || 320
+    const left = Math.max(4, Math.min(rect.left, window.innerWidth - w - 4))
+    this.el.style.top  = `${top}px`
+    this.el.style.left = `${left}px`
+    this.el.classList.add('kuro-emoji-panel--visible')
+  }
+
+  hide() { this.el.classList.remove('kuro-emoji-panel--visible') }
+
+  get visible() { return this.el.classList.contains('kuro-emoji-panel--visible') }
+
+  toggle(anchorEl) { this.visible ? this.hide() : this.show(anchorEl) }
+
+  destroy() { this.el.remove() }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // LINK EDIT POPUP — shown when the caret sits on / next to a link
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -7086,6 +7184,7 @@ export class KuroEditor {
       }
       execFormat('insertText', emoji)
     })
+    this.hrPanel = new HrColorPanel((color) => this._insertHR(color))
   }
 
   // ── Popup menu (popm) ─────────────────────────────────────────────────────
@@ -7829,6 +7928,7 @@ export class KuroEditor {
       const inEditor   = this.root.contains(e.target)
       const inPopm     = this.popm.el.contains(e.target)
       const inEmoji    = this.emojiPanel.el.contains(e.target)
+      const inHr       = this.hrPanel.el.contains(e.target)
       const inTable    = this.tableManager.el.contains(e.target) ||
                          this.tableInserter.container.contains(e.target)
       const inMedia    = this.mediaDialog.el.contains(e.target)
@@ -7838,6 +7938,7 @@ export class KuroEditor {
       const inLinkEdit = this.linkEditPopup.el.contains(e.target)
       if (!inEditor && !inPopm && !inEmoji) this.popm.hide()
       if (!inEditor && !inPopm && !inEmoji) this.emojiPanel.hide()
+      if (!inHr) this.hrPanel.hide()
       if (!inEditor && !inTable) this.tableManager.deactivate()
       if (!inMedia) this.mediaDialog.hide()
       if (!inImage && !inEditor) this.imageMenu.deactivate()
@@ -8100,7 +8201,7 @@ export class KuroEditor {
     const empty = !line.textContent?.trim() && !line.querySelector('img,video,audio,iframe,table,figure')
     const atStart = empty || this._caretAtBlockEdge(line, range, 'start')
     const atEnd   = empty || this._caretAtBlockEdge(line, range, 'end')
-    if (!atStart && !atEnd) return false
+    if (!atStart && !atEnd) return this._insertBlocksMidLine(line, range, box)
 
     const nodes = [...box.childNodes]
     const lastMeaningful = [...nodes].reverse().find((n) =>
@@ -8122,6 +8223,45 @@ export class KuroEditor {
 
     try { sel.setBaseAndExtent(lastMeaningful.parentNode, [...lastMeaningful.parentNode.childNodes].indexOf(lastMeaningful) + 1,
                                lastMeaningful.parentNode, [...lastMeaningful.parentNode.childNodes].indexOf(lastMeaningful) + 1) } catch {}
+    return true
+  }
+
+  /**
+   * 行の途中にブロック（表など）を貼る: 行をキャレットで 2 つに割り、間に入れる。
+   *
+   * ブラウザ（insertHTML）に任せると、割れた後ろの行の頭の空白が &nbsp; になって残る
+   * （"hello world" の hello の後ろに貼ると、後ろは "&nbsp;world"）。行の頭と末尾の
+   * 空白は見えないので、割った境目の空白はここで落とす。
+   * 段落・見出しだけ（リスト項目は _insertBlocksBesideListItem、セルの中はブラウザ任せ）。
+   */
+  _insertBlocksMidLine(line, range, box) {
+    if (!/^(P|H[1-6])$/.test(line.tagName) || line.closest('td,th,li')) return false
+    // 段落・見出しだけの断片は、これまでどおりブラウザに任せる（最初の段落が今の行に溶け込む）
+    if ([...box.children].every((el) => /^(P|H[1-6])$/.test(el.tagName))) return false
+    const sel = window.getSelection()
+    const r = range.cloneRange()
+    r.setEnd(line, line.childNodes.length)
+    const tail = line.cloneNode(false)
+    tail.removeAttribute('data-bid')
+    tail.removeAttribute('data-cbid')
+    tail.appendChild(r.extractContents())
+    const trimEdge = (el, end) => {
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      const texts = []
+      for (let t = w.nextNode(); t; t = w.nextNode()) texts.push(t)
+      const t = end ? texts[texts.length - 1] : texts[0]
+      if (t) t.data = end ? t.data.replace(/[ \u00a0]+$/, '') : t.data.replace(/^[ \u00a0]+/, '')
+      if (!el.textContent && !el.querySelector('img,br,video,audio,iframe')) el.innerHTML = '<br>'
+    }
+    trimEdge(line, true)
+    trimEdge(tail, false)
+    const nodes = [...box.childNodes]
+    line.after(...nodes, tail)
+    const last = nodes[nodes.length - 1]
+    try {
+      const idx = [...last.parentNode.childNodes].indexOf(last) + 1
+      sel.setBaseAndExtent(last.parentNode, idx, last.parentNode, idx)
+    } catch {}
     return true
   }
 
@@ -8158,6 +8298,18 @@ export class KuroEditor {
    * Pure sanitize step of {@link _pasteSanitizedHTML} — clipboard markup in,
    * cleaned markup out, no selection/DOM side effects (kept separate so the
    * rules are directly testable).
+   *
+   * 形を決めるのは normalize.js の conform（API・保存と同じ 1 つの実装）。
+   * ここに置くのは【外から貼ったときだけ】の決まりだけ:
+   *   - 色・背景を落とす（暗いテーマからのコピーが明るい公開ページで読めなくなる）
+   *   - 表の罫線を落とす（スプレッドシートの罫線は外周が欠けていて半端。表の線は
+   *     .kuro-table の CSS に任せる。列幅は残す）
+   *   - 外のサイトの id・class・data-* を落とす（機能の記法は他所の HTML では
+   *     意味が違う。KuroEditor 自身の data-kuro-* などは残す）。data-bid も落とす
+   *     （貼った写しは新しいブロック。同じ id が 2 つあると突き合わせが壊れる）
+   *   - 絶対値の文字サイズは「貼った断片でいちばん多い大きさ」を 100% にする
+   *     （Chrome は計算済みの 16px / 14px を全部に焼き込む。本文の大きさはサイトが決める）
+   *   - Google ドキュメントの全体の包み <b style="font-weight:normal"> を外す
    * @param {string} html  clipboard `text/html`
    * @returns {string} cleaned markup
    */
@@ -8167,82 +8319,25 @@ export class KuroEditor {
     const frag = html.match(/<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/)
     const markup = frag ? frag[1] : html
     const body = new DOMParser().parseFromString(markup, 'text/html').body
-    // コメントは本文ではない。Google の AI の回答のコピーは `<!--TgQPHd|||[…]-->` を
-    // 文ごとに挟んでくる（中の `[[…]]` まで描き直されてリンクのゴミになった）。
-    for (const c of [...this._commentsIn(body)]) c.remove()
-    this._repairTableSpans(body)
 
-    const COLOR_PROPS = ['color', 'background', 'background-color', 'background-image']
-
-    // ── 貼り付けで残してよいものの許可リスト ────────────────────────────────
-    // ⚠ 除去は【禁止リスト】ではなく【許可リスト】で行うこと。外部の HTML が
-    //   持ち込む装飾は無数にあり（letter-spacing / word-spacing / text-indent /
-    //   white-space / box-shadow / transform …）、KuroEditor の UI からは直せない。
-    //   つまり一度入ると HTML タブでしか消せない＝書き手には手の出しようがない。
-    //   「このエディタが自分で書けるものだけ残す」なら、残ったものは必ず UI で
-    //   直せる、という保証になる。
-    // ⚠ color / background は許可リストにも入れない（下の COLOR_PROPS で明示除去）。
-    //   暗いテーマからのコピーが明るい公開ページで読めなくなるため。
-    // ⚠ font-size / font-weight は【span に対してだけ】残る。ブロック（p / li /
-    //   h1..h6 / ol / ul / td / th / div）に付いたものは、最後に通す
-    //   normalizeContentHtml が落とす（R6）。エディタが文字サイズを書くのは
-    //   <span style="font-size:…"> だけなので、ブロックに付いていたら Chrome の
-    //   コピーが焼き込んだ計算済みスタイルだと断定できる。ここは要素ごとの
-    //   区別をしないので、許可リストには残したまま下流で判定する。
-    const STYLE_ALLOW = new Set([
-      'font-size', 'font-family', 'font-weight', 'font-style',
-      'text-decoration', 'text-decoration-line',
-      'text-align', 'line-height', 'vertical-align',
-      'width', 'padding-left', 'margin-left',
-      '--kuro-marker-color',
-    ])
-    // 属性も同様に許可リスト。data-kuro-* / data-checked / data-gutter などの
-    // 「KuroEditor 自身が意味を持たせている」ものは別途通す（下の keepAttr）。
-    const ATTR_ALLOW = new Set([
-      'href', 'target', 'rel', 'title', 'src', 'alt', 'controls', 'loading',
-      'allow', 'allowfullscreen', 'frameborder',
-      'colspan', 'rowspan', 'scope', 'start', 'value',
-      'contenteditable', 'style', 'class', 'dir', 'lang',
-    ])
-    const keepAttr = (name) =>
-      ATTR_ALLOW.has(name) || name.startsWith('data-kuro') ||
-      name === 'data-checked' || name === 'data-gutter' ||
-      name === 'data-align' || name === 'data-width' || name === 'data-recipe' ||
-      name === 'data-recipe-version'
-
-    // Chrome's "copy" serializes the element's ENTIRE computed style as
-    // `<prop>: revert-layer` (hundreds of props) plus the real color — pure noise
-    // that bloats saved HTML. Drop every CSS-wide-keyword declaration too.
-    const NOISE_VALUES = new Set(['revert-layer', 'revert', 'initial', 'unset', 'inherit'])
-
-    // 本文に置けない要素（script / style / 外部の iframe …）と危ない URL は、
-    // 最後に通す normalizeContentHtml の R0（sanitizeContentHtml）が落とす。
-    // API・保存・公開ページと同じ実装 —— ここに別の規則を置くと、貼り付けと
-    // API で残るものが割れる（貼り付けで消えた埋め込みが API では残る、など）。
-    // Google ドキュメントは選択全体を <b style="font-weight:normal"> で包む。
-    // 太字ではないので、R1 で <strong> にされる前に包みだけ外す（中身は残す）。
     body.querySelectorAll('b, strong').forEach((el) => {
       const w = el.style?.getPropertyValue('font-weight').trim().toLowerCase()
       if (w === 'normal' || w === '400' || w === 'lighter') el.replaceWith(...el.childNodes)
     })
 
+    const OWN_DATA = (name) => name.startsWith('data-kuro') || ['data-checked', 'data-gutter',
+      'data-align', 'data-width', 'data-recipe', 'data-recipe-version'].includes(name)
+    const COLOR_PROPS = ['color', 'background', 'background-color', 'background-image']
+    const BORDER_PROPS = ['border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+      'border-width', 'border-style', 'border-color']
+    const base = pasteBaseFontPx(body)
     for (const el of body.querySelectorAll('*')) {
-      el.removeAttribute('color')   // legacy <font color> / [color]
+      el.removeAttribute('color')
       el.removeAttribute('bgcolor')
-      // Block identity is per-document and minted by THIS editor. Copying from
-      // KuroEditor (or another KuroEditor document) puts data-bid/data-cbid on
-      // the clipboard; pasting them back would create TWO blocks claiming the
-      // same id, which silently breaks 3-way merge matching (mergeBlocks only
-      // uses the first occurrence). A pasted copy is always a NEW block, so the
-      // ids are dropped here and re-minted by the block-id observer.
-      el.removeAttribute('data-bid')
-      el.removeAttribute('data-cbid')
-      // 許可リストに無い属性は落とす（外部サイトの id / aria / on* / 独自 data-* など）
+      el.removeAttribute('id')
       for (const attr of [...el.attributes]) {
-        if (!keepAttr(attr.name)) el.removeAttribute(attr.name)
+        if (attr.name.startsWith('data-') && !OWN_DATA(attr.name)) el.removeAttribute(attr.name)
       }
-      // class は kuro-* だけ残す（他所の CSS 前提のクラスは持ち込んでも効かず、
-      // ホストのスタイルと衝突するだけ）
       if (el.hasAttribute('class')) {
         const keep = [...el.classList].filter((c) => c.startsWith('kuro-'))
         if (keep.length) el.setAttribute('class', keep.join(' '))
@@ -8250,72 +8345,23 @@ export class KuroEditor {
       }
       const st = el.style
       if (st && el.hasAttribute('style')) {
-        for (const p of COLOR_PROPS) st.removeProperty(p)
-        // ⚠ CSSStyleDeclaration をスプレッドで回さない（happy-dom は iterable ではなく
-        //   実行時に落ちる＝テストでしか気づけない差になる）。index で後ろから回せば、
-        //   途中で削除しても添字がずれない。
-        for (let i = st.length - 1; i >= 0; i--) {
-          const prop = st.item(i)
-          const v = st.getPropertyValue(prop).trim()
-          // 許可リスト外 / CSS 全体キーワード（Chrome のコピーが吐く revert-layer の山）は落とす
-          if (!STYLE_ALLOW.has(prop) || NOISE_VALUES.has(v)) st.removeProperty(prop)
-        }
+        for (const prop of COLOR_PROPS) st.removeProperty(prop)
+        if (el.tagName === 'TD' || el.tagName === 'TH') for (const prop of BORDER_PROPS) st.removeProperty(prop)
+        const px = absFontPx(st.getPropertyValue('font-size'))
+        if (px && base) st.setProperty('font-size', `${(px * 16 / base).toFixed(2)}px`)
         if (el.getAttribute('style') === '') el.removeAttribute('style')
       }
     }
 
     normalizePastedLinks(body, this.options.urlResolver)
-    this._normalizePastedTables(body)
-
-    // Same canonicalization the host API applies on ingest — one shared
-    // implementation, so pasted content and API-written content cannot drift.
-    return normalizeContentHtml(body.innerHTML)
-  }
-
-  /**
-   * Pasted <table> markup (Excel / Sheets / Notion / other pages) carries
-   * source-specific presentational cruft that fights the app's own
-   * `.kuro-table` CSS. Most visibly: spreadsheet exports often give inner
-   * cells per-side borders but leave the table's own outer edge (most
-   * commonly the last row's bottom) with no explicit border — so the bottom
-   * rule never renders even though `.kuro-content td` sets a border on every
-   * side. Stripping border/size cruft and re-adopting the canonical
-   * `kuro-table` class (same markup `_generateTableHTML` produces) lets the
-   * app's CSS own the border/width uniformly, and also makes the pasted
-   * table eligible for column-resize, row/col insert-delete-move, etc. —
-   * those already scope themselves to `.kuro-table` / cell contenteditable.
-   */
-  _normalizePastedTables(root) {
-    const LEGACY_ATTRS = ['border', 'cellpadding', 'cellspacing', 'width', 'height', 'align', 'valign', 'bgcolor']
-    const SIZE_BORDER_PROPS = [
-      'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
-      'border-width', 'border-style', 'border-color',
-      'border-collapse', 'border-spacing', 'width', 'height',
-    ]
-
-    for (const table of root.querySelectorAll('table')) {
-      table.className = 'kuro-table'
-      table.removeAttribute('style')
-      for (const a of LEGACY_ATTRS) table.removeAttribute(a)
-      // Source column widths (often fixed px) fight table-layout:fixed's
-      // even split; drop them and let TableResizer build one lazily on drag.
-      table.querySelector('colgroup')?.remove()
-
-      for (const row of table.querySelectorAll('tr')) {
-        row.removeAttribute('style')
-        for (const a of LEGACY_ATTRS) row.removeAttribute(a)
-      }
-
-      for (const cell of table.querySelectorAll('td, th')) {
-        cell.setAttribute('contenteditable', 'true')
-        for (const a of LEGACY_ATTRS) cell.removeAttribute(a)
-        if (cell.hasAttribute('style')) {
-          for (const p of SIZE_BORDER_PROPS) cell.style.removeProperty(p)
-          if (cell.getAttribute('style') === '') cell.removeAttribute('style')
-        }
-        if (!cell.innerHTML.trim()) cell.innerHTML = '<br>'
-      }
-    }
+    const out = normalizeContentHtml(body.innerHTML)
+    // 行の中の文字だけを写した断片は、行の中へ入る。本文の形は本文直下の文字を段落に
+    // 包むが、貼り付けではその包みを付けない（付けると、貼っただけで行が割れる）
+    const inlineOnly = ![...body.childNodes].some((n) => n.nodeType === 1 &&
+      !/^(SPAN|A|B|STRONG|I|EM|U|S|DEL|INS|STRIKE|CODE|KBD|SUB|SUP|SMALL|BIG|MARK|FONT|BR|IMG|RUBY|RT|RP|Q|ABBR|CITE|TIME|LABEL|BUTTON|WBR|TT|SAMP|VAR|DFN|BDI|BDO|DATA)$/.test(n.tagName))
+    const m = /^<p>([\s\S]*)<\/p>$/.exec(out)
+    if (inlineOnly && m && !m[1].includes('<p')) return m[1]
+    return out
   }
 
   /**
@@ -8916,8 +8962,8 @@ export class KuroEditor {
         // (書き換え・コードブロック再配線は編集ではないので dirty 検知は止める。
         //  ソースモードで実際に編集していれば sourceArea の input で dirty 済み)
         this._suspendDirty(() => {
-          // HTML タブで打たれたものも setContent と同じ守りを通す
-          this.wysiwyg.innerHTML = renderSpecialLinks(sanitizeContentHtml(this.sourceArea.value), this.options.urlResolver, this._supportedKinds)
+          // HTML タブで打たれたものも setContent と同じくエディタの形へ写す
+          this.wysiwyg.innerHTML = renderSpecialLinks(normalizeContentHtml(this.sourceArea.value), this.options.urlResolver, this._supportedKinds)
           this._wrapAtomicBlocks(this.wysiwyg)
           this._ensureCaretSlots()
           this._initAllCodeBlocks()
@@ -9821,28 +9867,6 @@ export class KuroEditor {
    * ⚠ 呼ぶのは _suspendDirty の中（過去の不具合の後始末であって編集ではないので、
    *   開いただけで保存ボタンを点けない）。
    */
-  /** root の下のコメントを全部。 */
-  _commentsIn(root) {
-    const out = []
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT)
-    for (let n = w.nextNode(); n; n = w.nextNode()) out.push(n)
-    return out
-  }
-
-  /**
-   * 正の整数でない colspan / rowspan を外す（`colspan="undefined"` など）。
-   * 道具は cellSpan() で 1 として扱うので動くが、属性が残ると保存・公開ページにも出る。
-   */
-  _repairTableSpans(root) {
-    for (const cell of root.querySelectorAll('td[colspan], th[colspan], td[rowspan], th[rowspan]')) {
-      for (const name of ['colspan', 'rowspan']) {
-        if (!cell.hasAttribute(name)) continue
-        const n = Number(cell.getAttribute(name))
-        if (!(Number.isInteger(n) && n >= 1) || n === 1) cell.removeAttribute(name)
-      }
-    }
-  }
-
   _dropStaleFrameIndent(root) {
     for (const el of root.querySelectorAll(FRAME_SELECTOR)) {
       if (el.style.paddingLeft) el.style.removeProperty('padding-left')
@@ -10603,7 +10627,11 @@ export class KuroEditor {
         break
       case 'table':    this._insertTable();     break
       case 'code':     this._insertCodeBlock(); break
-      case 'hr':       this._insertHR();        break
+      case 'hr':
+        // 色を選んでから引く（選ばずに閉じれば何も入らない）
+        this._saveRange()
+        this.hrPanel.toggle(anchorEl ?? this._mmenuBtns.hr)
+        break
       case 'link':     this._insertLink();      break
       case 'media':    this._promptMedia();     break
       case 'roundbox': this._insertRoundbox();  break
@@ -11081,9 +11109,6 @@ export class KuroEditor {
         this._wrapAtomicBlocks(this.wysiwyg)
         this._ensureCaretSlots()
         this._dropStaleFrameIndent(this.wysiwyg)
-        this._repairTableSpans(this.wysiwyg)
-        // コメントは本文ではない（貼り付けで落とすのと同じ。前に保存された分もここで外れる）
-        for (const c of this._commentsIn(this.wysiwyg)) c.remove()
         this._initAllCodeBlocks()
         if (this.options.blockIds) this._refreshBlockIds()
       })
@@ -11277,9 +11302,19 @@ export class KuroEditor {
     for (const [reel, d] of reels) reel.style.transform = `translateY(${-d}em)`
   }
 
-  _insertHR() {
+  /**
+   * 水平線を引く。色は水平線ボタンの色の選び場（HrColorPanel）で選ぶ。
+   * @param {string|null} [color]  null = テーマの線の色（色を書かない）
+   */
+  _insertHR(color = null) {
     this.wysiwyg.focus()
-    execFormat('insertHTML', '<hr class="kuro-hr"><p><br></p>')
+    if (this._savedRange) {
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(this._savedRange)
+    }
+    const c = color ? cssColor(color) : null
+    execFormat('insertHTML', `<hr class="kuro-hr"${c ? ` style="border-top-color: ${c}"` : ''}><p><br></p>`)
   }
 
   /**
@@ -11606,9 +11641,10 @@ export class KuroEditor {
    * @param {string} html
    */
   setContent(html) {
-    // 保存済みの本文は古い版・API・他の道具が書いたものかもしれない。innerHTML は
-    // <img onerror> を動かし <style> を管理画面ごと塗り替えるので、入れる前に R0 を通す。
-    const rendered = renderSpecialLinks(sanitizeContentHtml(html ?? ''), this.options.urlResolver, this._supportedKinds)
+    // 保存済みの本文は古い版・API・他の道具が書いたものかもしれない。入れる前に
+    // エディタの形へ写す（normalize.js の conform。R0 の守りも含む）。壊れた colspan・
+    // コメント・知らない包み…を、開いた時点で直す（2026-10-17「本文の形」）。
+    const rendered = renderSpecialLinks(normalizeContentHtml(html ?? ''), this.options.urlResolver, this._supportedKinds)
     this._suspendDirty(() => {
       this.wysiwyg.innerHTML = rendered
       // Box top-level inline cards / bare <br>s so the caret can navigate them.
@@ -11617,9 +11653,6 @@ export class KuroEditor {
       this._wrapAtomicBlocks(this.wysiwyg)
       this._ensureCaretSlots()
       this._dropStaleFrameIndent(this.wysiwyg)
-      this._repairTableSpans(this.wysiwyg)
-      // コメントは本文ではない（貼り付けで落とすのと同じ。前に保存された分もここで外れる）
-      for (const c of this._commentsIn(this.wysiwyg)) c.remove()
       if (this._mode === 'source') this.sourceArea.value = html ?? ''
       this.toc._doUpdate()
       this._initAllCodeBlocks()
@@ -11638,6 +11671,7 @@ export class KuroEditor {
     this.linkEditPopup.close()
     this.linePopupMenu.close()   // 罫線ポップアップ（差し替え前の表を指したまま残る）
     this.emojiPanel.hide()
+    this.hrPanel.hide()
     this.mediaDialog?.hide?.()
     this._clearDirty()  // プログラムからの差し替えは「未保存の変更」ではない
     this._resetHistory()     // 新しい文書 — それ以前の手には undo で戻さない
@@ -11870,7 +11904,9 @@ export class KuroEditor {
   /** Render a stored-form block html (with [[...]] tokens) into a DOM element. */
   _renderBlock(storedHtml) {
     const tmp = document.createElement('div')
-    // updateBlock / applyOps（他の端末・AI からの書き込み）も外から来る HTML
+    // updateBlock / applyOps（他の端末・AI からの書き込み）も外から来る HTML。
+    // ⚠ ここは R0 の守りだけ。形への写しはブロックを 2 つ以上に割ることがあり、
+    //   firstElementChild だけ取ると残りの文字が消える。形は保存（getContent）で揃う。
     tmp.innerHTML = renderSpecialLinks(sanitizeContentHtml(storedHtml ?? ''), this.options.urlResolver, this._supportedKinds)
     return tmp.firstElementChild
   }
@@ -12579,6 +12615,7 @@ export class KuroEditor {
     this.linkEditPopup.destroy()
     this.linkOpenDialog.destroy()
     this.emojiPanel.destroy()
+    this.hrPanel.destroy()
     this.mediaDialog.destroy()
     this.imageMenu.destroy()
     this.mmenu.remove()   // fixed to body (or modalToolbar) — remove separately

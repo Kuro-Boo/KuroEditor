@@ -58,8 +58,8 @@ describe('貼り付けの掃除（許可リスト）', () => {
 
   it('太字 / 斜体の意味は残す（span でコピーされた強調を失わない）', () => {
     const out = ed._sanitizePastedHTML('<span style="font-weight: 700; font-style: italic">強調</span>')
-    expect(out).toMatch(/font-weight/)
-    expect(out).toMatch(/font-style/)
+    // 書式のスタイルはエディタのタグへ写る（太字 → <strong>、斜体 → <em>）
+    expect(out).toBe('<strong><em>強調</em></strong>')   // 行の中の文字は段落に包まない
   })
 
   it('色・背景は残さない（暗いテーマからのコピーが明るいページで読めなくなる）', () => {
@@ -133,7 +133,7 @@ describe('貼り付けの掃除（許可リスト）', () => {
       '<p><a href="javascript:alert(1)">a</a><a href="jav&#x09;ascript:alert(1)">b</a>' +
       '<img src="javascript:alert(1)" alt=""><a href="data:text/html,x">c</a></p>')
     expect(out).not.toMatch(/javascript|data:text/i)
-    expect(out).toContain('>a</a>')   // 文字は落とさない
+    expect(out).toMatch(/^<p>a/)   // 文字は落とさない（行き先の無いリンクは文字になる）
   })
 
   it('安全な href / src はそのまま（mailto・相対パス・data:image）', () => {

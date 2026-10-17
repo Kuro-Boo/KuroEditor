@@ -1,345 +1,288 @@
 /**
- * Shared content normalization (editor paste / host API / maintenance cleaner).
- * The rules were derived from measured damage in the live corpus — see
- * src/normalize.js for the counts.
+ * 本文の形（normalize.js の conform）— エディタの形以外は、すべてエディタの形へ写す。
+ *
+ * 約束（2026-10-17 利用者の決定。Admin 仕様「本文の形」）:
+ *   1. 文字は絶対に消さない
+ *   2. 選べない値は近いものを採る。無ければ初期値（書かない）
+ *   3. エディタが書かない機能の記法（data-*・id・kuro-/kurocms- のコメント・[[…]]）は残す
+ *
+ * 実データでの確かめ（2026-10-17）: Admin の文書 929・entamy.com の記事 220・
+ * kuro.boo の記事 2,594 で、Chrome で読んだ文字の欠け 0・2 回目の変化 0。
  */
 import { describe, it, expect } from 'vitest'
-import { normalizeContentHtml, inspectContentHtml } from '../src/normalize.js'
+import { normalizeContentHtml, inspectContentHtml, conformContentHtml, cssColor } from '../src/normalize.js'
 
 const N = normalizeContentHtml
 
-describe('bold is spelled one way (<strong>)', () => {
-  it('rewrites <b> to <strong>', () => {
-    expect(N('<p>a <b>bold</b> c</p>')).toBe('<p>a <strong>bold</strong> c</p>')
+describe('約束 1: 文字は絶対に消さない', () => {
+  it('知らないタグは、文中の山括弧の書き損じとして文字に戻す（綴りもそのまま）', () => {
+    expect(N('<p>x <app>y</app> <Pid></p>')).toBe('<p>x &lt;app&gt;y&lt;/app&gt; &lt;Pid&gt;</p>')
   })
 
-  it('rewrites a span whose only style is a bold font-weight', () => {
-    expect(N('<p><span style="font-weight: 700;">x</span></p>'))
-      .toBe('<p><strong>x</strong></p>')
-    expect(N('<p><span style="font-weight:bold">x</span></p>'))
-      .toBe('<p><strong>x</strong></p>')
-    expect(N('<p><span style="font-weight: bolder;">x</span></p>'))
-      .toBe('<p><strong>x</strong></p>')
+  it('属性に見えない名前を持つタグも文字に戻す（"<A função …>" はブラウザでは消える）', () => {
+    expect(N('<div><b><A função de uso final não é um bônus></b></div>'))
+      .toBe('<p><strong>&lt;A função de uso final não é um bônus&gt;</strong></p>')
   })
 
-  it('leaves a span that also carries other styling', () => {
-    // collapsing this to <strong> would silently drop the size
-    const src = '<p><span style="font-weight: 700; font-size: 1.25rem;">x</span></p>'
-    expect(N(src)).toBe(src)
+  it('<button> や <label> は外しても、中の文字は残す', () => {
+    expect(N('<p>押す<button>ここ</button><label>名前</label></p>')).toBe('<p>押すここ名前</p>')
   })
 
-  it('leaves a non-bold font-weight alone', () => {
-    const src = '<p><span style="font-weight: 400;">x</span></p>'
-    expect(N(src)).toBe(src)
+  it('見出しが飲み込んだ本文を兄弟に戻し、後ろの地の文も段落として拾う', () => {
+    expect(N('<h1>見出し<p>本文</p>あとがき</h1>')).toBe('<h1>見出し</h1><p>本文</p><p>あとがき</p>')
   })
 
-  it('keeps <strong> untouched (idempotent on already-clean content)', () => {
-    const src = '<p>a <strong>b</strong> c</p>'
-    expect(N(src)).toBe(src)
+  it('表の外の文字・セルの外の文字も拾う', () => {
+    expect(N('<table><tr><td>a</td>外</tr></table>'))
+      .toBe('<table class="kuro-table"><tbody><tr><td contenteditable="true">a外</td></tr></tbody></table>')
+  })
+
+  it('<textarea> の中身は段落の文字になる', () => {
+    expect(N('<textarea>書きかけ</textarea>')).toBe('<p>書きかけ</p>')
   })
 })
 
-describe('paragraphs are <p>', () => {
-  it('renames a div paragraph to p, keeping attributes', () => {
+describe('約束 2: 選べない値は近いものへ、無ければ書かない', () => {
+  it('文字サイズはエディタの 7 段へ寄せる（100% は書かない）', () => {
+    expect(N('<p><span style="font-size: 140%">a</span></p>')).toBe('<p><span style="font-size: 150%">a</span></p>')
+    expect(N('<p><span style="font-size: 14px">a</span></p>')).toBe('<p><span style="font-size: 85%">a</span></p>')
+    expect(N('<p><span style="font-size: 16px">a</span></p>')).toBe('<p>a</p>')
+    expect(N('<p><span style="font-size: 1.5rem">a</span></p>')).toBe('<p><span style="font-size: 150%">a</span></p>')
+  })
+
+  it('入れ子の絶対値は、外側の大きさに対する比で書く', () => {
+    expect(N('<p><span style="font-size: 24px">a<span style="font-size: 24px">b</span></span></p>'))
+      .toBe('<p><span style="font-size: 150%">ab</span></p>')
+  })
+
+  it('見出しの中の絶対値は見出しの大きさに任せる', () => {
+    expect(N('<h2><span style="font-size: 24px">見出し</span></h2>')).toBe('<h2>見出し</h2>')
+  })
+
+  it('行間は 6 段、字下げは 2em 刻み', () => {
+    expect(N('<p style="line-height: 1.5; padding-left: 30px">a</p>'))
+      .toBe('<p style="line-height: 1.4; padding-left: 2em">a</p>')
+  })
+
+  it('無い種類の callout は近い種類へ', () => {
+    expect(N('<div class="kuro-callout kuro-callout--info"><p>a</p></div>'))
+      .toBe('<div class="kuro-callout kuro-callout--note"><p>a</p></div>')
+    expect(N('<div class="kuro-callout kuro-callout--warning"><p>a</p></div>'))
+      .toBe('<div class="kuro-callout kuro-callout--warn"><p>a</p></div>')
+  })
+
+  it('角丸ボックスの幅・配置は選べる値へ寄せ、style は data-* から作り直す', () => {
+    expect(N('<div class="kuro-roundbox" data-align="left" data-width="58%" style="width:58%"><p>a</p></div>'))
+      .toBe('<div class="kuro-roundbox" data-align="left" data-width="60%" style="width: 60%; float: left; margin: 0 1em 1em 0"><p>a</p></div>')
+  })
+
+  it('書体は serif / sans-serif / Web フォントだけ（Arial などの並びは書かない）', () => {
+    expect(N('<p><span style="font-family: Arial, sans-serif">a</span></p>')).toBe('<p>a</p>')
+    expect(N(`<p><span style="font-family: 'Hiragino Mincho ProN', serif">a</span></p>`))
+      .toBe('<p><span style="font-family: serif">a</span></p>')
+    expect(N('<p><span style="font-family: &quot;Noto Sans JP&quot;, sans-serif">a</span></p>'))
+      .toBe('<p><span style="font-family: &quot;Noto Sans JP&quot;, sans-serif">a</span></p>')
+  })
+
+  it('罫線は「幅 線種 色」のエディタの書き方（4 辺）へ', () => {
+    expect(N('<table><tr><td style="border: 1px solid #ddd">a</td></tr></table>'))
+      .toBe('<table class="kuro-table"><tbody><tr><td style="border-top: 1px solid #ddd; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; border-left: 1px solid #ddd" contenteditable="true">a</td></tr></tbody></table>')
+  })
+
+  it('背景と組で決めた文字色は、背景を落とすなら一緒に落とす（白地に白い字を残さない）', () => {
+    expect(N('<p><a href="https://x.example" style="background:#030712;color:#fff;font-weight:700">見る</a></p>'))
+      .toBe('<p><a href="https://x.example"><strong>見る</strong></a></p>')
+  })
+})
+
+describe('約束 3: 機能の記法は残す', () => {
+  it('data-* と id は残る（ページ内リンクの行き先・ホストの機能）', () => {
+    expect(N('<h3 id="a-s1">見出し</h3><p data-x="1">a</p>')).toBe('<h3 id="a-s1">見出し</h3><p data-x="1">a</p>')
+  })
+
+  it('中身の無い機能の要素も残る（entamy.com の <a data-brand-site href>）', () => {
+    expect(N('<p><a data-brand-site href="https://kuro.boo"></a>本文</p>'))
+      .toBe('<p><a data-brand-site="" href="https://kuro.boo"></a>本文</p>')
+  })
+
+  it('外した器の data-* / id は、最初のブロックへ移す', () => {
+    expect(N('<section id="purpose" data-source-doc-id="s17"><h2>目的</h2><p>a</p></section>'))
+      .toBe('<h2 id="purpose" data-source-doc-id="s17">目的</h2><p>a</p>')
+  })
+
+  it('kuro- / kurocms- のコメントだけ残す', () => {
+    expect(N('<p>a</p><!-- kurocms-reactions:off --><!--TgQPHd|||[]--><p>b</p>'))
+      .toBe('<p>a</p><!-- kurocms-reactions:off --><p>b</p>')
+  })
+
+  it('data-kuro-* を持つ部品（レシピカード等）は中まで触らない', () => {
+    const card = '<div data-kuro-block="recipe-card" data-recipe="x" data-recipe-version="1"><div class="kuro-recipe__head" style="color:red">鍋</div></div>'
+    expect(N(card)).toBe(card)
+  })
+
+  it('[[…]] は文字なので残る。本文直下の URL カード・メディアと <br> は段落で包まない', () => {
+    expect(N('<p>text</p>[[https://a.example|]]<br>[[img-1|60%,right]]'))
+      .toBe('<p>text</p>[[https://a.example|]]<br>[[img-1|60%,right]]')
+  })
+})
+
+describe('エディタの形', () => {
+  it('<b>・太字の span → <strong>、<i>・斜体 → <em>、下線・取り消し線もタグへ', () => {
+    expect(N('<p><b>a</b><i>b</i><span style="text-decoration: underline">c</span><del>d</del></p>'))
+      .toBe('<p><strong>a</strong><em>b</em><u>c</u><s>d</s></p>')
+  })
+
+  it('<font> は span の書き方へ', () => {
+    expect(N('<p><font color="#ff0000" size="5">a</font></p>'))
+      .toBe('<p><span style="color: #ff0000; font-size: 150%">a</span></p>')
+  })
+
+  it('意味の無い div は段落、ブロックを抱えていれば外す', () => {
     expect(N('<div data-bid="x-1">text</div>')).toBe('<p data-bid="x-1">text</p>')
+    expect(N('<div style="font-family: Arial"><div dir="ltr"><p>a</p><p>b</p></div></div>')).toBe('<p>a</p><p>b</p>')
   })
 
-  it('only a BARE div is treated as a paragraph', () => {
-    // A div carrying anything (class/style/data-*) may be a real container.
-    // We cannot prove it is a paragraph, so the tag is left alone.
-    const styled = '<div style="text-align: center;">c</div>'
-    expect(N(styled)).toBe(styled)
+  it('ブロックに付いた文字装飾は落とす（R6 を引き継ぐ）', () => {
+    expect(N('<p style="font-size: 15px; font-weight: 400;">本文</p>')).toBe('<p>本文</p>')
   })
 
-  it('never turns a structural container into a paragraph (regression)', () => {
-    // These are real shapes from the corpus. Renaming any of them to <p> is
-    // destructive: a <p> cannot hold block content, and the editor's callout /
-    // code-block handling looks for the container element.
-    const callout = '<div class="kuro-callout kuro-callout--tip">tip text</div>'
-    expect(N(callout)).toBe(callout)
-    const codeWrap = '<div data-language="plain" spellcheck="false">x</div>'
-    expect(N(codeWrap)).toBe(codeWrap)
-    const tableWrap = '<div class="kuro-table">cells</div>'
-    expect(N(tableWrap)).toBe(tableWrap)
+  it('書式の要素がブロックを抱えていたら、書式をブロックの内側へ配る', () => {
+    expect(N('<span style="font-size: 24px"><p>a</p><p>b</p></span>'))
+      .toBe('<p><span style="font-size: 150%">a</span></p><p><span style="font-size: 150%">b</span></p>')
   })
 
-  it('does not unwrap a container just because it holds blocks', () => {
-    const src = '<div class="kuro-callout"><p>a</p><p>b</p></div>'
-    expect(N(src)).toBe(src)
+  it('表: kuro-table・tbody 1 つ・長方形・壊れた colspan は外す・空のセルは <br>', () => {
+    expect(N('<table border="1"><thead><tr><th colspan="undefined">A</th><th>B</th></tr></thead><tbody><tr><td></td></tr></tbody></table>'))
+      .toBe('<table class="kuro-table"><tbody><tr><th contenteditable="true">A</th><th contenteditable="true">B</th></tr>' +
+        '<tr><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr></tbody></table>')
   })
 
-  it('unwraps a bare div that only wraps blocks', () => {
-    expect(N('<div data-bid="w"><p>a</p><p>b</p></div>'))
+  it('列幅は列数が合うときだけ % で残す（px は比率に直す）', () => {
+    expect(N('<table><colgroup><col width="100"><col width="300"></colgroup><tr><td>a</td><td>b</td></tr></table>'))
+      .toBe('<table class="kuro-table"><colgroup><col style="width: 25.0000%"><col style="width: 75.0000%"></colgroup>' +
+        '<tbody><tr><td contenteditable="true">a</td><td contenteditable="true">b</td></tr></tbody></table>')
+    expect(N('<table><colgroup><col width="100"></colgroup><tr><td>a</td><td>b</td></tr></table>')).not.toContain('colgroup')
+  })
+
+  it('コードブロックは <pre class="kuro-code" data-gutter><code>文字だけ</code></pre>', () => {
+    expect(N('<pre><span class="k">if</span> a\nb</pre>'))
+      .toBe('<pre class="kuro-code" data-gutter="1\n2"><code>if a\nb</code></pre>')
+    expect(N('<div spellcheck="false"><div data-language="plain">a</div><div data-language="plain">b</div></div>'))
+      .toBe('<pre class="kuro-code" data-gutter="1\n2"><code>a\nb</code></pre>')
+  })
+
+  it('水平線は kuro-hr、色は border-top-color だけ', () => {
+    expect(N('<hr style="font-size:14px">')).toBe('<hr class="kuro-hr">')
+    expect(N('<hr style="border: 0; border-top: 2px solid #ef4444">')).toBe('<hr class="kuro-hr" style="border-top-color: #ef4444">')
+  })
+
+  it('リスト: 項目の外の文字は項目に、入れ子は直前の項目の子に', () => {
+    expect(N('<ul>外<li>a</li><ul><li>b</li></ul></ul>'))
+      .toBe('<ul><li>外</li><li>a<ul><li>b</li></ul></li></ul>')
+    expect(N('<ol type="a" start="3"><li>x</li></ol>')).toBe('<ol class="kuro-list-alpha" start="3"><li>x</li></ol>')
+  })
+
+  it('器の外の <li> は <ul> に入れる', () => {
+    expect(N('<li>a</li><li>b</li>')).toBe('<ul><li>a</li><li>b</li></ul>')
+  })
+
+  it('本文直下の文字は段落に入れる', () => {
+    expect(N('a<b>b</b><p>c</p>')).toBe('<p>a<strong>b</strong></p><p>c</p>')
+  })
+
+  it('前の版が <p> に化けさせた器を戻す（R5 を引き継ぐ）', () => {
+    expect(N('<p class="kuro-callout kuro-callout--tip">tip</p>'))
+      .toBe('<div class="kuro-callout kuro-callout--tip"><p>tip</p></div>')
+  })
+
+  it('data-bid は 1 ブロックに 1 つ（R8 を引き継ぐ）', () => {
+    const out = N('<h1 data-bid="A">見出し<p data-bid="B">本文</p></h1>')
+    expect(out).toBe('<h1 data-bid="A">見出し</h1><p>本文</p>')
+  })
+
+  it('空の段落: <br> のあるものは 1 つの空行、何も無いものは捨てる', () => {
+    expect(N('<div><br><br></div>')).toBe('<p><br></p>')
+    expect(N('<p>   </p><p>a</p>')).toBe('<p>a</p>')
+    expect(N('<p>&nbsp;</p>')).toBe('<p>&nbsp;</p>')
+  })
+
+  it('文字参照はブラウザ（innerHTML）と同じ書き方に揃える — 開いて保存しても変わらない', () => {
+    expect(N('<p><a href="https://x.example/?a=1&b=2" title="&copy; x">a</a></p>'))
+      .toBe('<p><a href="https://x.example/?a=1&amp;b=2" title="© x">a</a></p>')
+    expect(N('<p>Q&A &#x20bb7; a > b &nbsp;&copy &bigstar;</p>'))
+      .toBe('<p>Q&amp;A 𠮷 a &gt; b &nbsp;© &bigstar;</p>')
+  })
+
+  it('段落の中の画像の [[…]] は段落の外へ（ブラウザも図の手前で段落を閉じる）', () => {
+    expect(N('<p>まえ[[img-1|60%,right]]あと</p><p>[[https://a.example|]]</p>'))
+      .toBe('<p>まえ</p>[[img-1|60%,right]]<p>あと</p><p>[[https://a.example|]]</p>')
+  })
+})
+
+describe('壊れた HTML も必ず形にする', () => {
+  it('閉じ忘れは親で閉じる', () => {
+    expect(N('<p>unclosed')).toBe('<p>unclosed</p>')
+    expect(N('</p>')).toBe('')
+  })
+
+  it('交差したタグは、開いた順に閉じる', () => {
+    expect(N('<p><b><i>x</b></i></p>')).toBe('<p><strong><em>x</em></strong></p>')
+  })
+
+  it('Google の AI の回答のコピー（plaimy-rival の実例）', () => {
+    const src = '<div style="font-family: Arial, sans-serif;"><button style="font-size: 13.3px"></button>' +
+      '<p><span style="font-size: 16px; font-weight: 700;">Steam</span><span style="font-size: 14px;">。</span></p></div>' +
+      '<div><div style="margin-left: -0.22px;"><div dir="ltr"><br><p>前置き<!--TgQPHd|||[]--></p>' +
+      '<table class="kuro-table"><tbody><tr><th colspan="undefined">順位<!--TgQPHd|||[]--></th></tr></tbody></table>' +
+      '<hr style="font-size: 14px;"></div></div></div>'
+    expect(N(src)).toBe('<p><strong>Steam</strong><span style="font-size: 85%">。</span></p><br><p>前置き</p>' +
+      '<table class="kuro-table"><tbody><tr><th contenteditable="true">順位</th></tr></tbody></table><hr class="kuro-hr">')
+  })
+
+  it('Google スプレッドシートの包み（<google-sheets-html-origin>）は外す', () => {
+    expect(N('<google-sheets-html-origin><table><tr><td>a</td></tr></table></google-sheets-html-origin>'))
+      .toBe('<table class="kuro-table"><tbody><tr><td contenteditable="true">a</td></tr></tbody></table>')
+  })
+})
+
+describe('守り（R0）と性質', () => {
+  it('script / style / on* / javascript: は落ちる', () => {
+    expect(N('<p onclick="x()">a<script>alert(1)</script></p><style>p{}</style><a href="javascript:x">b</a>'))
       .toBe('<p>a</p><p>b</p>')
   })
 
-  it('does NOT unwrap a block wrapper that carries styling', () => {
-    const src = '<div style="text-align: center;"><p>a</p></div>'
-    expect(N(src)).toBe(src)
-  })
-
-  it('leaves <p> alone', () => {
-    expect(N('<p>a</p>')).toBe('<p>a</p>')
-  })
-})
-
-describe('empty blocks', () => {
-  it('top-level empty div becomes an empty paragraph', () => {
-    expect(N('<div><br></div>')).toBe('<p><br></p>')
-  })
-
-  it('nested empty div degrades to a line break', () => {
-    expect(N('<div data-bid="w"><p>a</p><div><br></div></div>'))
-      .toBe('<p>a</p><br>')
-  })
-
-  it('an empty <p> stays a single <br> paragraph', () => {
-    expect(N('<p><br></p>')).toBe('<p><br></p>')
-  })
-
-  it('a COLLAPSED blank block never gains a <br> (it must stay zero-height)', () => {
-    // <p>\n</p> renders as nothing; <p><br></p> renders as one blank line.
-    // Rewriting the first into the second would insert visible blank lines.
-    expect(N('<p>\n</p>')).toBe('<p>\n</p>')
-    expect(N('<p>   </p>')).toBe('<p>   </p>')
-    expect(N('<div>  </div>')).toBe('<p>  </p>')
-  })
-
-  it('a nested collapsed block is dropped, a nested <br> block keeps its line', () => {
-    expect(N('<div data-bid="w"><p>a</p><div> </div></div>')).toBe('<p>a</p>')
-    expect(N('<div data-bid="w"><p>a</p><div><br></div></div>')).toBe('<p>a</p><br>')
-  })
-
-  it('collapses multiple <br> in a blank block to one', () => {
-    expect(N('<div><br><br></div>')).toBe('<p><br></p>')
-  })
-
-  it('&nbsp; is content, not emptiness', () => {
-    expect(N('<p>&nbsp;</p>')).toBe('<p>&nbsp;</p>')
-  })
-})
-
-describe('safety', () => {
-  it('never touches code / pre subtrees', () => {
-    const src = '<pre class="kuro-code"><code>if (a &lt; b) { x = "<b>y</b>" }</code></pre>'
-    expect(N(src)).toBe(src)
-  })
-
-  it('returns malformed HTML unchanged', () => {
-    const src = '<p>unclosed'
-    expect(N(src)).toBe(src)
-    expect(N('</p>')).toBe('</p>')
-  })
-
-  it('preserves entities and attributes byte-for-byte when nothing matches', () => {
-    const src = '<p class="x" data-bid="k">a &amp; b &lt;c&gt; &quot;d&quot;</p>'
-    expect(N(src)).toBe(src)
-  })
-
-  it('preserves media / link tokens and void tags', () => {
-    const src = '<p>[[img-1]]</p><figure class="kuro-media-wrap"><img src="a.png"></figure><hr class="kuro-hr">'
-    expect(N(src)).toBe(src)
-  })
-
-  it('is idempotent', () => {
-    const src = '<div><b>a</b></div><div><br></div><div data-bid="w"><p>x</p></div>'
+  it('冪等', () => {
+    const src = '<div><b>a</b></div><div><br></div><div data-bid="w"><p>x</p></div><table><tr><td style="border:1px solid red">c</td></tr></table>'
     const once = N(src)
     expect(N(once)).toBe(once)
   })
 
-  it('handles empty / non-string input', () => {
+  it('空・文字列以外', () => {
     expect(N('')).toBe('')
     expect(N(null)).toBe('')
     expect(N(undefined)).toBe('')
   })
-})
 
-describe('ブロックに付いた文字装飾は混入 (R6)', () => {
-  // エディタが文字サイズを書くのは <span style="font-size:…"> だけ (_applyFontSize)、
-  // 太字は <strong>。ブロックに付いた font-size / font-weight は Chrome のコピーが
-  // 焼き込んだ計算済みスタイルだと断定できる。
-  it('見出し・段落・セルから font-size / font-weight を落とす', () => {
-    expect(N('<p style="font-size: 15px; font-weight: 400;">本文</p>')).toBe('<p>本文</p>')
-    expect(N('<h2 style="font-weight: 700">見出し</h2>')).toBe('<h2>見出し</h2>')
-    expect(N('<td style="font-size: 13px">セル</td>')).toBe('<td>セル</td>')
-    expect(N('<li style="font-size: 13px">項目</li>')).toBe('<li>項目</li>')
+  it('normalizeContentHtml は conformContentHtml と同じ（旧い名前・旧いオプションは無視）', () => {
+    const src = '<h1><p style="font-size: 15px">本文</p></h1>'
+    expect(N(src, { clipboardRepair: false })).toBe(conformContentHtml(src))
   })
 
-  it('span に付いたものは書き手の指定なので残す', () => {
-    const src = '<p><span style="font-size: 150%;">大きく</span></p>'
-    expect(N(src)).toBe(src)
-  })
-
-  it('同じ style の他の指定は一字一句そのまま残す', () => {
-    // 値を作り直すと font-family の大文字小文字まで書き換わる。落とすのは
-    // 該当の宣言だけで、残りは元の綴りのまま。
-    expect(N(`<p style="text-align: center; font-size: 15px; font-family: 'Noto Sans JP';">x</p>`))
-      .toBe(`<p style="text-align: center; font-family: 'Noto Sans JP'">x</p>`)
-  })
-
-  it('style が空になったら属性ごと消える（div は段落として扱えるようになる）', () => {
-    expect(N('<div style="font-size: 15px">本文</div>')).toBe('<p>本文</p>')
-  })
-
-  it('冪等', () => {
-    const once = N('<p style="font-size: 15px; font-weight: 400;">本文</p>')
-    expect(N(once)).toBe(once)
-  })
-})
-
-describe('ブロックを内包した見出し・段落は解く (R7 / R8)', () => {
-  it('見出しが飲み込んだ本文を兄弟に戻す', () => {
-    expect(N('<h1>見出し<p>本文</p></h1>')).toBe('<h1>見出し</h1><p>本文</p>')
-  })
-
-  it('自分のテキストを持たない包みは消える（Chrome の文脈要素そのもの）', () => {
-    // 選択が見出しの内側から始まると、Chrome は記事全体をその見出しで包む。
-    expect(N('<h1><p style="font-size: 15px">本文</p><h2>次の見出し</h2></h1>'))
-      .toBe('<p>本文</p><h2>次の見出し</h2>')
-  })
-
-  it('文字は絶対に落とさない —— ブロックの後ろに続く地の文も残す', () => {
-    // タグは捨ててよいが中身の文字は捨てない。見出しの後に来た地の文は
-    // 段落として拾う（ブロックが始まった時点で見出しではなくなっている）。
-    const out = N('<h1>見出し<p>本文</p>あとがき</h1>')
-    expect(out).toBe('<h1>見出し</h1><p>本文</p><p>あとがき</p>')
-    expect(out).toContain('あとがき')
-  })
-
-  it('ブロックの間の空白は行を占めないので捨てる', () => {
-    expect(N('<h1>\n  <p>本文</p>\n</h1>')).toBe('<p>本文</p>')
-  })
-
-  it('空行は空行のまま残る', () => {
-    expect(N('<h1><p>一</p><p><br></p><p>二</p></h1>'))
-      .toBe('<p>一</p><p><br></p><p>二</p>')
-  })
-
-  it('data-bid は外側のものを1つだけ残す (R8)', () => {
-    // 共同編集のため 1 ブロック 1 bid・重複なしが不変条件。中途半端に残すと
-    // _dedupeNestedBids がどちらかを振り直し、他の人が編集中のブロックの id が変わる。
-    const out = N('<h1 data-bid="A">見出し<p data-bid="B">本文</p></h1>')
-    expect(out).toBe('<h1 data-bid="A">見出し</h1><p>本文</p>')
-    expect(out.match(/data-bid/g)).toHaveLength(1)
-  })
-
-  it('外側が持っていなければ内側のものを昇格させる', () => {
-    expect(N('<h1><p data-bid="B">本文</p><p data-bid="C">続き</p></h1>'))
-      .toBe('<p data-bid="B">本文</p><p>続き</p>')
-  })
-
-  it('段落がブロックを抱えている場合も同じ', () => {
-    expect(N('<p>まえ<ul><li>項目</li></ul></p>')).toBe('<p>まえ</p><ul><li>項目</li></ul>')
-  })
-
-  it('li / td は元からブロックを持てるので触らない', () => {
-    const src = '<ul><li><p>本文</p></li></ul>'
-    expect(N(src)).toBe(src)
-  })
-
-  it('冪等', () => {
-    const once = N('<h1 data-bid="A">見出し<p data-bid="B">本文</p></h1>')
-    expect(N(once)).toBe(once)
-  })
-})
-
-describe('既存の公開記事を「自動では」直さない (clipboardRepair: false)', () => {
-  // R6〜R8 は R1〜R5 と違って見た目が変わる。一括掃除の副作用で走ると
-  // 公開中の記事の表示が突然変わる——「書式の正規化」で起こしてよい変更ではない。
-  // ⚠ 禁止ではなく【黙ってやらない】。意図して直すのは正当なので、呼び出し側が
-  //   明示的に選べる形は残す（KuroCMS の保守画面の既定オフのチェック）。
-  // （2026-08-16 の決定。貼り付け破壊の修正仕様。admin.entamy.com の KuroEditor）
-  const src = '<h1><p style="font-size: 15px; font-weight: 400;">本文</p></h1>'
-
-  it('明示的に外したときは R6〜R8 を掛けない', () => {
-    expect(N(src, { clipboardRepair: false })).toBe(src)
-  })
-
-  it('明示的に選べば直せる（禁止ではない）', () => {
-    expect(N(src, { clipboardRepair: true })).toBe('<p>本文</p>')
-  })
-
-  it('従来の規則 (R1〜R5) はそのまま効く', () => {
-    expect(N('<div>a</div><p><b>x</b></p>', { clipboardRepair: false }))
-      .toBe('<p>a</p><p><strong>x</strong></p>')
-  })
-
-  it('既定は【掛ける】—— 書き込み経路が取りこぼさないため', () => {
-    expect(N(src)).not.toBe(src)
-    expect(N(src, {})).not.toBe(src)
-  })
-
-  it('inspect も同じ扱い（掃除の予告件数がずれない）', () => {
-    const s = inspectContentHtml(src, { clipboardRepair: false })
-    expect(s.blockDecor).toBe(0)
-    expect(s.nestedBlocks).toBe(0)
-    expect(s.changed).toBe(false)
+  it('cssColor はテーマの変数を色と認めない', () => {
+    expect(cssColor('#FFF')).toBe('#fff')
+    expect(cssColor('var(--muted)')).toBe(null)
+    expect(cssColor('rgb(1, 2, 3)')).toBe('rgb(1, 2, 3)')
   })
 })
 
 describe('inspectContentHtml', () => {
-  it('counts what would change without changing it', () => {
-    const src = '<div>a</div><p><b>x</b></p><div><br></div>'
-    const s = inspectContentHtml(src)
+  it('変わるかどうか（正）と内訳（目安）', () => {
+    const s = inspectContentHtml('<div>a</div><p><b>x</b></p><div><br></div>')
     expect(s.bTags).toBe(1)
-    expect(s.divBlocks).toBe(1)
     expect(s.changed).toBe(true)
   })
 
-  it('コピー由来の壊れ方を数える', () => {
-    const s = inspectContentHtml('<h1><p style="font-size: 15px; font-weight: 400;">本文</p></h1>')
-    expect(s.blockDecor).toBe(1)
-    expect(s.nestedBlocks).toBe(1)
-    expect(s.changed).toBe(true)
-  })
-
-  it('reports no change for already-canonical content', () => {
-    const s = inspectContentHtml('<p>a <strong>b</strong></p><p><br></p>')
-    expect(s.changed).toBe(false)
-  })
-})
-
-describe('mismatched nesting is refused, not guessed at (regression)', () => {
-  it('leaves a body containing an unescaped "<A word …>" untouched', () => {
-    // Seen live: an article whose text contained a literal "<A função …>".
-    // It parses as an <a> that is never closed, so a lenient unwind would let
-    // the following </b> close it too and emit a </a> that was never written.
-    const src = '<div><b><A função de uso final não é um bônus></b></div>'
-    expect(N(src)).toBe(src)
-  })
-
-  it('refuses interleaved tags rather than re-ordering them', () => {
-    const src = '<p><b><i>x</b></i></p>'
-    expect(N(src)).toBe(src)
-  })
-
-  it('still normalizes a document with correctly nested inline tags', () => {
-    expect(N('<div><b><i>x</i></b></div>')).toBe('<p><strong><i>x</i></strong></p>')
-  })
-})
-
-describe('self-heals containers a previous version renamed to <p> (R5)', () => {
-  it('restores a callout that was turned into a paragraph', () => {
-    expect(N('<p class="kuro-callout kuro-callout--tip">tip</p>'))
-      .toBe('<div class="kuro-callout kuro-callout--tip">tip</div>')
-  })
-
-  it('restores a code-block wrapper', () => {
-    expect(N('<p data-language="plain" spellcheck="false">x</p>'))
-      .toBe('<div data-language="plain" spellcheck="false">x</div>')
-  })
-
-  it('leaves an ordinary styled paragraph as a paragraph', () => {
-    const src = '<p style="text-align: center;">c</p>'
-    expect(N(src)).toBe(src)
-    const classed = '<p class="lead">c</p>'
-    expect(N(classed)).toBe(classed)
-  })
-
-  it('round-trips: damage then repair returns the original container', () => {
-    const original = '<div class="kuro-callout kuro-callout--tip">tip</div>'
-    const damaged = '<p class="kuro-callout kuro-callout--tip">tip</p>'
-    expect(N(damaged)).toBe(original)
-    expect(N(N(damaged))).toBe(original)   // idempotent
+  it('形どおりなら変わらない', () => {
+    expect(inspectContentHtml('<p>a <strong>b</strong></p><p><br></p>').changed).toBe(false)
   })
 })

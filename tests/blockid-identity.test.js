@@ -237,7 +237,8 @@ describe('pasted content never imports block ids (F0-6)', () => {
       blockIds: true,
       initialContent: '<p data-bid="p-1">a <b>bold</b> <span>x</span></p>',
     })
-    expect(ed.wysiwyg.querySelector('b').hasAttribute('data-bid')).toBe(false)
-    expect(ed.wysiwyg.querySelector('span').hasAttribute('data-bid')).toBe(false)
+    // 読み込みでエディタの形へ写る（<b> → <strong>、意味の無い <span> は外れる）
+    expect(ed.wysiwyg.querySelector('strong').hasAttribute('data-bid')).toBe(false)
+    expect(ed.wysiwyg.querySelector('span')).toBe(null)
   })
 })
