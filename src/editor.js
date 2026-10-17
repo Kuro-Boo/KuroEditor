@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.41.0'
+export const VERSION = '2.42.0'
 
 /** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
 const HIST_DEBOUNCE_MS = 400
@@ -4827,6 +4827,7 @@ export class TableResizer {
     const hit = this._findBorder(e.clientX, e.clientY)
     if (!hit) return
     e.preventDefault()
+    this.onStart?.()   // 履歴の区切り（打ちかけを確定。離したときに onEnd で 1 手にする）
 
     this._resizing = true
     this._table    = hit.table
@@ -4876,6 +4877,7 @@ export class TableResizer {
     document.removeEventListener('mouseup',   this._onUp)
     document.body.classList.remove('kuro-col-resizing')
     this.wysiwyg.style.cursor = ''
+    this.onEnd?.()
   }
 
   // ── colgroup management ──────────────────────────────────────────────────
@@ -7050,6 +7052,9 @@ export class KuroEditor {
       onColBorderClick: (target, btn) => this._openLinePopup(target, btn),
     })
     this.tableResizer  = new TableResizer(this.wysiwyg)
+    // 掴んでから離すまでで 1 手。掴んだ瞬間の colgroup 作りを別の手にしない（_historyStep は使わない）。
+    this.tableResizer.onStart = () => this._commitSnapshot()
+    this.tableResizer.onEnd   = () => this._commitSnapshot()
 
     this.emojiPanel = new EmojiPanel((emoji) => {
       this.wysiwyg.focus()
@@ -7685,6 +7690,12 @@ export class KuroEditor {
       // Editing-only caret slots become real paragraphs only when the user
       // starts entering content into one.
       if (e.inputType?.startsWith('insert')) this._promoteCaretSlotAtSelection()
+      // 履歴の区切り: 貼り付け・ドロップ・切り取り・書式は【1 手】、打鍵は畳む（_historyStep）。
+      if (/^(insertFromPaste|insertFromDrop|insertFromYank|insertReplacementText|deleteByCut|deleteByDrag|format)/.test(e.inputType ?? '')) {
+        this._historyStep()
+      } else if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') {
+        this._histSeal = false   // 打鍵は操作ではない（ボタンが本文を変えなかったときの区切りを解く）
+      }
       if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') return
       // コードブロック (<textarea>) は自分の履歴を持つ（keydown と同じ扱い）。
       if (e.target.closest?.('.kuro-code-wrap')) return
@@ -7814,6 +7825,8 @@ export class KuroEditor {
     this._onDocPointerdown = (e) => {
       const btn = e.target?.closest?.('button')
       if (!btn || btn.disabled || !btn.closest('[class*="kuro-"]')) return
+      // エディタのボタンは操作 = 履歴の区切り（打った直後に押しても別の 1 手）。
+      this._historyStep()
       btn.classList.remove('kuro-tap-flash')
       void btn.offsetWidth   // reflow so a rapid re-tap restarts the animation
       btn.classList.add('kuro-tap-flash')
@@ -7863,6 +7876,7 @@ export class KuroEditor {
       // 閲覧モード: 既定動作 (ブラウザがファイルを開く) だけ止めて、挿入はしない
       if (this._mode !== 'wysiwyg') { e.preventDefault(); return }
       e.preventDefault()
+      this._historyStep()
       this.wysiwyg.classList.remove('kuro-drag-over')
 
       const files = [...(e.dataTransfer.files ?? [])]
@@ -7887,6 +7901,9 @@ export class KuroEditor {
       // 閲覧モード: contenteditable=false でもここは呼ばれる。画像ペーストは
       // 自前で挿入しているので明示的に止める（テキストはブラウザが弾く）
       if (this._mode !== 'wysiwyg') { e.preventDefault(); return }
+      // 貼り付けは 1 手（直前の打鍵とも、直後の打鍵とも混ぜない）。自前で挿す経路は
+      // beforeinput を通らないので、ここで区切る。
+      this._historyStep()
       // ① 画像ペースト
       const items = [...(e.clipboardData?.items ?? [])]
         .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
@@ -8703,9 +8720,9 @@ export class KuroEditor {
     // ── Ctrl / Cmd shortcuts ───────────────────────────────────────────────
     if (e.ctrlKey || e.metaKey) {
       switch (e.key.toLowerCase()) {
-        case 'b': e.preventDefault(); this._format('bold');      return
-        case 'i': e.preventDefault(); this._format('italic');    return
-        case 'u': e.preventDefault(); this._format('underline'); return
+        case 'b': e.preventDefault(); this._historyStep(); this._format('bold');      return
+        case 'i': e.preventDefault(); this._historyStep(); this._format('italic');    return
+        case 'u': e.preventDefault(); this._historyStep(); this._format('underline'); return
         case 'z':
         case 'y':
           // コードブロック (<textarea>) の中は、その textarea 自身の履歴に任せる。
@@ -8731,6 +8748,7 @@ export class KuroEditor {
     //   確保している内側余白（コールアウトのアイコン列など）を潰す。
     if (e.key === 'Tab') {
       e.preventDefault()
+      this._historyStep()
       const dir   = e.shiftKey ? -1 : 1
       const lines = this._linesInSelection()
       const items = lines.filter((el) => el.tagName === 'LI')
@@ -10866,14 +10884,45 @@ export class KuroEditor {
     if (!this._hist) return     // 構築中 (初回 setContent) — _initHistory がこの後走る
     clearTimeout(this._histTimer)
     this._histTimer = null
+    this._histSeal = false
+    this._histSealPending = false
     this._hist    = [{ html: this.getContent(), caret: null }]
     this._histIdx = 0
   }
 
   _scheduleSnapshot() {
     if (this._histBusy || !this._hist) return
+    // 操作の直後の確定を待っているあいだは延ばさない（_historyStep）。
+    if (this._histSealPending) return
     clearTimeout(this._histTimer)
     this._histTimer = setTimeout(() => this._commitSnapshot(), HIST_DEBOUNCE_MS)
+  }
+
+  /**
+   * 【操作の区切り】。貼り付け・ドロップ・切り取り・ボタン・書式のショートカット・
+   * Tab の前に呼ぶ（v2.42.0〜。列幅のドラッグは掴む・離すで確定する別の形。`tests/undo-redo-regressions.test.js`）。
+   *
+   * 履歴は 400ms の無操作で 1 手に畳むので、区切りが無いと【打った直後の操作】が
+   * 打った文字と同じ手に入る —— 「文字を打ってすぐ表を貼る → ⌘Z で文字まで消える」
+   * 「表を貼ってすぐ打つ → ⌘Z で表ごと消える（貼る前の 1 手が無い）」。
+   * ①打ちかけを今すぐ 1 手として確定し、②次に本文が変わったら（＝この操作の結果）
+   * 待たずに 1 手として確定する。②は打鍵（beforeinput の入力系）で解く —— ボタンを
+   * 押しても本文が変わらなかったとき、次の打鍵の 1 文字目だけが 1 手になるのを防ぐ。
+   */
+  _historyStep() {
+    if (this._histBusy || !this._hist) return
+    this._commitSnapshot()
+    this._histSeal = true
+  }
+
+  /** 本文が変わったときの履歴の入口（MutationObserver から）。 */
+  _onContentChangedForHistory() {
+    if (!this._histSeal) { this._scheduleSnapshot(); return }
+    // 区切りの後の最初の変化 = 操作の結果。同じ task の変化をまとめるため 0ms 後に確定する。
+    this._histSeal = false
+    this._histSealPending = true
+    clearTimeout(this._histTimer)
+    this._histTimer = setTimeout(() => this._commitSnapshot(), 0)
   }
 
   /** 保留中の変更を確定して 1 エントリ積む（変化が無ければ何もしない）。 */
@@ -10881,6 +10930,7 @@ export class KuroEditor {
     if (this._histBusy || !this._hist) return
     clearTimeout(this._histTimer)
     this._histTimer = null
+    this._histSealPending = false
     // ソースモード中の getContent() は sourceArea の生テキスト。ソース編集は
     // WYSIWYG に戻った時点で 1 手として積む (_setMode) ので、ここでは触らない
     if (this._mode === 'source') return
@@ -12263,7 +12313,7 @@ export class KuroEditor {
       if (!records.some((r) => this._isContentMutation(r))) return
       this._ensureCaretSlots()
       this._markDirty()         // 既に dirty なら no-op
-      this._scheduleSnapshot()
+      this._onContentChangedForHistory()
       this._scheduleBlockEmit() // W2: block 変更を onBlockChange へ（設定時のみ）
     })
     this._observeDirty()

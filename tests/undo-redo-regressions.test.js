@@ -155,3 +155,49 @@ describe('鍵盤を持たない経路からの取り消しも拾う', () => {
     expect(ed.getContent()).toContain('AB')
   })
 })
+
+describe('貼り付けなどの操作は、前後の打鍵と別の 1 手（v2.42.0）', () => {
+  beforeEach(() => { document.body.innerHTML = '' })
+
+  const flush = () => new Promise((r) => setTimeout(r, 0))
+  const TABLE = '<table><tbody><tr><td>a</td><td>b</td></tr></tbody></table>'
+
+  /**
+   * 履歴は 400ms の無操作で 1 手に畳む。区切りが無かったので、打ってすぐ表を貼ると
+   * ⌘Z 1 回で打った字まで消え、貼ってすぐ打つと表ごと消えた（貼る前の 1 手が無い）。
+   * 実機（Chrome）で再現: 打鍵 → 即貼り付け → ⌘Z で `<p>hello abc</p>` が `<p>hello</p>` に戻った。
+   */
+  it('打った直後に貼った表は、⌘Z 1 回で表だけが消える', async () => {
+    const ed = new KuroEditor(mount(), { initialContent: '<p>hello</p>' })
+    type(ed, '<p>hello abc</p>')   // 打ちかけ（400ms の内側）
+    ed._historyStep()              // 貼り付けの入口
+    ed.wysiwyg.innerHTML = '<p>hello abc</p>' + TABLE
+    await flush(); await flush()   // MutationObserver → 0ms の確定
+    ed._undo()
+    expect(ed.getContent()).toContain('hello abc')
+    expect(ed.getContent()).not.toContain('<table')
+  })
+
+  it('貼った直後に打っても、⌘Z 1 回目は打った字だけ・2 回目で表が消える', async () => {
+    const ed = new KuroEditor(mount(), { initialContent: '<p>hello</p>' })
+    ed._historyStep()
+    ed.wysiwyg.innerHTML = '<p>hello</p>' + TABLE
+    await flush(); await flush()
+    type(ed, '<p>hello</p>' + TABLE + '<p>X</p>')   // 400ms の内側で打った
+    ed._undo()
+    expect(ed.getContent()).toContain('<table')
+    expect(ed.getContent()).not.toContain('X')
+    ed._undo()
+    expect(ed.getContent()).not.toContain('<table')
+  })
+
+  it('打鍵は区切りを解く（本文を変えなかったボタンの後でも、打鍵は 1 手に畳む）', async () => {
+    const ed = new KuroEditor(mount(), { initialContent: '<p>A</p>' })
+    ed._historyStep()                                   // 何も変えないボタン
+    ed.wysiwyg.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', bubbles: true }))
+    type(ed, '<p>AB</p>'); await flush()
+    type(ed, '<p>ABC</p>'); await flush()
+    ed._undo()
+    expect(ed.getContent()).toContain('<p>A</p>')       // B と C は同じ 1 手
+  })
+})
