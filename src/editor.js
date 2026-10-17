@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.43.0'
+export const VERSION = '2.43.1'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -1191,6 +1191,21 @@ export function findCell(node) {
 }
 
 /**
+ * セルの colspan / rowspan。**正の整数でなければ 1**（v2.43.1〜）。
+ *
+ * 外から貼った表には `colspan="undefined"` のような壊れた値が付いてくる
+ * （Google の AI の回答のコピーで実際に来た）。parseInt は NaN を返し、論理グリッドが
+ * 1 列も作れず、列幅のドラッグも結合も効かない表になった。ブラウザの描画も
+ * 正の整数でない値は 1 として扱うので、それに揃える。
+ * @param {Element|null|undefined} cell
+ * @param {'colspan'|'rowspan'} name
+ */
+export function cellSpan(cell, name) {
+  const n = Number(cell?.getAttribute?.(name))
+  return Number.isInteger(n) && n >= 1 ? n : 1
+}
+
+/**
  * Build a logical row/column map of a <table>, resolving rowspan/colspan.
  *
  * A cell's DOM position (`cellIndex`, `nextElementSibling`) only matches its
@@ -1218,8 +1233,8 @@ export function buildTableGrid(table) {
     let c = 0
     for (const cell of Array.from(rows[r].cells)) {
       while (grid[r][c]) c++   // skip slots already covered by a rowspan from above
-      const rs = parseInt(cell.getAttribute('rowspan') || '1', 10)
-      const cs = parseInt(cell.getAttribute('colspan') || '1', 10)
+      const rs = cellSpan(cell, 'rowspan')
+      const cs = cellSpan(cell, 'colspan')
       pos.set(cell, { row: r, col: c })
       for (let dr = 0; dr < rs; dr++) {
         for (let dc = 0; dc < cs; dc++) {
@@ -3246,8 +3261,8 @@ export class TableManager {
    */
   _updateMergeSplitBtns() {
     const cell    = this._cell()
-    const colspan = parseInt(cell?.getAttribute('colspan') || '1')
-    const rowspan = parseInt(cell?.getAttribute('rowspan') || '1')
+    const colspan = cellSpan(cell, 'colspan')
+    const rowspan = cellSpan(cell, 'rowspan')
     this._splitRightBtn.disabled = colspan <= 1
     this._splitDownBtn.disabled  = rowspan <= 1
 
@@ -3267,12 +3282,12 @@ export class TableManager {
     const below = grid[p.row + rowspan]?.[p.col]
     this._mergeDownBtn.disabled = !(
       below && pos.get(below)?.col === p.col &&
-      parseInt(below.getAttribute('colspan') || '1') === colspan
+      cellSpan(below, 'colspan') === colspan
     )
     const right = grid[p.row]?.[p.col + colspan]
     this._mergeRightBtn.disabled = !(
       right && pos.get(right)?.row === p.row &&
-      parseInt(right.getAttribute('rowspan') || '1') === rowspan
+      cellSpan(right, 'rowspan') === rowspan
     )
   }
 
@@ -3431,15 +3446,15 @@ export class TableManager {
     const { grid, pos } = buildTableGrid(table)
     const p = pos.get(cell)
     if (!p) return
-    const colspan = parseInt(cell.getAttribute('colspan') || '1', 10)
-    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
+    const colspan = cellSpan(cell, 'colspan')
+    const rowspan = cellSpan(cell, 'rowspan')
 
     const target = grid[p.row]?.[p.col + colspan]
     if (!target) return
     const tPos = pos.get(target)
-    if (!tPos || tPos.row !== p.row || parseInt(target.getAttribute('rowspan') || '1', 10) !== rowspan) return
+    if (!tPos || tPos.row !== p.row || cellSpan(target, 'rowspan') !== rowspan) return
 
-    const targetColspan = parseInt(target.getAttribute('colspan') || '1', 10)
+    const targetColspan = cellSpan(target, 'colspan')
     cell.setAttribute('colspan', String(colspan + targetColspan))
     cell.innerHTML += target.innerHTML
     target.remove()
@@ -3452,15 +3467,15 @@ export class TableManager {
     const { rows, grid, pos } = buildTableGrid(table)
     const p = pos.get(cell)
     if (!p) return
-    const colspan = parseInt(cell.getAttribute('colspan') || '1', 10)
-    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
+    const colspan = cellSpan(cell, 'colspan')
+    const rowspan = cellSpan(cell, 'rowspan')
 
     const target = grid[p.row + rowspan]?.[p.col]
     if (!target) return
     const tPos = pos.get(target)
-    if (!tPos || tPos.col !== p.col || parseInt(target.getAttribute('colspan') || '1', 10) !== colspan) return
+    if (!tPos || tPos.col !== p.col || cellSpan(target, 'colspan') !== colspan) return
 
-    const targetRowspan = parseInt(target.getAttribute('rowspan') || '1', 10)
+    const targetRowspan = cellSpan(target, 'rowspan')
     cell.setAttribute('rowspan', String(rowspan + targetRowspan))
     cell.innerHTML += target.innerHTML
     const targetRow = rows[tPos.row]
@@ -3477,9 +3492,9 @@ export class TableManager {
    */
   _splitRight() {
     const cell    = this._cell()
-    const colspan = parseInt(cell?.getAttribute('colspan') || '1', 10)
+    const colspan = cellSpan(cell, 'colspan')
     if (!cell || colspan <= 1) return
-    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
+    const rowspan = cellSpan(cell, 'rowspan')
     cell.removeAttribute('colspan')
     for (let i = 1; i < colspan; i++) {
       const c = document.createElement(cell.tagName)
@@ -3504,9 +3519,9 @@ export class TableManager {
     if (!cell || !table) return
     const { rows, grid, pos } = buildTableGrid(table)
     const p = pos.get(cell)
-    const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
+    const rowspan = cellSpan(cell, 'rowspan')
     if (!p || rowspan <= 1) return
-    const colspan = parseInt(cell.getAttribute('colspan') || '1', 10)
+    const colspan = cellSpan(cell, 'colspan')
 
     cell.removeAttribute('rowspan')
     for (let dr = 1; dr < rowspan; dr++) {
@@ -3859,7 +3874,7 @@ export class TableInserter {
     // ① 上の行から張り出している rowspan を 1 減らす
     for (let i = 0; i < rowIdx; i++) {
       for (const cell of Array.from(allRows[i].cells)) {
-        const rs = parseInt(cell.getAttribute('rowspan') || '1')
+        const rs = cellSpan(cell, 'rowspan')
         if (i + rs > rowIdx) {
           const next = rs - 1
           if (next <= 1) cell.removeAttribute('rowspan')
@@ -3872,7 +3887,7 @@ export class TableInserter {
     const nextRow = allRows[rowIdx + 1]
     if (nextRow) {
       for (const cell of Array.from(row.cells)) {
-        const rs = parseInt(cell.getAttribute('rowspan') || '1')
+        const rs = cellSpan(cell, 'rowspan')
         if (rs > 1) {
           const clone = cell.cloneNode(true)
           const next  = rs - 1
@@ -3911,7 +3926,7 @@ export class TableInserter {
       let logicalCol = 0
       let removed = false
       for (const c of Array.from(row.cells)) {
-        const cs = parseInt(c.getAttribute('colspan') || '1')
+        const cs = cellSpan(c, 'colspan')
         if (logicalCol === colIdx) {
           // このセルが colIdx の起点 → colspan を 1 減らすか remove
           if (cs > 1) {
@@ -4259,7 +4274,7 @@ export class TableInserter {
         if (!grown.has(spanned)) {
           grown.add(spanned)
           spanned.setAttribute('rowspan',
-            String(parseInt(spanned.getAttribute('rowspan') || '1', 10) + 1))
+            String(cellSpan(spanned, 'rowspan') + 1))
         }
         continue   // この列は伸ばしたセルが覆うので新しいセルは要らない
       }
@@ -4286,7 +4301,7 @@ export class TableInserter {
         if (!grown.has(spanned)) {
           grown.add(spanned)
           spanned.setAttribute('colspan',
-            String(parseInt(spanned.getAttribute('colspan') || '1', 10) + 1))
+            String(cellSpan(spanned, 'colspan') + 1))
         }
         continue
       }
@@ -4802,7 +4817,7 @@ export class TableResizer {
       // borderX[i] = x of the boundary between logical col i and i+1
       const borderX = new Map()
       for (const [cell, p] of pos) {
-        const cs  = parseInt(cell.getAttribute('colspan') || '1', 10)
+        const cs  = cellSpan(cell, 'colspan')
         const end = p.col + cs - 1   // last logical column this cell covers
         if (!borderX.has(end)) borderX.set(end, cell.getBoundingClientRect().right)
       }
@@ -4936,7 +4951,7 @@ export class TableResizer {
     edges[0] = tRect.left
     edges[n] = tRect.right
     for (const [cell, p] of pos) {
-      const cs  = parseInt(cell.getAttribute('colspan') || '1', 10)
+      const cs  = cellSpan(cell, 'colspan')
       const end = p.col + cs
       if (end < n && edges[end] === null) edges[end] = cell.getBoundingClientRect().right
     }
@@ -8152,6 +8167,10 @@ export class KuroEditor {
     const frag = html.match(/<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/)
     const markup = frag ? frag[1] : html
     const body = new DOMParser().parseFromString(markup, 'text/html').body
+    // コメントは本文ではない。Google の AI の回答のコピーは `<!--TgQPHd|||[…]-->` を
+    // 文ごとに挟んでくる（中の `[[…]]` まで描き直されてリンクのゴミになった）。
+    for (const c of [...this._commentsIn(body)]) c.remove()
+    this._repairTableSpans(body)
 
     const COLOR_PROPS = ['color', 'background', 'background-color', 'background-image']
 
@@ -9802,6 +9821,28 @@ export class KuroEditor {
    * ⚠ 呼ぶのは _suspendDirty の中（過去の不具合の後始末であって編集ではないので、
    *   開いただけで保存ボタンを点けない）。
    */
+  /** root の下のコメントを全部。 */
+  _commentsIn(root) {
+    const out = []
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT)
+    for (let n = w.nextNode(); n; n = w.nextNode()) out.push(n)
+    return out
+  }
+
+  /**
+   * 正の整数でない colspan / rowspan を外す（`colspan="undefined"` など）。
+   * 道具は cellSpan() で 1 として扱うので動くが、属性が残ると保存・公開ページにも出る。
+   */
+  _repairTableSpans(root) {
+    for (const cell of root.querySelectorAll('td[colspan], th[colspan], td[rowspan], th[rowspan]')) {
+      for (const name of ['colspan', 'rowspan']) {
+        if (!cell.hasAttribute(name)) continue
+        const n = Number(cell.getAttribute(name))
+        if (!(Number.isInteger(n) && n >= 1) || n === 1) cell.removeAttribute(name)
+      }
+    }
+  }
+
   _dropStaleFrameIndent(root) {
     for (const el of root.querySelectorAll(FRAME_SELECTOR)) {
       if (el.style.paddingLeft) el.style.removeProperty('padding-left')
@@ -11040,6 +11081,9 @@ export class KuroEditor {
         this._wrapAtomicBlocks(this.wysiwyg)
         this._ensureCaretSlots()
         this._dropStaleFrameIndent(this.wysiwyg)
+        this._repairTableSpans(this.wysiwyg)
+        // コメントは本文ではない（貼り付けで落とすのと同じ。前に保存された分もここで外れる）
+        for (const c of this._commentsIn(this.wysiwyg)) c.remove()
         this._initAllCodeBlocks()
         if (this.options.blockIds) this._refreshBlockIds()
       })
@@ -11573,6 +11617,9 @@ export class KuroEditor {
       this._wrapAtomicBlocks(this.wysiwyg)
       this._ensureCaretSlots()
       this._dropStaleFrameIndent(this.wysiwyg)
+      this._repairTableSpans(this.wysiwyg)
+      // コメントは本文ではない（貼り付けで落とすのと同じ。前に保存された分もここで外れる）
+      for (const c of this._commentsIn(this.wysiwyg)) c.remove()
       if (this._mode === 'source') this.sourceArea.value = html ?? ''
       this.toc._doUpdate()
       this._initAllCodeBlocks()

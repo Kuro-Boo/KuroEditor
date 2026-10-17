@@ -160,3 +160,42 @@ describe('貼り付けの掃除（許可リスト）', () => {
     expect(ed._sanitizePastedHTML('<p><b>太</b></p>')).toBe('<p><strong>太</strong></p>')
   })
 })
+
+describe('壊れた colspan とコメント（v2.43.1・Google の AI の回答のコピー）', () => {
+  it('cellSpan は正の整数でなければ 1', async () => {
+    const { cellSpan } = await import('../src/editor.js')
+    const td = document.createElement('td')
+    for (const [v, want] of [['undefined', 1], ['', 1], ['0', 1], ['-2', 1], ['1.5', 1], ['3', 3]]) {
+      td.setAttribute('colspan', v)
+      expect(cellSpan(td, 'colspan')).toBe(want)
+    }
+    expect(cellSpan(null, 'colspan')).toBe(1)
+  })
+
+  it('colspan="undefined" の表でも論理グリッドが組める（列幅のドラッグの前提）', async () => {
+    const { buildTableGrid } = await import('../src/editor.js')
+    const box = document.createElement('div')
+    box.innerHTML = '<table><tbody><tr><th colspan="undefined">a</th><th colspan="undefined">b</th></tr><tr><td colspan="undefined">1</td><td colspan="undefined">2</td></tr></tbody></table>'
+    const { grid } = buildTableGrid(box.querySelector('table'))
+    expect(grid[0].length).toBe(2)
+    expect(grid[1].length).toBe(2)
+  })
+
+  it('貼り付けはコメントと壊れた span を落とす', async () => {
+    const { KuroEditor } = await import('../src/editor.js')
+    const el = document.createElement('div'); document.body.appendChild(el)
+    const ed = new KuroEditor(el, {})
+    const out = ed._sanitizePastedHTML('<table><tbody><tr><td colspan="undefined">a<!--TgQPHd|||[[2,[null]]]--></td><td colspan="2">b</td></tr></tbody></table>')
+    expect(out).not.toContain('<!--')
+    expect(out).not.toContain('undefined')
+    expect(out).toContain('colspan="2"')
+  })
+
+  it('[[…]] の描き直しはコメントの中に触れない', async () => {
+    const { renderSpecialLinks } = await import('../src/kuro-links.js')
+    const html = '<p>x<!--TgQPHd|||[[2,[null,0]]]--></p><p>[[https://example.com|ex]]</p>'
+    const out = renderSpecialLinks(html)
+    expect(out).toContain('<!--TgQPHd|||[[2,[null,0]]]-->')
+    expect(out).toContain('<a ')
+  })
+})
