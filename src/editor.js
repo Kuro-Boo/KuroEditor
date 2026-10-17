@@ -115,10 +115,16 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.42.0'
+export const VERSION = '2.43.0'
 
-/** Undo 履歴: 連続タイピングを 1 手に畳む無操作時間 (ms) と、保持する最大手数 */
+/** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
+/**
+ * Undo 履歴: 打鍵を 1 手に畳む単位（v2.43.0〜。仕様書「Undo / Redo」の「1 手の単位」）。
+ * 時間だけで切らない —— 速く打ち続けると長い文が丸ごと 1 手になり、考えながら打つと細かく切れる。
+ * 時間（この無操作）に加えて、改行・入力と削除の切り替わり・カーソルの移動・操作（_historyStep）で切る。
+ */
+const HIST_IDLE_MS = 1000
 const HIST_LIMIT = 200
 /** Undo でキャレットを戻す先の「行」。キャレットはこの要素の番号 + 中の文字数で持つ */
 const CARET_LINE_SELECTOR = 'td, th, li, p, h1, h2, h3, h4, h5, h6, pre, blockquote, div'
@@ -7578,6 +7584,8 @@ export class KuroEditor {
     // selectionchange fires after the selection has actually changed — more reliable
     // than mouseup for detecting collapse (e.g. click inside table cell to deselect).
     this._onDocSelChange = () => {
+      // 打っていた場所からカーソルが離れたら、打ちかけを 1 手として確定する（Undo の単位）。
+      this._historyCaretBoundary()
       // ⚠ 本文の中にキャレットがある間は、その位置を【常に】控える。blur のときだけ
       //   覚えていると、本文を一度も触っていない状態でツールバーから挿入したとき
       //   「最後に居た場所」が無く、挿入が本文の先頭に飛ぶ（＝画面も先頭へ戻る）。
@@ -7686,6 +7694,13 @@ export class KuroEditor {
     // `historyUndo` / `historyRedo` として来る。素通りすると、ブラウザ自身が
     // contenteditable を巻き戻し、**こちらの履歴と中身が食い違う**
     // （以後の Undo が別物を指す）。だから必ず止めて、こちらの手で戻す。
+    // 変換中はカーソルの移動を区切りにしない（変換の候補を選ぶあいだも選択は動く）。
+    this.wysiwyg.addEventListener('compositionstart', () => { this._composing = true })
+    // クリック・タップでカーソルを置き直すのも区切り（矢印キーと同じ理由で、selectionchange を待たない）。
+    this.wysiwyg.addEventListener('pointerdown', () => {
+      if (this._histTimer != null && !this._composing) this._commitSnapshot()
+    })
+    this.wysiwyg.addEventListener('compositionend', () => { this._composing = false; this._noteHistoryCaret() })
     this.wysiwyg.addEventListener('beforeinput', (e) => {
       // Editing-only caret slots become real paragraphs only when the user
       // starts entering content into one.
@@ -7695,6 +7710,7 @@ export class KuroEditor {
         this._historyStep()
       } else if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') {
         this._histSeal = false   // 打鍵は操作ではない（ボタンが本文を変えなかったときの区切りを解く）
+        this._historyTypingBoundary(e)   // 改行・入力⇄削除で切る
       }
       if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') return
       // コードブロック (<textarea>) は自分の履歴を持つ（keydown と同じ扱い）。
@@ -7711,6 +7727,7 @@ export class KuroEditor {
       // _wireCodeBlock 内の専用 input リスナーが直接駆動する。
       this._markDirty()
       this._scheduleSnapshot()
+      this._noteHistoryCaret()
       this.toc._update()
       this._detectAutoList(e)
       this._detectSpecialLink(e)
@@ -8699,6 +8716,8 @@ export class KuroEditor {
     // IME 変換中のキーは IME のもの。日本語入力の Enter (変換確定) で
     // 引用/コールアウトの抜け出しや Tab のインデント処理を走らせない。
     if (isImeComposing(e)) return
+    // カーソルを動かすキーは Undo の区切り（selectionchange は遅れて届き、次の打鍵の後になることがある）。
+    if (/^(Arrow(Left|Right|Up|Down)|Home|End|PageUp|PageDown)$/.test(e.key) && this._histTimer != null) this._commitSnapshot()
     // Native contenteditable navigation can remain trapped in the last table
     // cell / callout line on Android. Move into the explicit landing paragraph.
     if (e.key === 'ArrowDown' && this._handleCaretBarrierExit(e)) return
@@ -10895,7 +10914,49 @@ export class KuroEditor {
     // 操作の直後の確定を待っているあいだは延ばさない（_historyStep）。
     if (this._histSealPending) return
     clearTimeout(this._histTimer)
-    this._histTimer = setTimeout(() => this._commitSnapshot(), HIST_DEBOUNCE_MS)
+    this._histTimer = setTimeout(() => this._commitSnapshot(), HIST_IDLE_MS)
+  }
+
+  /**
+   * 打鍵の区切り（beforeinput から。本文が変わる【前】に呼ぶので、確定するのは変わる前の形）。
+   *   改行（Enter / Shift+Enter）  その前で切る。改行は次の行の打鍵と同じ手に入る
+   *   入力 ⇄ 削除 の切り替わり     打っていて Backspace に変えた所・その逆で切る
+   * ⚠ 日本語の変換中は切らない（変換の途中の読みが 1 手ずつ積まれる）。
+   */
+  _historyTypingBoundary(e) {
+    if (this._histBusy || !this._hist || e.isComposing) return
+    const t = e.inputType ?? ''
+    const kind = /^insert(Paragraph|LineBreak)$/.test(t) ? 'newline'
+      : t.startsWith('delete') ? 'delete'
+      : t.startsWith('insert') ? 'insert' : null
+    if (!kind) return
+    const pending = this._histTimer != null
+    if (pending && (kind === 'newline' || (this._histKind && kind !== this._histKind))) this._commitSnapshot()
+    // 改行の後の打鍵は、その改行と同じ手（改行だけの 1 手を作らない）
+    this._histKind = kind === 'newline' ? 'insert' : kind
+  }
+
+  /**
+   * カーソルの移動で切る（selectionchange から）。打鍵で動いた分は区切りにしない ——
+   * input のたびに控えた「打った後の位置」と違うときだけ、打ちかけを確定する。
+   */
+  _historyCaretBoundary() {
+    if (this._histBusy || !this._hist || this._histTimer == null || this._composing) return
+    const sel = window.getSelection?.()
+    if (!sel?.rangeCount) return
+    const r = sel.getRangeAt(0)
+    if (!this.wysiwyg.contains(r.startContainer)) return
+    const at = this._histCaretAt
+    if (at && at.node === r.startContainer && at.offset === r.startOffset && r.collapsed) return
+    this._commitSnapshot()
+  }
+
+  /** 打った後のカーソルの位置を控える（input から）。 */
+  _noteHistoryCaret() {
+    const sel = window.getSelection?.()
+    if (!sel?.rangeCount) { this._histCaretAt = null; return }
+    const r = sel.getRangeAt(0)
+    this._histCaretAt = { node: r.startContainer, offset: r.startOffset }
   }
 
   /**
@@ -10931,6 +10992,7 @@ export class KuroEditor {
     clearTimeout(this._histTimer)
     this._histTimer = null
     this._histSealPending = false
+    this._histKind = null
     // ソースモード中の getContent() は sourceArea の生テキスト。ソース編集は
     // WYSIWYG に戻った時点で 1 手として積む (_setMode) ので、ここでは触らない
     if (this._mode === 'source') return

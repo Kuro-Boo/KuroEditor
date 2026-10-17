@@ -201,3 +201,52 @@ describe('貼り付けなどの操作は、前後の打鍵と別の 1 手（v2.4
     expect(ed.getContent()).toContain('<p>A</p>')       // B と C は同じ 1 手
   })
 })
+
+describe('1 手の単位は「時間＋区切り」（v2.43.0）', () => {
+  beforeEach(() => { document.body.innerHTML = '' })
+
+  /** beforeinput（変わる前）→ 本文を変える → input、の順で打った体にする。 */
+  function key(ed, inputType, html, extra = {}) {
+    ed.wysiwyg.dispatchEvent(new InputEvent('beforeinput', { inputType, bubbles: true, ...extra }))
+    type(ed, html)
+  }
+
+  it('改行の前で切る（改行は次の行の打鍵と同じ手）', () => {
+    const ed = new KuroEditor(mount(), { initialContent: '<p>A</p>' })
+    key(ed, 'insertText', '<p>A one</p>')
+    key(ed, 'insertParagraph', '<p>A one</p><p></p>')
+    key(ed, 'insertText', '<p>A one</p><p>two</p>')
+    ed._undo()
+    expect(ed.getContent()).toBe('<p>A one</p>')
+    ed._undo()
+    expect(ed.getContent()).toBe('<p>A</p>')
+  })
+
+  it('入力と削除の切り替わりで切る', () => {
+    const ed = new KuroEditor(mount(), { initialContent: '<p>A</p>' })
+    key(ed, 'insertText', '<p>Abc</p>')
+    key(ed, 'deleteContentBackward', '<p>Ab</p>')
+    key(ed, 'insertText', '<p>AbX</p>')
+    ed._undo(); expect(ed.getContent()).toBe('<p>Ab</p>')
+    ed._undo(); expect(ed.getContent()).toBe('<p>Abc</p>')
+    ed._undo(); expect(ed.getContent()).toBe('<p>A</p>')
+  })
+
+  it('日本語の変換中は切らない', () => {
+    const ed = new KuroEditor(mount(), { initialContent: '<p>A</p>' })
+    key(ed, 'insertText', '<p>Ab</p>')
+    key(ed, 'deleteContentBackward', '<p>A</p>', { isComposing: true })
+    key(ed, 'insertCompositionText', '<p>A漢</p>', { isComposing: true })
+    ed._undo()
+    expect(ed.getContent()).toBe('<p>A</p>')   // b と変換は同じ 1 手（変換中の削除で切っていない）
+  })
+
+  it('矢印キーで切る', () => {
+    const ed = new KuroEditor(mount(), { initialContent: '<p>A</p>' })
+    key(ed, 'insertText', '<p>AB</p>')
+    ed.wysiwyg.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    key(ed, 'insertText', '<p>AZB</p>')
+    ed._undo()
+    expect(ed.getContent()).toBe('<p>AB</p>')
+  })
+})
