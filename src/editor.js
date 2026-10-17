@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.44.0'
+export const VERSION = '2.44.1'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -1196,37 +1196,6 @@ export function findCell(node) {
     el = el.parentElement
   }
   return null
-}
-
-/** `16px` / `12pt` / `1.5rem` → px（相対の大きさは null）。 */
-function absFontPx(v) {
-  const m = /^([\d.]+)(px|pt|rem)$/i.exec(String(v ?? '').trim())
-  if (!m) return null
-  const n = parseFloat(m[1])
-  const u = m[2].toLowerCase()
-  return u === 'px' ? n : u === 'pt' ? n * 4 / 3 : n * 16
-}
-
-/**
- * 貼った断片の「本文の大きさ」— 文字数でいちばん多い絶対値の文字サイズ（px）。
- * 無ければ null（相対の大きさしか無い＝そのまま）。
- */
-export function pasteBaseFontPx(root) {
-  const tally = new Map()
-  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  for (let t = w.nextNode(); t; t = w.nextNode()) {
-    const len = t.data.trim().length
-    if (!len) continue
-    let px = null
-    for (let e = t.parentElement; e && e !== root && px === null; e = e.parentElement) {
-      if (/^H[1-6]$/.test(e.tagName)) break
-      px = absFontPx(e.style?.getPropertyValue('font-size'))
-    }
-    if (px !== null) tally.set(px, (tally.get(px) || 0) + len)
-  }
-  let best = null
-  for (const [px, n] of tally) if (best === null || n > tally.get(best)) best = px
-  return best
 }
 
 /**
@@ -8157,11 +8126,8 @@ export class KuroEditor {
   }
 
   /**
-   * Paste rich HTML with theme-hostile presentational styling removed: strip
-   * `color` / `background*` from inline styles, legacy `color` / `bgcolor`
-   * attributes, and `<font color>`. Pasted content then adopts the document's own
-   * theme colors (so e.g. white-on-dark copied text doesn't become white-on-white
-   * on the published light page) while keeping structure, emphasis and links.
+   * Paste rich HTML in the editor's own form (本文の形 — the same conform the
+   * API and save use; see {@link _sanitizePastedHTML}).
    * @param {string} html  clipboard `text/html`
    */
   _pasteSanitizedHTML(html) {
@@ -8299,69 +8265,32 @@ export class KuroEditor {
    * cleaned markup out, no selection/DOM side effects (kept separate so the
    * rules are directly testable).
    *
-   * 形を決めるのは normalize.js の conform（API・保存と同じ 1 つの実装）。
-   * ここに置くのは【外から貼ったときだけ】の決まりだけ:
-   *   - 色・背景を落とす（暗いテーマからのコピーが明るい公開ページで読めなくなる）
-   *   - 表の罫線を落とす（スプレッドシートの罫線は外周が欠けていて半端。表の線は
-   *     .kuro-table の CSS に任せる。列幅は残す）
-   *   - 外のサイトの id・class・data-* を落とす（機能の記法は他所の HTML では
-   *     意味が違う。KuroEditor 自身の data-kuro-* などは残す）。data-bid も落とす
-   *     （貼った写しは新しいブロック。同じ id が 2 つあると突き合わせが壊れる）
-   *   - 絶対値の文字サイズは「貼った断片でいちばん多い大きさ」を 100% にする
-   *     （Chrome は計算済みの 16px / 14px を全部に焼き込む。本文の大きさはサイトが決める）
-   *   - Google ドキュメントの全体の包み <b style="font-weight:normal"> を外す
+   * **形と値は normalize.js の conform だけが決める**（API・保存・読み込みと同じ 1 つの
+   * 実装。2026-10-17 の決定）。貼り付けだけの決まりは持たない — 経路ごとに結果が違うと、
+   * 後で「なぜこの本文だけこうなるのか」が分からなくなる。貼り付けを良くしたいときは
+   * conform を直す。ここに残すのは【挿す】ための扱いだけ:
+   *   - クリップボードの StartFragment〜EndFragment だけを読む（<head> などを拾わない）
+   *   - data-bid / data-cbid を外す（貼った写しは新しいブロック。元と同じ id にしない）
+   *   - 行の中の文字だけの断片は段落で包まない（包むと貼っただけで行が割れる）
+   *   - [[…]] を描く（本文に挿すのは描いた形）
    * @param {string} html  clipboard `text/html`
    * @returns {string} cleaned markup
    */
   _sanitizePastedHTML(html) {
-    // Browser/Office clipboards wrap the real selection in fragment markers;
-    // use that slice when present so we don't drag in <head>/<style> noise.
     const frag = html.match(/<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/)
     const markup = frag ? frag[1] : html
-    const body = new DOMParser().parseFromString(markup, 'text/html').body
-
-    body.querySelectorAll('b, strong').forEach((el) => {
-      const w = el.style?.getPropertyValue('font-weight').trim().toLowerCase()
-      if (w === 'normal' || w === '400' || w === 'lighter') el.replaceWith(...el.childNodes)
-    })
-
-    const OWN_DATA = (name) => name.startsWith('data-kuro') || ['data-checked', 'data-gutter',
-      'data-align', 'data-width', 'data-recipe', 'data-recipe-version'].includes(name)
-    const COLOR_PROPS = ['color', 'background', 'background-color', 'background-image']
-    const BORDER_PROPS = ['border', 'border-top', 'border-right', 'border-bottom', 'border-left',
-      'border-width', 'border-style', 'border-color']
-    const base = pasteBaseFontPx(body)
-    for (const el of body.querySelectorAll('*')) {
-      el.removeAttribute('color')
-      el.removeAttribute('bgcolor')
-      el.removeAttribute('id')
-      for (const attr of [...el.attributes]) {
-        if (attr.name.startsWith('data-') && !OWN_DATA(attr.name)) el.removeAttribute(attr.name)
-      }
-      if (el.hasAttribute('class')) {
-        const keep = [...el.classList].filter((c) => c.startsWith('kuro-'))
-        if (keep.length) el.setAttribute('class', keep.join(' '))
-        else el.removeAttribute('class')
-      }
-      const st = el.style
-      if (st && el.hasAttribute('style')) {
-        for (const prop of COLOR_PROPS) st.removeProperty(prop)
-        if (el.tagName === 'TD' || el.tagName === 'TH') for (const prop of BORDER_PROPS) st.removeProperty(prop)
-        const px = absFontPx(st.getPropertyValue('font-size'))
-        if (px && base) st.setProperty('font-size', `${(px * 16 / base).toFixed(2)}px`)
-        if (el.getAttribute('style') === '') el.removeAttribute('style')
-      }
-    }
-
-    normalizePastedLinks(body, this.options.urlResolver)
-    const out = normalizeContentHtml(body.innerHTML)
-    // 行の中の文字だけを写した断片は、行の中へ入る。本文の形は本文直下の文字を段落に
-    // 包むが、貼り付けではその包みを付けない（付けると、貼っただけで行が割れる）
-    const inlineOnly = ![...body.childNodes].some((n) => n.nodeType === 1 &&
-      !/^(SPAN|A|B|STRONG|I|EM|U|S|DEL|INS|STRIKE|CODE|KBD|SUB|SUP|SMALL|BIG|MARK|FONT|BR|IMG|RUBY|RT|RP|Q|ABBR|CITE|TIME|LABEL|BUTTON|WBR|TT|SAMP|VAR|DFN|BDI|BDO|DATA)$/.test(n.tagName))
+    let out = normalizeContentHtml(markup).replace(/\sdata-c?bid="[^"]*"/g, '')
+    // 行の中の文字だけを写した断片は、行の中へ入る
     const m = /^<p>([\s\S]*)<\/p>$/.exec(out)
-    if (inlineOnly && m && !m[1].includes('<p')) return m[1]
-    return out
+    if (m && !/<(p|h[1-6]|ul|ol|li|table|blockquote|pre|figure|hr|div)[\s>]/.test(m[1]) && !this._looksLikeBlockFragment(markup)) out = m[1]
+    return renderSpecialLinks(out, this.options.urlResolver, this._supportedKinds)
+  }
+
+  /** 断片の一番外にブロックがあるか（無ければ行の中の文字だけ）。 */
+  _looksLikeBlockFragment(markup) {
+    const body = new DOMParser().parseFromString(markup, 'text/html').body
+    return [...body.childNodes].some((n) => n.nodeType === 1 &&
+      !/^(SPAN|A|B|STRONG|I|EM|U|S|DEL|INS|STRIKE|CODE|KBD|SUB|SUP|SMALL|BIG|MARK|FONT|BR|IMG|RUBY|RT|RP|Q|ABBR|CITE|TIME|LABEL|BUTTON|WBR|TT|SAMP|VAR|DFN|BDI|BDO|DATA)$/.test(n.tagName))
   }
 
   /**

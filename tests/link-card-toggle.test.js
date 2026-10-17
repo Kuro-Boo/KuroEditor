@@ -54,9 +54,9 @@ describe('LinkEditPopup card toggle', () => {
     // AI/ペースト/旧コンテンツ由来のリンクは data-kuro-* を持たない素の <a>。
     // 以前は writeLinkParts の非 kuro 分岐が空テキストを拒否し、チェックしても
     // カードにならなかった（出典リストのリンクで発生）。
-    const ed = new KuroEditor(makeMount(), {
-      initialContent: '<p><a href="https://www.kantou.gr.jp/">秋田竿燈まつり公式</a></p>',
-    })
+    // 本文の形は読み込みで記法へ写すので、素の <a> を直に置く（ホストが DOM を触った場合など）
+    const ed = new KuroEditor(makeMount(), {})
+    ed.wysiwyg.innerHTML = '<p><a href="https://www.kantou.gr.jp/">秋田竿燈まつり公式</a></p>'
     const a = ed.wysiwyg.querySelector('a')
     expect(a.hasAttribute('data-kuro-wiki')).toBe(false)  // 素のリンク
     const popup = ed.linkEditPopup

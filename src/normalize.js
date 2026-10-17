@@ -362,6 +362,11 @@ export function sanitizeContentHtml(html) {
 // colspan="undefined"・コメント・<button>・何重もの <div>・Arial・負の margin・
 // <hr> の文字サイズ・16px が出た）が、エディタの形は有限だから。
 //
+// ⚠ 【経路ごとの決まりを作らない】（2026-10-17 利用者の決定）。貼り付けも API も
+//   読み込みも保存も、形と値はここだけが決める。貼り付けだけ・API だけの加工が
+//   あると、同じ HTML が経路で違う本文になり、後で原因の分からない違いになる。
+//   貼り付けを良くしたいときは、ここを直す（editor.js の貼り付けは【挿す】扱いだけ）。
+//
 // ## 3 つの約束（2026-10-17 利用者の決定）
 //
 //   1. 文字は絶対に消さない。タグは外しても中身の文字は残す。知らないタグ
@@ -393,6 +398,14 @@ export function sanitizeContentHtml(html) {
 //   span       color / font-size（75–200% の 7 段）/ font-family（serif・sans-serif・Web フォント）
 //   strong em u s code kbd ruby rt rp a br img video audio source iframe figure(kuro-media-wrap)
 //   div        kuro-callout（note / tip / warn / danger）、kuro-roundbox（data-align・data-width）
+//
+//   a          http(s) で中が文字だけなら記法 [[URL|文字]]（文字が URL なら [[URL]]）。
+//              記法にできないもの（mailto・相対・中に書式・] | を含む・図になる URL・
+//              id / data-* / rel の nofollow・sponsored・ugc を持つ）は <a> のまま
+//
+//   文字サイズの絶対値（px・pt・rem）は「本文の大きさ」＝文字数でいちばん多い大きさ
+//   （書かれていない文字は 16px）を 100% として読む。同じ id は最初の 1 つだけ残す。
+//   <b style="font-weight:normal">（Google ドキュメントの包み）は太字にしない。
 //
 //   b → strong、i → em、del・strike → s、ins → u、tt・samp・var → code、
 //   font[color/size/face] → span、太字・斜体・下線・取り消し線のスタイル → それぞれのタグ。
@@ -514,7 +527,7 @@ function alignValue(v) {
  * @param {number} ctxPct  祖先が決めた大きさ（%。絶対値を相対に直すのに使う）
  * @param {boolean} inHeading  見出しの中の絶対値は見出しの大きさに任せる
  */
-function fontSizeRel(v, ctxPct, inHeading) {
+function fontSizeRel(v, ctxPct, inHeading, basePx) {
   const s = String(v ?? '').trim().toLowerCase()
   let rel = null
   let abs = null
@@ -529,7 +542,8 @@ function fontSizeRel(v, ctxPct, inHeading) {
   else if (s === 'larger') rel = 120
   if (abs !== null) {
     if (inHeading) return null
-    rel = abs / (ctxPct || 100) * 100
+    // 絶対値は「本文の大きさ」（bodyFontPx）を 100% として読む
+    rel = abs * 16 / (basePx || 16) / (ctxPct || 100) * 100
   }
   if (rel === null || !Number.isFinite(rel) || rel <= 0) return null
   const snapped = nearest(FONT_SIZES, rel)
@@ -855,7 +869,7 @@ function inlineWrappers(sm, ctx) {
   const color = sm.has('background') || sm.has('background-color') ? null : cssColor(sm.get('color'))
   if (color) span.push(['color', color])
   let pct = ctx.pct
-  const size = fontSizeRel(sm.get('font-size'), ctx.pct, ctx.inHeading)
+  const size = fontSizeRel(sm.get('font-size'), ctx.pct, ctx.inHeading, ctx.basePx)
   if (size) { span.push(['font-size', `${size}%`]); pct = ctx.pct * size / 100 }
   const fam = fontFamilyValue(sm.get('font-family'))
   if (fam) span.push(['font-family', fam])
@@ -1472,7 +1486,11 @@ function convertNode(nd, ctx) {
       if (name === 'xmp' || name === 'plaintext') return [el('p', [], [{ t: 'text', raw: nd.kids.map(rawText).join('') }])]
       return []
     // ── 書式 ──
-    case 'strong': case 'b': return convertInline(nd, ctx, 'strong')
+    case 'strong': case 'b': {
+      // 太さを normal に戻した <b> は太字ではない（Google ドキュメントの全体の包み）
+      const w = String(styleMap(attrOf(nd, 'style')).get('font-weight') ?? '').toLowerCase()
+      return convertInline(nd, ctx, w === 'normal' || w === '400' || w === 'lighter' ? null : 'strong')
+    }
     case 'em': case 'i': return convertInline(nd, ctx, 'em')
     case 'u': case 'ins': return convertInline(nd, ctx, 'u')
     case 's': case 'strike': case 'del': return convertInline(nd, ctx, 's')
@@ -1489,6 +1507,8 @@ function convertNode(nd, ctx) {
       const href = attrOf(nd, 'href')
       // 危ない行き先（javascript: など）は行き先ごと持たない＝ただの文字
       if (!href || !isSafeContentUrl(href, 'href')) return convertInline({ ...nd, attrs: nd.attrs.filter((a) => a.name !== 'href') }, ctx, null)
+      const tok = linkToken(nd, href)
+      if (tok) return convertInline({ ...nd, kids: [{ t: 'text', raw: escText(tok, false) }] }, ctx, null)
       const extra = [{ name: 'href', value: href }]
       if (String(attrOf(nd, 'target') ?? '').toLowerCase() === '_blank') extra.push({ name: 'target', value: '_blank' })
       const rel = String(attrOf(nd, 'rel') ?? '').toLowerCase().split(/\s+/).filter((r) => ['noopener', 'noreferrer', 'nofollow', 'ugc', 'sponsored'].includes(r))
@@ -1503,6 +1523,88 @@ function convertNode(nd, ctx) {
       // span・font・small・mark・button・label… 意味を持たない包み → 書式だけ残して外す
       return convertInline(nd, ctx, null)
   }
+}
+
+/** 同じ id は最初の 1 つだけ（外した包みの id が中の複数のブロックへ配られることがある）。 */
+function uniqueIds(nodes, seen) {
+  const out = []
+  for (const n of nodes) {
+    if (n.t !== 'el') { out.push(n); continue }
+    const id = attrOf(n, 'id')
+    let drop = false
+    if (id !== null) {
+      if (seen.has(id)) { n.attrs = n.attrs.filter((a) => a.name !== 'id'); drop = n.name === 'span' && !n.attrs.length }
+      else seen.add(id)
+    }
+    if (n.kids) n.kids = uniqueIds(n.kids, seen)
+    // id を運ぶためだけの <span> は外す
+    if (drop) out.push(...n.kids)
+    else out.push(n)
+  }
+  return out
+}
+
+/** 文字参照を解いた素の文字。 */
+function plainText(raw) {
+  return canon(raw, true).replace(/&(amp|lt|gt|quot|nbsp);/g, (_, n) => ({ amp: '&', lt: '<', gt: '>', quot: '"', nbsp: '\u00a0' })[n])
+}
+
+/**
+ * 外の書き方のリンク `<a href="https://…">文字</a>` → エディタの記法 `[[URL|文字]]`
+ * （文字が URL そのものなら `[[URL]]`）。null = 記法にできない（<a> のまま残す）:
+ * http(s) 以外・中に文字以外がある・記法を壊す ] | を含む・図として描かれる・
+ * 機能の記法（data-*・id。ブロックの名札 data-bid は除く）や rel の nofollow / sponsored / ugc を持つ。
+ */
+function linkToken(nd, href) {
+  const url = plainText(href).trim()
+  if (!/^https?:\/\//i.test(url) || /[\]|\s]/.test(url)) return null
+  // data-bid / data-cbid はブロックの名札（段落へ移る）なので妨げない
+  if (nd.attrs.some((a) => a.name === 'id' || (a.name.startsWith('data-') && a.name !== 'data-bid' && a.name !== 'data-cbid'))) return null
+  // 検索エンジンへの申告（広告・ユーザー投稿）は記法では書けない＝<a> のまま
+  if (/\b(nofollow|sponsored|ugc)\b/i.test(attrOf(nd, 'rel') ?? '')) return null
+  if (!nd.kids.every((k) => k.t === 'text')) return null
+  const text = plainText(nd.kids.map((k) => k.raw).join('')).replace(/\s+/g, ' ').trim()
+  if (!text || /[\]\[|]/.test(text)) return null
+  const tok = text === url ? `[[${url}]]` : `[[${url}|${text}]]`
+  return isFigureToken(tok) ? null : tok
+}
+
+/**
+ * 本文の大きさ（px）＝文字数でいちばん多い文字の大きさ。大きさの書かれていない文字は
+ * 16px として数える。外の HTML は計算済みの 14px などを全部に焼き込むので、それを
+ * 100% として読む（そうしないと本文全体が「小さい文字」になる）。見出しは数えない。
+ */
+function bodyFontPx(root) {
+  const tally = new Map()
+  const walk = (nd, px) => {
+    for (const k of nd.kids ?? []) {
+      if (k.t === 'text') {
+        const len = plainText(k.raw).trim().length
+        if (len) tally.set(px, (tally.get(px) ?? 0) + len)
+        continue
+      }
+      if (k.t !== 'el' || RAW_NAMES.has(k.name) || /^h[1-6]$/.test(k.name)) continue
+      walk(k, elementFontPx(k, px))
+    }
+  }
+  walk(root, 16)
+  let best = 16
+  for (const [px, n] of tally) if (n > (tally.get(best) ?? 0)) best = px
+  return best
+}
+
+function elementFontPx(nd, px) {
+  let v = styleMap(attrOf(nd, 'style')).get('font-size')
+  if (!v && nd.name === 'font' && FONT_TAG_SIZES[parseInt(attrOf(nd, 'size'), 10)]) v = `${FONT_TAG_SIZES[parseInt(attrOf(nd, 'size'), 10)]}%`
+  const s = String(v ?? '').trim().toLowerCase()
+  let m
+  if ((m = /^([\d.]+)px$/.exec(s))) return parseFloat(m[1])
+  if ((m = /^([\d.]+)pt$/.exec(s))) return parseFloat(m[1]) * 4 / 3
+  if ((m = /^([\d.]+)rem$/.exec(s))) return parseFloat(m[1]) * 16
+  if ((m = /^([\d.]+)%$/.exec(s))) return px * parseFloat(m[1]) / 100
+  if ((m = /^([\d.]+)em$/.exec(s))) return px * parseFloat(m[1])
+  if (s in FONT_KEYWORDS) return FONT_KEYWORDS[s] * 16 / 100
+  return px
 }
 
 /** エディタのコードブロック（行番号は data-gutter に焼き込む。_serializeCodeBlocksToHtml と同じ形）。 */
@@ -1528,9 +1630,9 @@ function borderColorOf(v) {
 export function conformContentHtml(html) {
   if (typeof html !== 'string' || html === '') return html ?? ''
   const root = parseLoose(html)
-  const kids = settleFlow(convertKids(root.kids, { pct: 100, inHeading: false, nested: false }), 'root')
+  const kids = settleFlow(convertKids(root.kids, { pct: 100, inHeading: false, nested: false, basePx: bodyFontPx(root) }), 'root')
   // 段落の中の空白だけの段落など、最後に空になったものを落とす
-  return sanitizeContentHtml(serializeNodes(kids))
+  return sanitizeContentHtml(serializeNodes(uniqueIds(kids, new Set())))
 }
 
 // ── public API ────────────────────────────────────────────────────────────────

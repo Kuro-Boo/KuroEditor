@@ -45,14 +45,23 @@ describe('約束 1: 文字は絶対に消さない', () => {
 describe('約束 2: 選べない値は近いものへ、無ければ書かない', () => {
   it('文字サイズはエディタの 7 段へ寄せる（100% は書かない）', () => {
     expect(N('<p><span style="font-size: 140%">a</span></p>')).toBe('<p><span style="font-size: 150%">a</span></p>')
-    expect(N('<p><span style="font-size: 14px">a</span></p>')).toBe('<p><span style="font-size: 85%">a</span></p>')
+    expect(N('<p>本文<span style="font-size: 14px">a</span></p>')).toBe('<p>本文<span style="font-size: 85%">a</span></p>')
     expect(N('<p><span style="font-size: 16px">a</span></p>')).toBe('<p>a</p>')
-    expect(N('<p><span style="font-size: 1.5rem">a</span></p>')).toBe('<p><span style="font-size: 150%">a</span></p>')
+    expect(N('<p>本文<span style="font-size: 1.5rem">a</span></p>')).toBe('<p>本文<span style="font-size: 150%">a</span></p>')
   })
 
   it('入れ子の絶対値は、外側の大きさに対する比で書く', () => {
-    expect(N('<p><span style="font-size: 24px">a<span style="font-size: 24px">b</span></span></p>'))
-      .toBe('<p><span style="font-size: 150%">ab</span></p>')
+    expect(N('<p>本文<span style="font-size: 24px">a<span style="font-size: 24px">b</span></span></p>'))
+      .toBe('<p>本文<span style="font-size: 150%">ab</span></p>')
+  })
+
+  it('絶対値の文字サイズは、いちばん多い大きさを 100% として読む（貼り付けも API も同じ）', () => {
+    // Chrome は計算済みの 14px を全部に焼き込む。本文の大きさはサイトが決める
+    expect(N('<p style="font-size: 14px">本文の文字</p><p><span style="font-size: 28px">大</span></p>'))
+      .toBe('<p>本文の文字</p><p><span style="font-size: 200%">大</span></p>')
+    // 大きさの書かれていない文字は 16px として数える
+    expect(N('<p>ふつうの本文です</p><p><span style="font-size: 14px">注</span></p>'))
+      .toBe('<p>ふつうの本文です</p><p><span style="font-size: 85%">注</span></p>')
   })
 
   it('見出しの中の絶対値は見出しの大きさに任せる', () => {
@@ -91,7 +100,7 @@ describe('約束 2: 選べない値は近いものへ、無ければ書かない
 
   it('背景と組で決めた文字色は、背景を落とすなら一緒に落とす（白地に白い字を残さない）', () => {
     expect(N('<p><a href="https://x.example" style="background:#030712;color:#fff;font-weight:700">見る</a></p>'))
-      .toBe('<p><a href="https://x.example"><strong>見る</strong></a></p>')
+      .toBe('<p><strong>[[https://x.example|見る]]</strong></p>')
   })
 })
 
@@ -147,8 +156,8 @@ describe('エディタの形', () => {
   })
 
   it('書式の要素がブロックを抱えていたら、書式をブロックの内側へ配る', () => {
-    expect(N('<span style="font-size: 24px"><p>a</p><p>b</p></span>'))
-      .toBe('<p><span style="font-size: 150%">a</span></p><p><span style="font-size: 150%">b</span></p>')
+    expect(N('<p>本文の文字</p><span style="font-size: 24px"><p>a</p><p>b</p></span>'))
+      .toBe('<p>本文の文字</p><p><span style="font-size: 150%">a</span></p><p><span style="font-size: 150%">b</span></p>')
   })
 
   it('表: kuro-table・tbody 1 つ・長方形・壊れた colspan は外す・空のセルは <br>', () => {
@@ -207,8 +216,26 @@ describe('エディタの形', () => {
   })
 
   it('文字参照はブラウザ（innerHTML）と同じ書き方に揃える — 開いて保存しても変わらない', () => {
-    expect(N('<p><a href="https://x.example/?a=1&b=2" title="&copy; x">a</a></p>'))
-      .toBe('<p><a href="https://x.example/?a=1&amp;b=2" title="© x">a</a></p>')
+    expect(N('<p><a href="/x?a=1&b=2" title="&copy; x">a</a></p>'))
+      .toBe('<p><a href="/x?a=1&amp;b=2" title="© x">a</a></p>')
+    expect(N('<p><a href="https://x.example/?a=1&b=2">Q&amp;A</a></p>'))
+      .toBe('<p>[[https://x.example/?a=1&amp;b=2|Q&amp;A]]</p>')
+  })
+
+  it('外の書き方のリンクはエディタの記法へ（記法にできないものは <a> のまま）', () => {
+    expect(N('<p><a href="https://a.example/" target="_blank" class="x">https://a.example/</a></p>'))
+      .toBe('<p>[[https://a.example/]]</p>')
+    expect(N('<p><a href="https://a.example/" id="r1">a</a></p>')).toBe('<p><a href="https://a.example/" id="r1">a</a></p>')
+    expect(N('<p><a href="mailto:a@example.com">m</a></p>')).toBe('<p><a href="mailto:a@example.com">m</a></p>')
+    expect(N('<p><a href="https://a.example/" rel="sponsored noopener">広告</a></p>')).toBe('<p><a href="https://a.example/" rel="sponsored noopener">広告</a></p>')
+    expect(N('<p><a href="https://a.example/">[x]</a></p>')).toBe('<p><a href="https://a.example/">[x]</a></p>')
+    // 図として描かれる URL（動画）は文中の <a> のまま（段落が割れない）
+    expect(N('<p>見て<a href="https://www.youtube.com/watch?v=x">https://www.youtube.com/watch?v=x</a></p>'))
+      .toBe('<p>見て<a href="https://www.youtube.com/watch?v=x">https://www.youtube.com/watch?v=x</a></p>')
+  })
+
+  it('同じ id は最初の 1 つだけ（外した包みの id が配られても重ならない）', () => {
+    expect(N('<b id="g1" style="font-weight:normal"><p>一</p><p>二</p></b>')).toBe('<p><span id="g1">一</span></p><p>二</p>')
     expect(N('<p>Q&A &#x20bb7; a > b &nbsp;&copy &bigstar;</p>'))
       .toBe('<p>Q&amp;A 𠮷 a &gt; b &nbsp;© &bigstar;</p>')
   })
