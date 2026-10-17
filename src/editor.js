@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.44.1'
+export const VERSION = '2.45.0'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -499,6 +499,12 @@ const ICON = {
     `<polyline points="10,6.5 11.8,9 10,11.5"/>` +
     `<line x1="8.6" y1="5.5" x2="7.4" y2="12.5" opacity="0.7"/>` +
   `</svg>`,
+  // Eraser — 斜めの消しゴム＋下の線（文字装飾をすべて外す）
+  clearFormat: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" aria-hidden="true">` +
+    `<path d="M5.2 12.2 1.6 8.6a1 1 0 0 1 0-1.4L7.4 1.4a1 1 0 0 1 1.4 0l3.8 3.8a1 1 0 0 1 0 1.4L7.2 12.2Z"/>` +
+    `<path d="M4.4 4.4 9.6 9.6" />` +
+    `<path d="M5.2 12.2H13" stroke-linecap="round"/>` +
+  `</svg>`,
   // Blockquote — left vertical bar + three horizontal text lines
   quote: _icn(
     `<rect x="0" y="0" width="2" height="14" rx="1"/>` +
@@ -594,6 +600,7 @@ const EMOJI_LIST = [
  * ここに登録されていれば自動で title / aria-label に流れる。
  */
 const POPM_TITLES = {
+  clearFormat:         '文字装飾をすべて外す（太字・色・大きさ・書体など。リンクとルビは残す）',
   bold:                '太字 (Ctrl/⌘+B)',
   italic:              '斜体 (Ctrl/⌘+I)',
   underline:           '下線 (Ctrl/⌘+U)',
@@ -1196,6 +1203,21 @@ export function findCell(node) {
     el = el.parentElement
   }
   return null
+}
+
+/** 文字の装飾として外せるタグ（消しゴム）。リンク・ルビは文字の内容なので入れない。 */
+const INLINE_FORMAT_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'INS', 'S', 'STRIKE', 'DEL', 'FONT',
+  'KBD', 'CODE', 'MARK', 'SMALL', 'BIG', 'SUB', 'SUP', 'TT', 'SAMP', 'VAR'])
+
+/**
+ * 消しゴムで外す要素か。<span> は style だけを持つもの（色・大きさ・書体）に限る —
+ * クラスや data-* を持つ <span> はエディタの部品や機能の記法かもしれない。
+ * <pre> の中の <code> はコードブロックの本体なので外さない。
+ */
+export function isInlineFormatEl(el) {
+  if (el.tagName === 'SPAN') return [...el.attributes].every((a) => a.name === 'style')
+  if (el.tagName === 'CODE' && el.closest('pre')) return false
+  return INLINE_FORMAT_TAGS.has(el.tagName)
 }
 
 /**
@@ -7167,6 +7189,8 @@ export class KuroEditor {
     this.popm.setClearColorFn(() => this._clearColor())
     this.popm.setApplyColorFn((color) => this._applyColor(color))
     this.popm
+      .addButton(ICON.clearFormat, 'clearFormat', () => this._clearInlineFormat())
+      .addDivider()
       .addButton('<b>B</b>',  'bold',          () => this._format('bold'))
       .addButton('<i>I</i>',  'italic',        () => this._format('italic'))
       .addButton('<u>U</u>',  'underline',     () => this._format('underline'))
@@ -10458,6 +10482,60 @@ export class KuroEditor {
    * rather than replacing with a new colour.  Mirrors the heading-toggle-off
    * approach: remove only what was added, leave everything else intact.
    */
+/**
+   * 選択した文字の装飾をすべて外す（v2.45.0〜。popm の左端の消しゴム）。
+   *
+   * 外から貼った文字を「文字だけ」にして装飾をやり直すためのもの。外すのは
+   * 文字の装飾（{@link INLINE_FORMAT_TAGS}・style だけの <span>）。**リンクとルビは
+   * 残す**（行き先・読みは文字の内容であって装飾ではない）。段落・見出し・寄せなどの
+   * 行の形も触らない（行のメニューで直す）。
+   *
+   * ⚠ 選択の境目で装飾の要素を【割ってから】外す。選択の外の文字の装飾まで消すと、
+   *   「この語だけ太字を外したい」で行全体の太字が消える（既存の色の解除はそうなる）。
+   *   境目には目印を置き、割った後の選択はそこから組み直す（割ると Range がずれる）。
+   */
+  _clearInlineFormat() {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount || sel.isCollapsed) return
+    const range = sel.getRangeAt(0)
+    if (!this.wysiwyg.contains(range.commonAncestorContainer)) return
+    const mark = () => { const m = document.createElement('span'); m.setAttribute('data-kuro-clear-mark', ''); return m }
+    const ms = mark(), me = mark()
+    const endR = range.cloneRange(); endR.collapse(false); endR.insertNode(me)
+    const startR = range.cloneRange(); startR.collapse(true); startR.insertNode(ms)
+    const isFormat = (el) => el?.nodeType === 1 && el !== this.wysiwyg && isInlineFormatEl(el) &&
+      !el.closest('[contenteditable="false"]')
+    const emptyFormat = (el) => isFormat(el) && !el.textContent && !el.querySelector('img,br,video,audio,iframe')
+    // 目印を、それを包む装飾の要素の外へ出す（要素は目印の所で 2 つに割る）
+    const lift = (m) => {
+      let top = null
+      for (let p = m.parentElement; p && isFormat(p); p = p.parentElement) top = p
+      if (!top) return
+      const r = document.createRange()
+      r.setStartAfter(m); r.setEnd(top, top.childNodes.length)
+      const right = top.cloneNode(false)
+      right.removeAttribute('id')
+      right.append(r.extractContents())
+      top.after(right)
+      top.after(m)
+      for (const el of [top, right]) if (emptyFormat(el)) el.remove()
+    }
+    lift(me); lift(ms)
+    // 目印の間の装飾をほどく
+    const inner = document.createRange()
+    inner.setStartAfter(ms); inner.setEndBefore(me)
+    const targets = [...this.wysiwyg.querySelectorAll('*')].filter((el) => isFormat(el) && inner.intersectsNode(el))
+    for (const el of targets) {
+      if (!el.isConnected) continue
+      el.replaceWith(...el.childNodes)
+    }
+    // 選択を目印の所に組み直して、目印を消す
+    const at = (m) => { const i = [...m.parentNode.childNodes].indexOf(m); const p = m.parentNode; m.remove(); return [p, i] }
+    const [sp, si] = at(ms)
+    const [ep, ei] = at(me)
+    try { sel.setBaseAndExtent(sp, si, ep, ei) } catch (_) {}
+  }
+
   _clearColor() {
     const sel = window.getSelection()
     if (!sel?.rangeCount) return
