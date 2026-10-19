@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.45.1'
+export const VERSION = '2.45.2'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -3903,6 +3903,8 @@ export class TableInserter {
 
     const allRows = Array.from(table.querySelectorAll('tr'))
     const rowIdx  = allRows.indexOf(row)
+    // 論理列は①で rowspan を減らす前に取る（減らした後だと下の行の列がずれる）
+    const { pos } = buildTableGrid(table)
 
     // ① 上の行から張り出している rowspan を 1 減らす
     for (let i = 0; i < rowIdx; i++) {
@@ -3919,6 +3921,7 @@ export class TableInserter {
     // ② 削除対象の行に rowspan>1 のセルがあれば、次の行に「実体を引き継ぐ」
     const nextRow = allRows[rowIdx + 1]
     if (nextRow) {
+      // 位置は論理列で決める（cellIndex は左に rowspan があるとずれる）
       for (const cell of Array.from(row.cells)) {
         const rs = cellSpan(cell, 'rowspan')
         if (rs > 1) {
@@ -3926,8 +3929,9 @@ export class TableInserter {
           const next  = rs - 1
           if (next <= 1) clone.removeAttribute('rowspan')
           else           clone.setAttribute('rowspan', String(next))
-          // 次の行で同じ列位置に挿入 (cellIndex ベース、 失敗時は末尾)
-          const target = nextRow.cells[cell.cellIndex]
+          const col    = pos.get(cell)?.col ?? 0
+          const target = Array.from(nextRow.cells)
+            .find((c) => (pos.get(c)?.col ?? -1) > col)
           if (target) nextRow.insertBefore(clone, target)
           else        nextRow.appendChild(clone)
         }
@@ -3940,50 +3944,37 @@ export class TableInserter {
   }
 
   /**
-   * 列を削除する。colspan を考慮:
-   *  ① 各行で「colIdx を覆っている」セルがあれば colspan を 1 減らす
-   *  ② colIdx そのものが先頭のセル (colspan を持つ場合の起点) なら remove
-   *  ③ それ以外は普通に colIdx 位置のセルを remove
+   * 列を削除する。論理グリッド（buildTableGrid）の列 colIdx に掛かるセルを
+   * 1 つずつ処理する:
+   *  ① colspan>1 のセル → colspan を 1 減らす（起点でも、左から覆っていても）
+   *  ② それ以外 → remove（rowspan のセルも 1 回だけ。下の行は触らない）
+   * ⚠ cellIndex や行ごとの物理セルの数え上げで列を決めない。上の行から
+   *   rowspan で垂れているセルは下の行の cells に居ないので、その行では
+   *   1 つ右のセル（＝別の列）を消してしまい、表が崩れる。
    */
   _deleteCol() {
     const cell  = this._currentCell
     const table = this.activeTable
     if (!cell || !table) return
-    const colIdx = cell.cellIndex
-    if (colIdx < 0) return
-    const firstRow = table.querySelector('tr')
-    if (!firstRow || firstRow.cells.length <= 1) return
+    const { grid, pos } = buildTableGrid(table)
+    const colIdx = pos.get(cell)?.col
+    if (colIdx == null) return
+    const nCols = Math.max(0, ...grid.map((r) => r.length))
+    if (nCols <= 1) return
 
-    for (const row of Array.from(table.querySelectorAll('tr'))) {
-      // 各 cell について「論理列範囲」を走査して colIdx が含まれるものを探す
-      let logicalCol = 0
-      let removed = false
-      for (const c of Array.from(row.cells)) {
-        const cs = cellSpan(c, 'colspan')
-        if (logicalCol === colIdx) {
-          // このセルが colIdx の起点 → colspan を 1 減らすか remove
-          if (cs > 1) {
-            const next = cs - 1
-            if (next <= 1) c.removeAttribute('colspan')
-            else           c.setAttribute('colspan', String(next))
-          } else {
-            c.remove()
-          }
-          removed = true
-          break
-        }
-        if (logicalCol < colIdx && logicalCol + cs > colIdx) {
-          // colspan で colIdx を覆っているセル → colspan を 1 減らす
-          const next = cs - 1
-          if (next <= 1) c.removeAttribute('colspan')
-          else           c.setAttribute('colspan', String(next))
-          removed = true
-          break
-        }
-        logicalCol += cs
+    const done = new Set()
+    for (const row of grid) {
+      const c = row[colIdx]
+      if (!c || done.has(c)) continue
+      done.add(c)
+      const cs = cellSpan(c, 'colspan')
+      if (cs > 1) {
+        const next = cs - 1
+        if (next <= 1) c.removeAttribute('colspan')
+        else           c.setAttribute('colspan', String(next))
+      } else {
+        c.remove()
       }
-      // 何も該当しない (= rowspan で上から張り出している行) はそのまま
-      void removed
     }
     // 列を消したら <col> も 1 本消す（挿入と対称。放置すると幅の合計が
     // 100% を割り、table-layout:fixed の表が右に痩せる）

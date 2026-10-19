@@ -1971,6 +1971,52 @@ describe('KuroEditor', () => {
       expect(w[0] / w[1]).toBeCloseTo(50 / 30, 3)
     })
 
+    // 結合のある表: 上から rowspan で垂れている行では、その行の物理セルの
+    // 並びと論理列がずれる。列を消すとき別の列のセルまで消えて表が崩れていた
+    it('列の削除: 先頭列に rowspan があっても、下の行の別の列を消さない', () => {
+      const table = setTable('<table><tbody>' +
+        '<tr><td rowspan="2">A</td><td>B</td><td>C</td></tr>' +
+        '<tr><td>E</td><td>F</td></tr>' +
+        '<tr><td>G</td><td>H</td><td>I</td></tr></tbody></table>')
+      cursorAt(table, 2, 0)
+      editor.tableInserter._deleteCol()
+      expect(text(table)).toEqual([['B', 'C'], ['E', 'F'], ['H', 'I']])
+      expect(gridCols(table)).toEqual([2, 2, 2])
+    })
+
+    it('列の削除: 左に rowspan がある行で 2 列目を消しても列が揃う', () => {
+      const table = setTable('<table><tbody>' +
+        '<tr><td rowspan="2">A</td><td>B</td><td>C</td></tr>' +
+        '<tr><td>E</td><td>F</td></tr>' +
+        '<tr><td>G</td><td>H</td><td>I</td></tr></tbody></table>')
+      cursorAt(table, 1, 0)          // E（論理列 1）
+      editor.tableInserter._deleteCol()
+      expect(text(table)).toEqual([['A', 'C'], ['F'], ['G', 'I']])
+      expect(gridCols(table)).toEqual([2, 2, 2])
+    })
+
+    it('列の削除: colspan で覆われた列は colspan を 1 減らす', () => {
+      const table = setTable('<table><tbody>' +
+        '<tr><td colspan="2">AB</td><td>C</td></tr>' +
+        '<tr><td>D</td><td>E</td><td>F</td></tr></tbody></table>')
+      cursorAt(table, 1, 1)
+      editor.tableInserter._deleteCol()
+      expect(text(table)).toEqual([['AB', 'C'], ['D', 'F']])
+      expect(table.rows[0].cells[0].hasAttribute('colspan')).toBe(false)
+      expect(gridCols(table)).toEqual([2, 2])
+    })
+
+    it('行の削除: rowspan のセルは次の行の同じ論理列へ引き継ぐ', () => {
+      const table = setTable('<table><tbody>' +
+        '<tr><td rowspan="3">A</td><td>B</td><td>C</td></tr>' +
+        '<tr><td rowspan="2">E</td><td>F</td></tr>' +
+        '<tr><td>I</td></tr></tbody></table>')
+      cursorAt(table, 1, 1)          // F の行（E は rowspan=2）
+      editor.tableInserter._deleteRow()
+      expect(text(table)).toEqual([['A', 'B', 'C'], ['E', 'I']])
+      expect(gridCols(table)).toEqual([3, 3])
+    })
+
     it('行の削除: 先頭行 / 最後の行を消すと残りはそのまま（<col> は不変）', () => {
       const table = grid3x3()
       cursorAt(table, 0, 1)
