@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.45.2'
+export const VERSION = '2.45.3'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -8993,20 +8993,7 @@ export class KuroEditor {
     }
 
     if (range.collapsed) return
-    const kbd = document.createElement('kbd')
-    try {
-      range.surroundContents(kbd)
-      sel.setBaseAndExtent(kbd, 0, kbd, kbd.childNodes.length)
-    } catch {
-      kbd.appendChild(range.extractContents())
-      range.insertNode(kbd)
-      try {
-        const nr = document.createRange()
-        nr.selectNodeContents(kbd)
-        sel.removeAllRanges()
-        sel.addRange(nr)
-      } catch (_) {}
-    }
+    this._wrapSelectionInline(() => document.createElement('kbd'))
     if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
   }
 
@@ -9471,11 +9458,11 @@ export class KuroEditor {
   /**
    * Apply or toggle a block-level heading (h1–h5).
    *
-   * Toggle-off uses DOM unwrap (remove the heading tag, keep children) rather
-   * than formatBlock('p').  formatBlock always *creates* a new block element,
-   * which produces spurious <p> tags when the heading was originally applied to
-   * partial text and the browser had split the surrounding paragraph.
-   * Unwrapping removes only what we added — nothing more.
+   * Toggle-off is plain DOM work rather than formatBlock('p'), which creates
+   * new block elements around partial selections (spurious <p> tags). Each
+   * heading in the selection becomes a <p> holding the very same children
+   * (inside a list item / cell, where the container is the line, it is just
+   * unwrapped).
    */
   _formatBlock(tag) {
     this.wysiwyg.focus()
@@ -9485,38 +9472,54 @@ export class KuroEditor {
     try { current = document.queryCommandValue('formatBlock').toLowerCase() } catch {}
 
     if (current === tag) {
-      // ── Toggle off: unwrap the heading element ─────────────────────────────
-      // "We only added <h2>, so we only remove <h2>."
-      // Using formatBlock('p') would create a new <p> every time, producing
-      // extra paragraphs when the browser had split a paragraph around a partial
-      // selection.  Replacing the element with its own children is exact.
-      const el = this._findBlockEl(tag)
-      if (el) {
-        // Save the full selection BEFORE the DOM move.
-        // After replaceWith(frag), the text nodes are the same objects — only
-        // their parent changed — so the cloned Range still points to valid nodes.
-        const sel = window.getSelection()
-        const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null
-
+      // ── Toggle off ────────────────────────────────────────────────────────
+      // ⚠ 選択がかかっている見出し【すべて】を戻す（先頭の 1 つだけにしない）。
+      //   中身だけ残して外すと、並んだ見出しの文字が 1 行に繋がる（「一行目二行目」）
+      //   ので、行の器（本文・枠の中）では段落に置き換える。項目・セルの中の見出しは
+      //   その器が行なので、外すだけにする。
+      const sel = window.getSelection()
+      const savedRange = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null
+      const T = tag.toUpperCase()
+      const heads = []
+      for (const line of this._linesInSelection()) {
+        // 見出しは行そのもの、引用は行を包む枠なので、行から上へ辿って拾う
+        const el = line.tagName === T ? line : line.parentElement?.closest?.(tag)
+        if (el && this.wysiwyg.contains(el) && !heads.includes(el)) heads.push(el)
+      }
+      if (heads.length === 0) {
+        const el = this._findBlockEl(tag)
+        if (el) heads.push(el)
+      }
+      for (const el of heads) {
         // Use insertBefore (not DocumentFragment) so text nodes stay in the live
         // document at all times — DocumentFragment detaches them momentarily and
         // Safari invalidates any Range that references detached nodes.
         const parent = el.parentNode
-        while (el.firstChild) parent.insertBefore(el.firstChild, el)
-        el.remove()
+        const holdsBlocks = [...el.children].some((c) =>
+          isLineBlock(c) || c.matches?.(FRAME_SELECTOR))
+        if (holdsBlocks || /^(LI|TD|TH)$/.test(parent.tagName)) {
+          while (el.firstChild) parent.insertBefore(el.firstChild, el)
+          el.remove()
+        } else {
+          const p = document.createElement('p')
+          for (const a of el.attributes) p.setAttribute(a.name, a.value)
+          parent.insertBefore(p, el)
+          while (el.firstChild) p.appendChild(el.firstChild)
+          el.remove()
+        }
+      }
 
-        // Restore the original selection via setBaseAndExtent (atomic, no
-        // empty-selection gap that can reset Chrome/Safari internal state).
-        if (savedRange) {
-          try {
-            sel.setBaseAndExtent(
-              savedRange.startContainer, savedRange.startOffset,
-              savedRange.endContainer,   savedRange.endOffset
-            )
-          } catch {
-            this.wysiwyg.focus({ preventScroll: true })
-            try { sel.removeAllRanges(); sel.addRange(savedRange) } catch (_) {}
-          }
+      // Restore the original selection via setBaseAndExtent (atomic, no
+      // empty-selection gap that can reset Chrome/Safari internal state).
+      if (savedRange && heads.length) {
+        try {
+          sel.setBaseAndExtent(
+            savedRange.startContainer, savedRange.startOffset,
+            savedRange.endContainer,   savedRange.endOffset
+          )
+        } catch {
+          this.wysiwyg.focus({ preventScroll: true })
+          try { sel.removeAllRanges(); sel.addRange(savedRange) } catch (_) {}
         }
       }
 
@@ -9529,9 +9532,12 @@ export class KuroEditor {
   /**
    * Apply / change / toggle a callout (admonition) block.
    *
-   *   - Not inside a callout → wrap the nearest top-level block in a new callout
-   *   - Inside a callout of a DIFFERENT type → switch its type
-   *   - Inside a callout of the SAME type → unwrap (toggle off)
+   *   - 選択の行がすべてコールアウトの中 → 同じ種類なら外す（toggle off）・違えば種類を替える
+   *     （選択がかかっているコールアウト【すべて】に効かせる）
+   *   - そうでなければ → 選択の行を【まとめて 1 つ】のコールアウトで囲む
+   *
+   * ⚠ キャレット 1 点（選択の先頭）だけで決めない。popm は範囲選択中に出るので、
+   *   複数行を選んで押したのに先頭の 1 行しか囲まれない、という壊れ方をする。
    *
    * @param {'tip'|'warn'|'danger'|'note'} type
    */
@@ -9540,56 +9546,123 @@ export class KuroEditor {
     const sel = window.getSelection()
     if (!sel?.rangeCount) return
     const range = sel.getRangeAt(0)
+    const savedRange = range.cloneRange()
+    const restore = () => {
+      try {
+        sel.setBaseAndExtent(savedRange.startContainer, savedRange.startOffset,
+                             savedRange.endContainer,   savedRange.endOffset)
+      } catch (_) {}
+    }
+    const typeOf = (c) => [...c.classList]
+      .map(k => k.match(/^kuro-callout--(\w+)$/)?.[1])
+      .find(Boolean)
 
-    // ── Already inside a callout? ───────────────────────────────────────────
-    let node = range.startContainer
-    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
-    const callout = node?.closest?.('.kuro-callout')
+    let lines = this._linesInSelection(range)
+    if (lines.length === 0) {
+      // 行が拾えない（枠の直下の文字など）— 選択の先頭から辿る
+      let n = range.startContainer
+      if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
+      const c = n?.closest?.('.kuro-callout')
+      if (c && this.wysiwyg.contains(c)) lines = [c.firstElementChild ?? c]
+    }
+    const calloutOf = (el) => {
+      const c = el.closest?.('.kuro-callout')
+      return c && c !== el && this.wysiwyg.contains(c) ? c : (el.classList?.contains('kuro-callout') ? el : null)
+    }
 
-    if (callout) {
-      const currentType = [...callout.classList]
-        .map(c => c.match(/^kuro-callout--(\w+)$/)?.[1])
-        .find(Boolean)
-      if (currentType === type) {
-        // Toggle off: unwrap the callout, keep its children in place
-        const savedRange = range.cloneRange()
-        const parent = callout.parentNode
-        while (callout.firstChild) parent.insertBefore(callout.firstChild, callout)
-        callout.remove()
-        try { sel.removeAllRanges(); sel.addRange(savedRange) } catch (_) {}
+    // ── すべての行がコールアウトの中 → 種類替え / 外す ────────────────────
+    // 枠と枠の間にエディタが置く足場の空行（data-kuro-caret-slot）は本文ではないので数えない
+    const real = lines.filter((l) => !l.hasAttribute?.('data-kuro-caret-slot'))
+    if (real.length) lines = real
+    const owners = lines.map(calloutOf)
+    if (lines.length && owners.every(Boolean)) {
+      const callouts = owners.filter((c, i) => owners.indexOf(c) === i)
+      if (callouts.every((c) => typeOf(c) === type)) {
+        for (const c of callouts) {
+          const parent = c.parentNode
+          while (c.firstChild) parent.insertBefore(c.firstChild, c)
+          c.remove()
+        }
       } else {
-        // Change type
-        if (currentType) callout.classList.remove(`kuro-callout--${currentType}`)
-        callout.classList.add(`kuro-callout--${type}`)
+        for (const c of callouts) {
+          const cur = typeOf(c)
+          if (cur) c.classList.remove(`kuro-callout--${cur}`)
+          c.classList.add(`kuro-callout--${type}`)
+        }
       }
+      restore()
       return
     }
 
-    // ── 囲む対象は【キャレットのある行】────────────────────────────────
+    // ── 囲む対象は【選択の行】────────────────────────────────────────────
     // ⚠ 本文直下のブロックまで遡ってはいけない。角丸ボックスの中の段落で押すと
     //   遡った先はボックスそのもので、【ボックス全体】がコールアウトに入る。
     //   行の居る場所（枠の中なら枠の中）で囲むのが正しい。
-    let block = this._nearestLine(range.startContainer)
-    // リスト項目は【リストごと】囲む（項目 1 つだけ囲むとリストが分断される）
-    if (block?.tagName === 'LI') block = block.parentElement
-    // セルは器なので、セルの中身を段落にまとめてから囲む
-    if (block?.tagName === 'TD' || block?.tagName === 'TH') {
-      const p = document.createElement('p')
-      while (block.firstChild) p.appendChild(block.firstChild)
-      block.appendChild(p)
-      block = p
+    const units = []
+    for (let block of lines) {
+      // リスト項目は【リストごと】囲む（項目 1 つだけ囲むとリストが分断される）。
+      // 入れ子の子項目なら、枠に当たるまでの一番外のリストまで上がる。
+      if (block.tagName === 'LI') {
+        let list = block.parentElement
+        while (list?.parentElement?.tagName === 'LI' &&
+               /^(UL|OL)$/.test(list.parentElement.parentElement?.tagName ?? '')) {
+          list = list.parentElement.parentElement
+        }
+        block = list
+      }
+      if (!block || block === this.wysiwyg) continue
+      if (!units.includes(block)) units.push(block)
     }
-    if (!block || block === this.wysiwyg) return
+    if (units.length === 0) return
+
+    // セルは器なので、セルの中身を段落にまとめてから囲む（セルが 1 つのときだけ。
+    // 複数のセルにまたがるなら表ごと囲む — 下の共通の親の処理で表に上がる）
+    if (units.length === 1 && /^T[DH]$/.test(units[0].tagName)) {
+      const cell = units[0]
+      const p = document.createElement('p')
+      while (cell.firstChild) p.appendChild(cell.firstChild)
+      cell.appendChild(p)
+      units[0] = p
+    }
+
+    // 共通の親（行を置ける器）を求め、その直下で最初から最後までを囲む
+    const canHold = (el) => el === this.wysiwyg ||
+      (el.matches?.('div, blockquote, li, td, th') && !el.matches('[data-kuro-block], [data-kuro-media]'))
+    let parent = units[0].parentElement
+    while (parent && !units.every((u) => parent.contains(u) && u !== parent)) parent = parent.parentElement
+    while (parent && parent !== this.wysiwyg && !canHold(parent)) parent = parent.parentElement
+    if (!parent || !this.wysiwyg.contains(parent) && parent !== this.wysiwyg) return
+    const childOf = (u) => { let x = u; while (x && x.parentElement !== parent) x = x.parentElement; return x }
+    const tops = units.map(childOf).filter(Boolean)
+    if (tops.length === 0) return
+    const first = tops[0]
+    const last = tops[tops.length - 1]
 
     const wrap = document.createElement('div')
     wrap.className = `kuro-callout kuro-callout--${type}`
-    block.before(wrap)
-    wrap.appendChild(block)
+    first.before(wrap)
+    let x = first
+    while (x) {
+      const next = x === last ? null : x.nextSibling
+      wrap.appendChild(x)
+      x = next
+    }
+    // 囲んだ中の既存のコールアウトは外して 1 つにまとめる（入れ子にしない）
+    for (const inner of [...wrap.children]) {
+      if (!inner.classList.contains('kuro-callout')) continue
+      while (inner.firstChild) wrap.insertBefore(inner.firstChild, inner)
+      inner.remove()
+    }
 
+    if (!savedRange.collapsed && wrap.contains(savedRange.startContainer) &&
+        wrap.contains(savedRange.endContainer)) {
+      restore()
+      return
+    }
     // Restore caret inside the moved block
     try {
       const r = document.createRange()
-      r.setStart(block, 0)
+      r.setStart(units[0].isConnected ? units[0] : wrap, 0)
       r.collapse(true)
       sel.removeAllRanges()
       sel.addRange(r)
@@ -9876,27 +9949,91 @@ export class KuroEditor {
     const range = sel.getRangeAt(0)
     if (range.collapsed) return
 
-    const span = document.createElement('span')
-    span.style.fontSize = size
-
-    try {
-      range.surroundContents(span)
-      // Live Range auto-updates — browser tracks the moved nodes automatically.
-    } catch {
-      span.appendChild(range.extractContents())
-      range.insertNode(span)
-      try {
-        sel.setBaseAndExtent(span, 0, span, span.childNodes.length)
-      } catch {
-        try {
-          const nr = document.createRange()
-          nr.selectNodeContents(span)
-          sel.removeAllRanges()
-          sel.addRange(nr)
-        } catch (_) {}
-      }
-    }
+    this._wrapSelectionInline(() => {
+      const span = document.createElement('span')
+      span.style.fontSize = size
+      return span
+    })
     if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
+  }
+
+  /**
+   * 選択範囲を文字の装飾の要素（色・大きさ・書体の <span>、<kbd>）で包み、包んだ範囲を選び直す。
+   *
+   * ⚠ 行をまたぐ選択を 1 つの要素で包まない。`extractContents()` は途中の段落ごと
+   *   抜き出すので、`<span><p>…</p><p>…</p></span>` という不正 HTML になり、
+   *   選択の両端には空の段落（同じ id・data-bid の写し）が残る。行ごとに、
+   *   その行【自身の】中身（子リストなどの入れ子のブロックは除く）だけを包む。
+   *
+   * @param {() => HTMLElement} make  包む要素を 1 つ作る（行ごとに呼ぶ）
+   * @returns {HTMLElement[]} 包んだ要素（文書順）
+   */
+  _wrapSelectionInline(make) {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return []
+    const range = sel.getRangeAt(0)
+    if (range.collapsed) return []
+
+    const wrapOne = (r) => {
+      const el = make()
+      try {
+        r.surroundContents(el)
+      } catch {
+        el.appendChild(r.extractContents())
+        r.insertNode(el)
+      }
+      return el
+    }
+
+    // 行は【文字が直に乗っている要素】そのもの（`_linesInSelection` と違い、
+    // <li><p>…</p></li> の <p> を項目に読み替えず、入れ子の子項目も落とさない）
+    const hit = (n) => { try { return range.intersectsNode(n) } catch { return false } }
+    const isInner = (c) => c.nodeType === Node.ELEMENT_NODE &&
+      (isLineBlock(c) || c.matches?.(FRAME_SELECTOR))
+    const lines = []
+    const walker = document.createTreeWalker(this.wysiwyg, NodeFilter.SHOW_ELEMENT, null)
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!isLineBlock(n) || !hit(n)) continue
+      if ([...n.childNodes].some((c) => !isInner(c) && hit(c))) lines.push(n)
+    }
+    let wrapped
+    if (lines.length <= 1) {
+      wrapped = [wrapOne(range)]
+    } else {
+      const parts = []
+      for (const line of lines) {
+        const r = document.createRange()
+        r.selectNodeContents(line)
+        // 行自身の中身の終わり＝最初の子ブロック（子リスト・枠）の手前
+        const inner = [...line.childNodes].find(isInner)
+        if (inner) r.setEndBefore(inner)
+        if (r.compareBoundaryPoints(Range.START_TO_START, range) < 0) {
+          r.setStart(range.startContainer, range.startOffset)
+        }
+        if (r.compareBoundaryPoints(Range.END_TO_END, range) > 0) {
+          r.setEnd(range.endContainer, range.endOffset)
+        }
+        if (r.collapsed || r.toString() === '') continue
+        parts.push(r)
+      }
+      // 後ろの行から包む（手前を包んでも後ろの Range の端点は動かないが、念のため）
+      wrapped = parts.reverse().map(wrapOne).reverse()
+    }
+    if (wrapped.length === 0) return []
+
+    const first = wrapped[0], last = wrapped[wrapped.length - 1]
+    try {
+      sel.setBaseAndExtent(first, 0, last, last.childNodes.length)
+    } catch {
+      try {
+        const nr = document.createRange()
+        nr.setStart(first, 0)
+        nr.setEnd(last, last.childNodes.length)
+        sel.removeAllRanges()
+        sel.addRange(nr)
+      } catch (_) {}
+    }
+    return wrapped
   }
 
   /**
@@ -9948,25 +10085,11 @@ export class KuroEditor {
     const range = sel.getRangeAt(0)
     if (range.collapsed) return
 
-    const span = document.createElement('span')
-    span.style.fontFamily = family
-
-    try {
-      range.surroundContents(span)
-    } catch {
-      span.appendChild(range.extractContents())
-      range.insertNode(span)
-      try {
-        sel.setBaseAndExtent(span, 0, span, span.childNodes.length)
-      } catch {
-        try {
-          const nr = document.createRange()
-          nr.selectNodeContents(span)
-          sel.removeAllRanges()
-          sel.addRange(nr)
-        } catch (_) {}
-      }
-    }
+    this._wrapSelectionInline(() => {
+      const span = document.createElement('span')
+      span.style.fontFamily = family
+      return span
+    })
     if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
   }
 
@@ -10048,6 +10171,15 @@ export class KuroEditor {
     // parent changes, not the node identity.  So setBaseAndExtent at the end
     // reliably re-selects the same characters even after reparenting.
     const savedRange = sel.getRangeAt(0).cloneRange()
+
+    // ── 選択がリストの項目だけなら、かかっているリスト【すべて】に効かせる ──
+    if (this._styleListsInSelection('OL', 'kuro-list-', value)) {
+      try {
+        sel.setBaseAndExtent(savedRange.startContainer, savedRange.startOffset,
+                             savedRange.endContainer,   savedRange.endOffset)
+      } catch (_) {}
+      return
+    }
 
     // ── Walk up from the saved position to the nearest <ol> ──────────────────
     let node = savedRange.startContainer
@@ -10339,6 +10471,15 @@ export class KuroEditor {
     // insertBefore (no detach), so the saved Range stays valid after reparenting.
     const savedRange = sel.getRangeAt(0).cloneRange()
 
+    // ── 選択がリストの項目だけなら、かかっているリスト【すべて】に効かせる ──
+    if (this._styleListsInSelection('UL', 'kuro-ul-', value)) {
+      try {
+        sel.setBaseAndExtent(savedRange.startContainer, savedRange.startOffset,
+                             savedRange.endContainer,   savedRange.endOffset)
+      } catch (_) {}
+      return
+    }
+
     // ── Walk up from the saved position to the nearest <ul> ──────────────────
     let node = savedRange.startContainer
     if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
@@ -10375,6 +10516,34 @@ export class KuroEditor {
 
     // ── Restore the original selection ────────────────────────────────────────
     this._restoreListRange(sel, savedRange, ul)
+  }
+
+  /**
+   * 選択がリストの項目だけでできているとき、項目が属するリストすべてのマーカーを
+   * `value` に揃える（違う種類のリストは種類も替える）。処理したら true。
+   *
+   * ⚠ 選択の先頭から辿った 1 つのリストだけにしない。離れた 2 つのリストを選んで
+   *   押すと、先頭のリストしか変わらない。
+   * 段落が混ざった選択は false（従来どおり、段落をリストにする道へ）。
+   */
+  _styleListsInSelection(tag, prefix, value) {
+    const lines = this._linesInSelection()
+    const items = lines.filter((el) => el.tagName === 'LI')
+    if (items.length === 0 || items.length !== lines.length) return false
+    const lists = []
+    for (const li of items) {
+      const list = li.parentElement
+      if (list && /^(UL|OL)$/.test(list.tagName) && !lists.includes(list)) lists.push(list)
+    }
+    if (lists.length < 2) return false   // 1 つなら従来の道（同じ結果）
+    for (let list of lists) {
+      if (list.tagName !== tag) list = this._convertListType(list, tag)
+      Array.from(list.classList)
+        .filter((c) => c.startsWith(prefix))
+        .forEach((c) => list.classList.remove(c))
+      list.classList.add(value)
+    }
+    return true
   }
 
   /**
@@ -10443,30 +10612,11 @@ export class KuroEditor {
     const range = sel.getRangeAt(0)
     if (range.collapsed) return
 
-    const span = document.createElement('span')
-    span.style.color = color
-
-    try {
-      range.surroundContents(span)
-      // After surroundContents the live Range already wraps span's content —
-      // no manual restore needed; the browser updates it automatically.
-    } catch {
-      // Selection crosses element boundaries → extract → wrap → reinsert
-      span.appendChild(range.extractContents())
-      range.insertNode(span)
-      // insertNode may collapse the range, so we explicitly re-select span content.
-      // Use setBaseAndExtent (atomic, no empty-selection gap) with fallback.
-      try {
-        sel.setBaseAndExtent(span, 0, span, span.childNodes.length)
-      } catch {
-        try {
-          const nr = document.createRange()
-          nr.selectNodeContents(span)
-          sel.removeAllRanges()
-          sel.addRange(nr)
-        } catch (_) {}
-      }
-    }
+    this._wrapSelectionInline(() => {
+      const span = document.createElement('span')
+      span.style.color = color
+      return span
+    })
     // Keep _activeRange in sync for further sub-panel actions
     if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
   }

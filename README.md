@@ -3,7 +3,7 @@
 # KuroEditor
 
 > **共有コマンド（版を上げる／端末へ渡す）は [OPS.md](OPS.md) を読むこと。**
-> `./lib_release.sh --gh <アカウント> --notes "…"`（版を上げる）。
+> `./lib_release.sh --notes "…"`（版を上げる）。
 > どれも `Entamy/ops/` への symlink で、**中身は書き換えない**。
 > 手で版を書き換えない／手で `install` を叩かない理由もそこにある。
 
