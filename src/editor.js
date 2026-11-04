@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.45.3'
+export const VERSION = '2.45.4'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -3235,6 +3235,22 @@ export class TableManager {
 
     this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
 
+    // 行・列のボタン（＋ −・つかむ手・罫線）をマウスを乗せたときだけ出す。
+    // マウスの無い端末では効かないので出さない。
+    if (TableInserter.canHover()) {
+      this._hoverBtn = createElement('button', {
+        className: 'kuro-table-menu__btn kuro-table-menu__btn--valign',
+        html: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3l6.5 17 2.3-7 7-2.3z"/><path d="M14 14l6 6"/></svg>`,
+        attrs: { type: 'button', title: '行・列のボタンをマウスを乗せたときだけ出す' },
+      })
+      this._hoverBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        this.editor._setTableHoverButtons(!this.editor.tableInserter?.hoverMode)
+      })
+      this._mainRow.appendChild(this._hoverBtn)
+      this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
+    }
+
     // Delete table button
     const delTableBtn = createElement('button', {
       className: 'kuro-table-menu__btn kuro-table-menu__btn--valign kuro-table-menu__btn--deltbl',
@@ -3322,6 +3338,16 @@ export class TableManager {
       right && pos.get(right)?.row === p.row &&
       cellSpan(right, 'rowspan') === rowspan
     )
+  }
+
+  /** ホバー表示のボタンの点灯を、いまの設定に合わせる。 */
+  _syncHoverBtn(on) {
+    if (!this._hoverBtn) return
+    this._hoverBtn.classList.toggle('kuro-table-menu__btn--active', !!on)
+    this._hoverBtn.setAttribute('aria-pressed', on ? 'true' : 'false')
+    this._hoverBtn.title = on
+      ? '行・列のボタンをマウスを乗せたときだけ出す（入）— 押すと常に出す'
+      : '行・列のボタンをマウスを乗せたときだけ出す（切）'
   }
 
   /** Highlight the active vertical-align button for the focused cell. */
@@ -3489,7 +3515,7 @@ export class TableManager {
 
     const targetColspan = cellSpan(target, 'colspan')
     cell.setAttribute('colspan', String(colspan + targetColspan))
-    cell.innerHTML += target.innerHTML
+    appendCellContent(cell, target)
     target.remove()
   }
 
@@ -3510,10 +3536,10 @@ export class TableManager {
 
     const targetRowspan = cellSpan(target, 'rowspan')
     cell.setAttribute('rowspan', String(rowspan + targetRowspan))
-    cell.innerHTML += target.innerHTML
-    const targetRow = rows[tPos.row]
+    appendCellContent(cell, target)
     target.remove()
-    if (targetRow.cells.length === 0) targetRow.remove()
+    // 行が空になったら消す（rowspan も合わせて縮める）
+    dropEmptyTableRows(table)
   }
 
   /**
@@ -3560,12 +3586,15 @@ export class TableManager {
     for (let dr = 1; dr < rowspan; dr++) {
       const row = rows[p.row + dr]
       if (!row) break
+      // ⚠ 挿す手前は【この行から始まる】セルだけ。上の行から rowspan で垂れている
+      //   セルはこの行の子ではないので、それを基準に insertBefore すると例外になり、
+      //   rowspan だけ外れて行のセルが足りない表が残っていた。
       let ref = null
       for (let c = p.col + 1; c < grid[p.row + dr].length; c++) {
         const candidate = grid[p.row + dr][c]
-        if (candidate && candidate !== cell) { ref = candidate; break }
+        if (candidate && candidate !== cell && candidate.parentElement === row) { ref = candidate; break }
       }
-      const newCell = document.createElement('td')
+      const newCell = document.createElement(cell.tagName)   // 見出しのセルは見出しのまま
       newCell.setAttribute('contenteditable', 'true')
       newCell.innerHTML = '<br>'
       if (colspan > 1) newCell.setAttribute('colspan', String(colspan))
@@ -3595,6 +3624,44 @@ export class TableManager {
 // TABLE INSERTER — "+" button appears only on the border the mouse hovers over
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * セルが 1 つも無くなった行を消し、その行に掛かっていた rowspan を 1 ずつ縮める。
+ * ⚠ 空の行を消すだけにしない。上から垂れていたセルの rowspan が表の外まで
+ *   伸びたままになり、次に行を足すと新しい行がそのセルに覆われて表が崩れる。
+ */
+export function dropEmptyTableRows(table) {
+  for (;;) {
+    const { rows, grid } = buildTableGrid(table)
+    const r = rows.findIndex((tr) => tr.cells.length === 0)
+    if (r < 0) return
+    const seen = new Set()
+    for (const cell of grid[r] ?? []) {
+      if (!cell || seen.has(cell)) continue
+      seen.add(cell)
+      const next = cellSpan(cell, 'rowspan') - 1
+      if (next <= 1) cell.removeAttribute('rowspan')
+      else           cell.setAttribute('rowspan', String(next))
+    }
+    rows[r].remove()
+  }
+}
+
+/** 結合でセルの中身をつなぐ。空のセル（<br> だけ）は足さない・置き換える。 */
+function appendCellContent(cell, from) {
+  const empty = (el) => el.textContent.trim() === '' &&
+    !el.querySelector('img, video, audio, iframe, table, hr, [contenteditable="false"]')
+  if (empty(from)) return
+  if (empty(cell)) { cell.innerHTML = from.innerHTML; return }
+  cell.innerHTML += from.innerHTML
+}
+
+/** ホバー表示で、表から離れてから表のボタンを消すまで（ms）。 */
+const TABLE_BTN_SLEEP_MS = 2000
+/** ホバー表示で「表に近い」とみなす、表の外側の幅（px）。ボタンの並ぶ帯を含む。 */
+const TABLE_BTN_REACH = 48
+/** ホバー表示の入り切りを覚えておく場所（端末ごと）。 */
+const TABLE_HOVER_KEY = 'kuro-editor-table-hover-buttons'
+
 export class TableInserter {
   /**
    * @param {HTMLElement} wysiwyg
@@ -3609,6 +3676,11 @@ export class TableInserter {
     this._onRowBorderClick = callbacks.onRowBorderClick
     this._onColBorderClick = callbacks.onColBorderClick
     this._editor = null   // KuroEditor が設定（mmenu を避ける位置決めに使う）
+    // ホバー表示（マウスのある環境だけ）: 表に近づいたときだけボタンを出し、
+    // 離れて TABLE_BTN_SLEEP_MS で消す。⚠ 消すのは見た目と押せることだけで、
+    // 位置の計算は続ける（戻った瞬間に正しい場所に出す）。
+    this._hoverMode  = false
+    this._sleepTimer = null
     this._reorderMode  = null   // 並び替えモード中の <table>（長押しで入る）
     this._reorderStart = null
     this._reorderMoved = false
@@ -3682,9 +3754,48 @@ export class TableInserter {
     this._onScroll = () => this._syncScroll()
   }
 
+  /** マウスを乗せられる環境か（タッチだけの端末ではホバー表示を使わない）。 */
+  static canHover() {
+    try { return !!window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches } catch { return false }
+  }
+
+  /** ホバー表示の入り切り。入れても、マウスを乗せられない環境では効かない。 */
+  setHoverMode(on) {
+    this._hoverMode = !!on
+    if (this._hoverMode && TableInserter.canHover()) {
+      this._wake()
+      this._scheduleSleep()
+    } else {
+      clearTimeout(this._sleepTimer); this._sleepTimer = null
+      this.container.classList.remove('kuro-table-inserter--asleep')
+    }
+  }
+
+  get hoverMode() { return this._hoverMode }
+
+  _wake() {
+    clearTimeout(this._sleepTimer); this._sleepTimer = null
+    this.container.classList.remove('kuro-table-inserter--asleep')
+  }
+
+  _scheduleSleep() {
+    if (this._sleepTimer || this.container.classList.contains('kuro-table-inserter--asleep')) return
+    this._sleepTimer = setTimeout(() => {
+      this._sleepTimer = null
+      // 並べ替えのドラッグ中は消さない（掴んでいる手が消える）
+      if (this._rowDrag || this._colDrag) { this._scheduleSleep(); return }
+      this.container.classList.add('kuro-table-inserter--asleep')
+    }, TABLE_BTN_SLEEP_MS)
+  }
+
   activate(table) {
     const wasActive = this.activeTable !== null
     this.activeTable = table
+    if (this._hoverMode && TableInserter.canHover() && !wasActive) {
+      // キーボードで表に入ったときも一度は見せる（そこから 2 秒で消える）
+      this._wake()
+      this._scheduleSleep()
+    }
     // 別の表へ移ったら並び替えモードは終わり（同じ表なら維持）
     if (this._reorderMode && this._reorderMode !== table) this._exitReorderMode()
     if (!wasActive) {
@@ -3700,6 +3811,8 @@ export class TableInserter {
   }
 
   deactivate() {
+    clearTimeout(this._sleepTimer); this._sleepTimer = null
+    this.container.classList.remove('kuro-table-inserter--asleep')
     if (!this.activeTable) return
     this.activeTable  = null
     this._currentCell = null
@@ -3717,7 +3830,7 @@ export class TableInserter {
     if (!table?.isConnected) { this.deactivate(); return }
     const tableRect = table.getBoundingClientRect()
     const rows  = Array.from(table.querySelectorAll('tr'))
-    const cells = rows.length ? Array.from(rows[0].cells) : []
+    const colX  = this._logicalColBorders(tableRect)
     const BTN = 9
     const BBT = 12
     const GAP = 5
@@ -3727,9 +3840,7 @@ export class TableInserter {
     const rowBorderY = (i) => i === 0 ? tableRect.top
       : i >= rows.length ? tableRect.bottom
       : rows[i].getBoundingClientRect().top
-    const colBorderX = (i) => i === 0 ? tableRect.left
-      : i >= cells.length ? tableRect.right
-      : cells[i].getBoundingClientRect().left
+    const colBorderX = (i) => colX[Math.min(i, colX.length - 1)] ?? tableRect.right
 
     if (this._pendingRowIdx != null && rows.length) {
       this.rowBtn.style.left = `${Math.round(tableRect.left - BTN * 2 - GAP)}px`
@@ -3739,11 +3850,11 @@ export class TableInserter {
       this.rowBorderBtn.style.left = `${Math.round(tableRect.right + GAP)}px`
       this.rowBorderBtn.style.top  = `${Math.round(rowBorderY(this._pendingRowBorderIdx) - BBT)}px`
     }
-    if (this._pendingColIdx != null && cells.length) {
+    if (this._pendingColIdx != null && colX.length) {
       this.colBtn.style.left = `${Math.round(colBorderX(this._pendingColIdx) - BTN)}px`
       this.colBtn.style.top  = `${Math.round(tableRect.top - BTN * 2 - GAP)}px`
     }
-    if (this._pendingColBorderIdx != null && cells.length) {
+    if (this._pendingColBorderIdx != null && colX.length) {
       this.colBorderBtn.style.left = `${Math.round(colBorderX(this._pendingColBorderIdx) - BBT)}px`
       this.colBorderBtn.style.top  = `${Math.round(tableRect.bottom + GAP)}px`
     }
@@ -3976,6 +4087,8 @@ export class TableInserter {
         c.remove()
       }
     }
+    // 上の行の rowspan に覆われた行は、その列のセルが消えると空になる（空の <tr> を残さない）
+    dropEmptyTableRows(table)
     // 列を消したら <col> も 1 本消す（挿入と対称。放置すると幅の合計が
     // 100% を割り、table-layout:fixed の表が右に痩せる）
     this._colgroupDelete(table, colIdx)
@@ -4151,12 +4264,39 @@ export class TableInserter {
     }
   }
 
+  /**
+   * 論理の列の境目の x 座標（0 = 左端 … nCols = 右端）。どの行でもその列から始まる
+   * セルが無い境目（全行で横に結合されている所）は null（挿す場所として出さない）。
+   */
+  _logicalColBorders(tableRect) {
+    const { grid, pos } = buildTableGrid(this.activeTable)
+    const nCols = Math.max(0, ...grid.map((r) => r.length))
+    const xs = new Array(nCols + 1).fill(null)
+    xs[0] = tableRect.left
+    xs[nCols] = tableRect.right
+    for (const [cell, p] of pos) {
+      if (p.col > 0 && p.col < nCols && xs[p.col] == null) {
+        xs[p.col] = cell.getBoundingClientRect().left
+      }
+    }
+    return xs
+  }
+
   _handleMouseMove(e) {
     if (!this.activeTable) return
 
     const tableRect = this.activeTable.getBoundingClientRect()
     const mx  = e.clientX
     const my  = e.clientY
+
+    if (this._hoverMode && TableInserter.canHover()) {
+      // 表とボタンの並ぶ帯（表の外側 TABLE_BTN_REACH px）の中なら出す
+      const R = TABLE_BTN_REACH
+      const near = mx >= tableRect.left - R && mx <= tableRect.right + R &&
+                   my >= tableRect.top - R  && my <= tableRect.bottom + R
+      if (near) this._wake()
+      else this._scheduleSleep()
+    }
     const BTN = 9    // half of + button (18px)
     const BBT = 12   // half of border-cycle button (24px)
     const GAP = 5
@@ -4207,7 +4347,9 @@ export class TableInserter {
     }
 
     // ── Column border detection (top zone: + button area + table height) ──
-    const cells = Array.from(rows[0].cells)
+    // ⚠ 境目は【論理の列】で数える。1 行目の cells で数えると、1 行目に横の結合が
+    //   あるとき番号が論理の列とずれ、_insertCol が別の場所（結合セルの中）に挿す。
+    const colX = this._logicalColBorders(tableRect)
     const inColZone = mx >= tableRect.left  - BTN
                    && mx <= tableRect.right + BTN
                    && my >= tableRect.top   - BTN * 2 - GAP
@@ -4215,10 +4357,9 @@ export class TableInserter {
 
     if (inColZone) {
       let found = false
-      for (let i = 0; i <= cells.length; i++) {
-        const borderX = i === 0 ? tableRect.left
-          : i === cells.length  ? tableRect.right
-          : cells[i].getBoundingClientRect().left
+      for (let i = 0; i < colX.length; i++) {
+        const borderX = colX[i]
+        if (borderX == null) continue
         if (Math.abs(mx - borderX) <= THR) {
           this._pendingColIdx = i
           this.colBtn.style.display = 'flex'
@@ -4285,7 +4426,7 @@ export class TableInserter {
     if (!table) return
     const { rows, grid } = buildTableGrid(table)
     if (!rows.length) return
-    const nCols = grid[0]?.length ?? 0
+    const nCols = Math.max(0, ...grid.map((r) => r.length))   // 1 行目が短い表もある
     const at    = Math.max(0, Math.min(index, rows.length))
 
     const newRow = document.createElement('tr')
@@ -4314,7 +4455,7 @@ export class TableInserter {
     if (!table) return
     const { rows, grid, pos } = buildTableGrid(table)
     if (!rows.length) return
-    const nCols = grid[0]?.length ?? 0
+    const nCols = Math.max(0, ...grid.map((r) => r.length))
     const at    = Math.max(0, Math.min(index, nCols))
 
     const grown = new Set()
@@ -4540,6 +4681,7 @@ export class TableInserter {
 
   destroy() {
     clearTimeout(this._pressTimer)
+    clearTimeout(this._sleepTimer)
     this._exitReorderMode()
     document.removeEventListener('pointerdown', this._onDocPointerDown, true)
     document.removeEventListener('mousemove', this._onMouseMove)
@@ -4668,50 +4810,35 @@ export class LinePopupMenu {
     const border = this._currentColor ? `${borderBase} ${this._currentColor}` : borderBase
 
     const { table, axis, idx } = t
-    const rows = Array.from(table.querySelectorAll('tr'))
-    const colCount = rows[0]?.cells.length ?? 0
-
-    if (this._scope === 'outer') {
-      // Outer = top, bottom, left, right borders of the table
-      for (const cell of rows[0].cells) cell.style.borderTop    = border
-      for (const cell of rows[rows.length - 1].cells) cell.style.borderBottom = border
-      for (const tr of rows) {
-        if (tr.cells[0])              tr.cells[0].style.borderLeft  = border
-        if (tr.cells[colCount - 1])   tr.cells[colCount - 1].style.borderRight = border
-      }
-    } else if (this._scope === 'inner') {
-      // Inner = every border that is NOT the outer edge
-      for (let r = 0; r < rows.length; r++) {
-        for (let c = 0; c < rows[r].cells.length; c++) {
-          const cell = rows[r].cells[c]
-          if (r > 0)                cell.style.borderTop    = border
-          if (r < rows.length - 1)  cell.style.borderBottom = border
-          if (c > 0)                cell.style.borderLeft   = border
-          if (c < colCount - 1)     cell.style.borderRight  = border
-        }
-      }
-    } else {
-      // single: only the border at `idx` on the given axis
-      if (axis === 'row') {
-        if (idx === 0)               for (const cell of rows[0].cells) cell.style.borderTop = border
-        else if (idx === rows.length) for (const cell of rows[rows.length - 1].cells) cell.style.borderBottom = border
-        else {
-          for (const cell of rows[idx - 1].cells) cell.style.borderBottom = border
-          for (const cell of rows[idx].cells)     cell.style.borderTop    = border
-        }
+    // ⚠ 罫線の位置は【論理グリッド】で決める。row.cells[i] は i 列目ではなく、
+    //   上の行の rowspan に覆われた行では cells[colCount-1] が右端のセルでもない
+    //   （結合のある表で、右端・境目の線が引かれない／隣の列に引かれていた）。
+    //   境目をまたいで結合したセルには、その境目の線を引かない。
+    const { grid, pos } = buildTableGrid(table)
+    const nRows = grid.length
+    const nCols = Math.max(0, ...grid.map((r) => r.length))
+    for (const [cell, p] of pos) {
+      const top    = p.row
+      const bottom = p.row + cellSpan(cell, 'rowspan')
+      const left   = p.col
+      const right  = p.col + cellSpan(cell, 'colspan')
+      if (this._scope === 'outer') {
+        if (top === 0)         cell.style.borderTop    = border
+        if (bottom >= nRows)   cell.style.borderBottom = border
+        if (left === 0)        cell.style.borderLeft   = border
+        if (right >= nCols)    cell.style.borderRight  = border
+      } else if (this._scope === 'inner') {
+        if (top > 0)           cell.style.borderTop    = border
+        if (bottom < nRows)    cell.style.borderBottom = border
+        if (left > 0)          cell.style.borderLeft   = border
+        if (right < nCols)     cell.style.borderRight  = border
+      } else if (axis === 'row') {
+        // single: only the border at `idx` on the given axis
+        if (top === idx)                                  cell.style.borderTop    = border
+        if (bottom === idx || (idx >= nRows && bottom >= nRows)) cell.style.borderBottom = border
       } else {
-        // axis === 'col'
-        for (const tr of rows) {
-          if (idx === 0) {
-            if (tr.cells[0]) tr.cells[0].style.borderLeft = border
-          } else if (idx === colCount) {
-            const last = tr.cells[colCount - 1]
-            if (last) last.style.borderRight = border
-          } else {
-            if (tr.cells[idx - 1]) tr.cells[idx - 1].style.borderRight = border
-            if (tr.cells[idx])     tr.cells[idx].style.borderLeft      = border
-          }
-        }
+        if (left === idx)                                 cell.style.borderLeft   = border
+        if (right === idx || (idx >= nCols && right >= nCols))  cell.style.borderRight  = border
       }
     }
   }
@@ -7155,6 +7282,7 @@ export class KuroEditor {
       onRowBorderClick: (target, btn) => this._openLinePopup(target, btn),
       onColBorderClick: (target, btn) => this._openLinePopup(target, btn),
     })
+    this._setTableHoverButtons(this._readTableHoverButtons(), { save: false })
     this.tableResizer  = new TableResizer(this.wysiwyg)
     // 掴んでから離すまでで 1 手。掴んだ瞬間の colgroup 作りを別の手にしない（_historyStep は使わない）。
     this.tableResizer.onStart = () => this._commitSnapshot()
@@ -10174,10 +10302,10 @@ export class KuroEditor {
 
     // ── 選択がリストの項目だけなら、かかっているリスト【すべて】に効かせる ──
     if (this._styleListsInSelection('OL', 'kuro-list-', value)) {
-      try {
-        sel.setBaseAndExtent(savedRange.startContainer, savedRange.startOffset,
-                             savedRange.endContainer,   savedRange.endOffset)
-      } catch (_) {}
+      // 段落を項目にすると <p> は外れる（文字のノードは移るだけ）— 外れた端点は丸める
+      const host = sel.anchorNode?.parentElement?.closest?.('ul, ol') ??
+        savedRange.startContainer.parentElement?.closest?.('ul, ol')
+      this._restoreListRange(sel, savedRange, host)
       return
     }
 
@@ -10473,10 +10601,10 @@ export class KuroEditor {
 
     // ── 選択がリストの項目だけなら、かかっているリスト【すべて】に効かせる ──
     if (this._styleListsInSelection('UL', 'kuro-ul-', value)) {
-      try {
-        sel.setBaseAndExtent(savedRange.startContainer, savedRange.startOffset,
-                             savedRange.endContainer,   savedRange.endOffset)
-      } catch (_) {}
+      // 段落を項目にすると <p> は外れる（文字のノードは移るだけ）— 外れた端点は丸める
+      const host = sel.anchorNode?.parentElement?.closest?.('ul, ol') ??
+        savedRange.startContainer.parentElement?.closest?.('ul, ol')
+      this._restoreListRange(sel, savedRange, host)
       return
     }
 
@@ -10524,12 +10652,14 @@ export class KuroEditor {
    *
    * ⚠ 選択の先頭から辿った 1 つのリストだけにしない。離れた 2 つのリストを選んで
    *   押すと、先頭のリストしか変わらない。
-   * 段落が混ざった選択は false（従来どおり、段落をリストにする道へ）。
+   * 段落が混ざった選択は、段落もリストにして 1 つにまとめる（`_mergeIntoList`）。
    */
   _styleListsInSelection(tag, prefix, value) {
     const lines = this._linesInSelection()
+      .filter((l) => !l.hasAttribute?.('data-kuro-caret-slot'))
     const items = lines.filter((el) => el.tagName === 'LI')
-    if (items.length === 0 || items.length !== lines.length) return false
+    if (items.length === 0) return false
+    if (items.length !== lines.length) return this._mergeIntoList(lines, tag, prefix, value)
     const lists = []
     for (const li of items) {
       const list = li.parentElement
@@ -10544,6 +10674,74 @@ export class KuroEditor {
       list.classList.add(value)
     }
     return true
+  }
+
+  /**
+   * リストと段落が混ざった選択を、1 つのリストにまとめる。段落・見出しは項目になり、
+   * 既存のリストの項目は（入れ子ごと）そのまま移る。マーカーは `value`。
+   *
+   * まとめるのは【同じ器の中で隣り合う】ものだけ。間に表・コールアウトなどの枠が
+   * あれば、そこで別のリストに分ける（枠を項目の中へ入れて形を変えない）。
+   */
+  _mergeIntoList(lines, tag, prefix, value) {
+    // 行 → 器の直下の単位（項目は一番外のリスト）
+    const units = []
+    for (let u of lines) {
+      if (u.tagName === 'LI') {
+        let list = u.parentElement
+        while (list?.parentElement?.tagName === 'LI' &&
+               /^(UL|OL)$/.test(list.parentElement.parentElement?.tagName ?? '')) {
+          list = list.parentElement.parentElement
+        }
+        u = list
+      }
+      if (u && u !== this.wysiwyg && !units.includes(u)) units.push(u)
+    }
+    // 器が違うもの（枠の中の行と外の行）は、先頭の行の器に揃うものだけを扱う
+    const parent = units[0]?.parentElement
+    if (!parent) return false
+    const tops = units.filter((u) => u.parentElement === parent)
+    if (tops.length === 0) return false
+    const isList = (el) => /^(UL|OL)$/.test(el.tagName)
+    const isText = (el) => isLineBlock(el) && !/^(LI|TD|TH)$/.test(el.tagName)
+
+    // 先頭から末尾までの兄弟を、枠で区切った「まとまり」に分ける
+    const runs = [[]]
+    for (let x = tops[0]; x; x = x === tops[tops.length - 1] ? null : x.nextElementSibling) {
+      if (x.hasAttribute?.('data-kuro-caret-slot')) continue
+      if (isList(x) || isText(x)) runs[runs.length - 1].push(x)
+      else if (runs[runs.length - 1].length) runs.push([])
+    }
+
+    let made = 0
+    for (const run of runs) {
+      if (run.length === 0) continue
+      const base = run.find(isList)
+      const list = document.createElement(tag)
+      if (base) {
+        for (const a of [...base.attributes]) {
+          if (base.tagName !== tag && (a.name === 'start' || a.name === 'reversed')) continue
+          list.setAttribute(a.name, a.value)
+        }
+      }
+      for (const c of [...list.classList]) {
+        if (c.startsWith('kuro-ul-') || c.startsWith('kuro-list-')) list.classList.remove(c)
+      }
+      list.classList.add(value)
+      run[0].before(list)
+      for (const x of run) {
+        if (isList(x)) {
+          while (x.firstChild) list.appendChild(x.firstChild)
+        } else {
+          const li = document.createElement('li')
+          while (x.firstChild) li.appendChild(x.firstChild)
+          list.appendChild(li)
+        }
+        x.remove()
+      }
+      made++
+    }
+    return made > 0
   }
 
   /**
@@ -12404,6 +12602,20 @@ export class KuroEditor {
       if (all.filter((e) => e.getAttribute('data-bid') === id).length > 1) {
         el.setAttribute('data-bid', this._uuid())
       }
+    }
+  }
+
+  /** 表のボタンのホバー表示の設定（端末ごと。既定は切＝常に出す）。 */
+  _readTableHoverButtons() {
+    try { return window.localStorage.getItem(TABLE_HOVER_KEY) === '1' } catch { return false }
+  }
+
+  /** 表のボタンのホバー表示を入り切りする（表のメニューのボタンから）。 */
+  _setTableHoverButtons(on, { save = true } = {}) {
+    this.tableInserter.setHoverMode(on)
+    this.tableManager._syncHoverBtn(on)
+    if (save) {
+      try { window.localStorage.setItem(TABLE_HOVER_KEY, on ? '1' : '0') } catch {}
     }
   }
 

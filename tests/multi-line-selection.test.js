@@ -158,4 +158,36 @@ describe('複数行の選択', () => {
     expect(ed.wysiwyg.querySelectorAll('ol.kuro-list-paren').length).toBe(2)
     expect(ed.wysiwyg.querySelector('ul')).toBeNull()
   })
+
+  it('記号のマーカー — リストと段落が混ざれば、段落も項目にして 1 つのリストに', () => {
+    const ed = makeEditor('<ul><li id="a">x</li></ul><p id="b">m</p><h2 id="c">n</h2>')
+    selectLines(ed, '#a', '#c')
+    ed._applyULStyle('kuro-ul-star')
+    expect(html(ed)).toBe('<ul class="kuro-ul-star"><li id="a">x</li><li>m</li><li>n</li></ul>')
+    expect(window.getSelection().toString()).toBe('xmn')
+  })
+
+  it('番号のマーカー — 段落を挟んだ 2 つのリストも 1 つにまとまる（入れ子はそのまま）', () => {
+    const ed = makeEditor(
+      '<ol start="3"><li id="a">x<ol><li>x1</li></ol></li></ol><p id="b">m</p><ul><li id="c">y</li></ul>')
+    selectLines(ed, '#a', '#c')
+    ed._applyListStyle('kuro-list-paren-num')
+    const top = [...ed.wysiwyg.children].filter((el) => el.tagName === 'OL')
+    expect(top.length).toBe(1)
+    const ol = top[0]
+    expect(ol.getAttribute('start')).toBe('3')
+    expect(ol.classList.contains('kuro-list-paren-num')).toBe(true)
+    expect([...ol.children].map((li) => li.firstChild.textContent)).toEqual(['x', 'm', 'y'])
+    expect(ol.querySelector('li > ol > li')?.textContent).toBe('x1')
+    expect(ed.wysiwyg.querySelector('ul')).toBeNull()
+  })
+
+  it('マーカー — 間に表があれば、そこで別のリストに分ける（表を項目に入れない）', () => {
+    const ed = makeEditor(
+      '<ul><li id="a">x</li></ul><p>m</p><table><tbody><tr><td>t</td></tr></tbody></table><p id="c">n</p>')
+    selectLines(ed, '#a', '#c')
+    ed._applyULStyle('kuro-ul-star')
+    expect([...ed.wysiwyg.children].filter((el) => el.matches('ul.kuro-ul-star')).length).toBe(2)
+    expect(ed.wysiwyg.querySelector('li table')).toBeNull()
+  })
 })

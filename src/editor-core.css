@@ -852,7 +852,12 @@
     left: 0;
     pointer-events: none;
     z-index: 30;
+    transition: opacity .25s;
   }
+  /* ホバー表示で、表から離れて消えている間（表のメニューの矢印ボタンで入り切り）。
+     見た目と押せることだけを止める — 位置の計算は続けるので、戻ればすぐ出る。 */
+  .kuro-table-inserter--asleep { opacity: 0; }
+  .kuro-table-inserter--asleep * { pointer-events: none !important; }
 
   .kuro-table-insert-btn {
     position: absolute;
