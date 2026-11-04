@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.45.4'
+export const VERSION = '2.45.5'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -12605,9 +12605,9 @@ export class KuroEditor {
     }
   }
 
-  /** 表のボタンのホバー表示の設定（端末ごと。既定は切＝常に出す）。 */
+  /** 表のボタンのホバー表示の設定（端末ごと。既定は入＝近づいたときだけ出す）。 */
   _readTableHoverButtons() {
-    try { return window.localStorage.getItem(TABLE_HOVER_KEY) === '1' } catch { return false }
+    try { return window.localStorage.getItem(TABLE_HOVER_KEY) !== '0' } catch { return true }
   }
 
   /** 表のボタンのホバー表示を入り切りする（表のメニューのボタンから）。 */

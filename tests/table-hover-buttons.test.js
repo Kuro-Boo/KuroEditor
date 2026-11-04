@@ -33,14 +33,31 @@ describe('表のボタンのホバー表示', () => {
   })
   afterEach(() => { window.matchMedia = orig; vi.useRealTimers() })
 
-  it('既定は切 — 表から離れてもボタンは消えない', () => {
+  it('既定は入 — 何も覚えていない端末では、離れて 2 秒で消える', () => {
     stubHover(true)
     const ed = makeEditor()
     const ins = ed.tableInserter
+    expect(ins.hoverMode).toBe(true)
+    expect(ed.tableManager._hoverBtn.classList.contains('kuro-table-menu__btn--active')).toBe(true)
+    ins.activate(ed.wysiwyg.querySelector('table'))
+    move(5000, 5000)
+    vi.advanceTimersByTime(2100)
+    expect(ins.container.classList.contains('kuro-table-inserter--asleep')).toBe(true)
+  })
+
+  it('切 — 表から離れてもボタンは消えない。切も端末に覚える', () => {
+    stubHover(true)
+    const ed = makeEditor()
+    const ins = ed.tableInserter
+    ed.tableManager._hoverBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(ins.hoverMode).toBe(false)
+    expect(localStorage.getItem('kuro-editor-table-hover-buttons')).toBe('0')
     ins.activate(ed.wysiwyg.querySelector('table'))
     move(5000, 5000)
     vi.advanceTimersByTime(3000)
     expect(ins.container.classList.contains('kuro-table-inserter--asleep')).toBe(false)
+    document.body.innerHTML = ''
+    expect(makeEditor().tableInserter.hoverMode).toBe(false)
   })
 
   it('入 — 離れて 2 秒で消え、近づけば出る。設定は端末に覚える', () => {
@@ -49,7 +66,7 @@ describe('表のボタンのホバー表示', () => {
     const ins = ed.tableInserter
     const table = ed.wysiwyg.querySelector('table')
     table.getBoundingClientRect = () => ({ left: 100, top: 100, right: 300, bottom: 200, width: 200, height: 100 })
-    ed.tableManager._hoverBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    ed._setTableHoverButtons(true)
     expect(ins.hoverMode).toBe(true)
     expect(ed.tableManager._hoverBtn.classList.contains('kuro-table-menu__btn--active')).toBe(true)
     expect(localStorage.getItem('kuro-editor-table-hover-buttons')).toBe('1')
