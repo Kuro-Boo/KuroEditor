@@ -115,7 +115,7 @@ export {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.45.5'
+export const VERSION = '2.45.6'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -8426,17 +8426,13 @@ export class KuroEditor {
     const frag = html.match(/<!--StartFragment-->([\s\S]*?)<!--EndFragment-->/)
     const markup = frag ? frag[1] : html
     let out = normalizeContentHtml(markup).replace(/\sdata-c?bid="[^"]*"/g, '')
-    // 行の中の文字だけを写した断片は、行の中へ入る
+    // 段落 1 つ分（属性なし）の断片は、行の中へ入る。外のアプリやページの 1 行の
+    // コピーは <p>・<div> に包まれて来ることが多く（VS Code・メモ・段落ごとの選択）、
+    // 段落のまま挿すと行が割れて「前後に改行が入る」。段落 2 つ以上・見出し・寄せや
+    // 行間を持つ段落はブロックのまま。
     const m = /^<p>([\s\S]*)<\/p>$/.exec(out)
-    if (m && !/<(p|h[1-6]|ul|ol|li|table|blockquote|pre|figure|hr|div)[\s>]/.test(m[1]) && !this._looksLikeBlockFragment(markup)) out = m[1]
+    if (m && !/<(p|h[1-6]|ul|ol|li|table|blockquote|pre|figure|hr|div)[\s>]/.test(m[1])) out = m[1]
     return renderSpecialLinks(out, this.options.urlResolver, this._supportedKinds)
-  }
-
-  /** 断片の一番外にブロックがあるか（無ければ行の中の文字だけ）。 */
-  _looksLikeBlockFragment(markup) {
-    const body = new DOMParser().parseFromString(markup, 'text/html').body
-    return [...body.childNodes].some((n) => n.nodeType === 1 &&
-      !/^(SPAN|A|B|STRONG|I|EM|U|S|DEL|INS|STRIKE|CODE|KBD|SUB|SUP|SMALL|BIG|MARK|FONT|BR|IMG|RUBY|RT|RP|Q|ABBR|CITE|TIME|LABEL|BUTTON|WBR|TT|SAMP|VAR|DFN|BDI|BDO|DATA)$/.test(n.tagName))
   }
 
   /**

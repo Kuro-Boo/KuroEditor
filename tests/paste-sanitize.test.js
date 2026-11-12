@@ -29,22 +29,35 @@ describe('貼り付けの掃除（許可リスト）', () => {
       '<p id="theirs" data-x="1" class="prose" onclick="alert(1)">文</p>',
       '<p><span style="color: #fff; background-color: #000">文</span></p>',
       '<table><tr><td style="border: 1px solid #000">a</td></tr></table>',
-    ]) expect(ed._sanitizePastedHTML(html)).toBe(normalizeContentHtml(html))
+    ]) {
+      // 段落 1 つ分は行の中へ入るので、2 段落で比べる
+      const two = html + '<p>次</p>'
+      expect(ed._sanitizePastedHTML(two)).toBe(normalizeContentHtml(two))
+    }
   })
 
   it('貼った写しは新しいブロック（data-bid を持ち込まない）', () => {
-    expect(ed._sanitizePastedHTML('<p data-bid="b-1">文</p>')).toBe('<p>文</p>')
+    expect(ed._sanitizePastedHTML('<p data-bid="b-1">文</p><p data-bid="b-2">次</p>')).toBe('<p>文</p><p>次</p>')
   })
 
   it('行の中の文字だけの断片は段落で包まない（貼っただけで行が割れない）', () => {
     expect(ed._sanitizePastedHTML('<span style="font-weight: 700; font-style: italic">強調</span>'))
       .toBe('<strong><em>強調</em></strong>')
-    expect(ed._sanitizePastedHTML('<p>段落</p>')).toBe('<p>段落</p>')
+  })
+
+  it('段落 1 つ分の断片は行の中へ入る（外の 1 行のコピーで前後に改行が入らない）', () => {
+    expect(ed._sanitizePastedHTML('<p>段落</p>')).toBe('段落')
+    expect(ed._sanitizePastedHTML('<div><span>一行</span></div>')).toBe('一行')
+    expect(ed._sanitizePastedHTML('<meta charset="utf-8"><p class="p1">一行</p>')).toBe('一行')
+    // 2 段落以上・見出し・寄せのある段落はブロックのまま
+    expect(ed._sanitizePastedHTML('<p>一</p><p>二</p>')).toBe('<p>一</p><p>二</p>')
+    expect(ed._sanitizePastedHTML('<h2>見出し</h2>')).toBe('<h2>見出し</h2>')
+    expect(ed._sanitizePastedHTML('<p style="text-align: center">中</p>')).toMatch(/^<p /)
   })
 
   it('StartFragment の印があればその間だけ読む', () => {
-    expect(ed._sanitizePastedHTML('<html><head><style>.a{}</style></head><body><!--StartFragment--><p>文</p><!--EndFragment--></body></html>'))
-      .toBe('<p>文</p>')
+    expect(ed._sanitizePastedHTML('<html><head><style>.a{}</style></head><body><!--StartFragment--><p>文</p><p>次</p><!--EndFragment--></body></html>'))
+      .toBe('<p>文</p><p>次</p>')
   })
 
   it('外のリンクは記法になり、描いた形で入る（編集ポップアップで直せる）', () => {
@@ -66,7 +79,7 @@ describe('貼り付けの掃除（許可リスト）', () => {
   })
 
   it('本文に置けない要素は中身ごと落とす・危ない href は文字になる（R0）', () => {
-    expect(ed._sanitizePastedHTML('<style>body{display:none}</style><p>文</p><script>alert(1)</script>')).toBe('<p>文</p>')
+    expect(ed._sanitizePastedHTML('<style>body{display:none}</style><p>文</p><script>alert(1)</script>')).toBe('文')
     const out = ed._sanitizePastedHTML('<p><a href="javascript:alert(1)">a</a></p>')
     expect(out).not.toMatch(/javascript/i)
     expect(out).toContain('a')
