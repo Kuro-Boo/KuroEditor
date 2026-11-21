@@ -469,6 +469,10 @@
      置かない（WYSIWYG＝公開ページと同じ見た目）ので、手触りは cursor だけ。 */
   .kuro-pane__wysiwyg [data-kuro-block="recipe-card"] { cursor: pointer; }
   .kuro-pane--view [data-kuro-block="recipe-card"] { cursor: default; }
+  .kuro-pane__wysiwyg [data-kuro-block="job-card"],
+  .kuro-pane__wysiwyg [data-kuro-block="contact-form"] { cursor: pointer; }
+  .kuro-pane--view [data-kuro-block="job-card"],
+  .kuro-pane--view [data-kuro-block="contact-form"] { cursor: default; }
   /* チェックリストの箱 — タップで data-checked をトグルする */
   .kuro-pane__wysiwyg ul.kuro-ul-check > li::before { cursor: pointer; }
   .kuro-pane--view .kuro-pane__wysiwyg ul.kuro-ul-check > li::before { cursor: default; }
@@ -1460,6 +1464,16 @@
   .kuro-recipe-dialog__btn--primary {
     @apply text-white bg-indigo-600 hover:bg-indigo-500;
   }
+
+  /* ── Job / Contact Dialog(見た目はレシピのモーダルと共通。足りない部品だけ) ── */
+  .kuro-recipe-dialog__field--wide { @apply flex-none w-full; }
+  .kuro-job-dialog__open { @apply flex-row items-center gap-2 flex-none; }
+  .kuro-job-dialog__types { @apply flex flex-wrap gap-x-3 gap-y-1.5 text-sm text-neutral-200; }
+  .kuro-job-dialog__type { @apply flex items-center gap-1 cursor-pointer; }
+  .kuro-contact-dialog__item { @apply flex-wrap; }
+  .kuro-contact-dialog__kind { @apply flex-none; width: 9rem; }
+  .kuro-contact-dialog__req { @apply flex flex-none items-center gap-1 text-xs text-neutral-300 cursor-pointer; }
+  .kuro-contact-dialog__options { @apply w-full; flex-basis: 100%; }
 
   /* ── Media Dialog ── */
   .kuro-media-dialog {

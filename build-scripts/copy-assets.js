@@ -1,7 +1,7 @@
 // dist へ「vite が扱わない素ファイル」を複製する。
 //  - kuro-content.css : 公開ページ用の本文スタイル（エディタ非読込ページ向け）
 //  - kuro-code-copy.js : 公開ページのコードブロックに 📋 を後付けする小さな script
-//  - blocks.js / kuro-links.js / recipe.js : DOM 非依存の共有純関数モジュール
+//  - blocks.js / kuro-links.js / recipe.js / job.js / contact.js : DOM 非依存の共有純関数モジュール
 //    （公開 repo の利用者向けの dist。Entamy のモノレポの中の製品は src を直接 import する）
 //  - *.d.ts : 上記モジュールの型定義（src では .js と同じ名前で並べる。dist では kuro- を付ける）
 // これらは verbatim コピー（vite バンドル対象外）。
@@ -20,6 +20,10 @@ const files = [
   ['src/normalize.js', 'dist/kuro-normalize.js'],
   ['src/recipe.js', 'dist/kuro-recipe.js'],
   ['src/recipe.d.ts', 'dist/kuro-recipe.d.ts'],
+  ['src/job.js', 'dist/kuro-job.js'],
+  ['src/job.d.ts', 'dist/kuro-job.d.ts'],
+  ['src/contact.js', 'dist/kuro-contact.js'],
+  ['src/contact.d.ts', 'dist/kuro-contact.d.ts'],
   ['src/normalize.d.ts', 'dist/kuro-normalize.d.ts'],
 ];
 

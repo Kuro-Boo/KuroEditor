@@ -61,6 +61,35 @@ import {
   renderRecipePreview,
   validateRecipe,
 } from './recipe.js'
+// JobCard(求人の構造化ブロック)・ContactForm(問い合わせフォームの形)。純関数は job.js・contact.js。
+import {
+  JOB_CARD_SEL,
+  JOB_LIMITS,
+  JOB_VERSION,
+  EMPLOYMENT_TYPES,
+  SALARY_UNITS,
+  SALARY_CURRENCIES,
+  buildJobCardHtml,
+  decodeJob,
+  emptyJob,
+  normalizeJob,
+  renderJobPreview,
+  stampOpenedAt,
+  validateJob,
+} from './job.js'
+import {
+  CONTACT_CARD_SEL,
+  CONTACT_DEFAULTS,
+  CONTACT_LIMITS,
+  CONTACT_VERSION,
+  FIELD_KINDS,
+  buildContactCardHtml,
+  decodeContactForm,
+  emptyContactForm,
+  normalizeContactForm,
+  renderContactPreview,
+  validateContactForm,
+} from './contact.js'
 
 // 後方互換: 従来 editor.js から import していた名前をそのまま再 export する。
 export {
@@ -110,12 +139,15 @@ export {
   totalMinutes,
   validateRecipe,
 } from './recipe.js'
+// JobCard・ContactForm の純関数(ホストのサーバー側検証・公開ページ生成が同じ実装を使う)
+export * from './job.js'
+export * from './contact.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.45.6'
+export const VERSION = '2.46.0'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -455,6 +487,18 @@ const ICON = {
     `<path d="M1 5.5h14"/>` +                                            // 縁
     `<path d="M2.6 6.6H1.2a.9.9 0 0 1 0-1.8h1.4M13.4 6.6h1.4a.9.9 0 0 0 0-1.8h-1.4"/>` + // 取っ手
     `<path d="M6 3.2c0-.9.9-.9.9-1.8M9.1 3.2c0-.9.9-.9.9-1.8"/>` +       // 湯気
+  `</svg>`,
+  // 求人(鞄) — JobCard button (jobUi オプションで表示)
+  job: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<rect x="1" y="4" width="14" height="9" rx="1.5"/>` +
+    `<path d="M5.5 4V2.6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4"/>` +
+    `<path d="M1 8h14M7 8v1.4h2V8"/>` +
+  `</svg>`,
+  // フォーム(欄と送る) — ContactForm button (contactUi オプションで表示)
+  form: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `<rect x="1" y="1.5" width="14" height="3" rx="0.8"/>` +
+    `<rect x="1" y="6" width="14" height="3" rx="0.8"/>` +
+    `<path d="M9.5 11.2h5.5M12.5 9.8l1.6 1.4-1.6 1.4"/>` +
   `</svg>`,
   // Undo: 矢印が左に折れ曲がってカーブ
   undo: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,4 2,4 2,1"/><path d="M2 4 a5 5 0 0 1 5 -1 h2 a4 4 0 0 1 0 8 h-3"/></svg>`,
@@ -6152,6 +6196,392 @@ export class RecipeDialog {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// JOB DIALOG — JobCard の唯一の編集手段(仕様 editor-editor-spec-job)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 書き手の端末の今日(YYYY-MM-DD)。募集を始めた日の既定。 */
+function localIsoDate(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/**
+ * 求人(募集中の入切・雇用形態・給与・勤務地・勤務時間・応募資格・期限)を入力するモーダル。
+ * 見た目はレシピのモーダルと共通(kuro-recipe-dialog の部品を使う)。
+ * ⚠ 保存時は必ず normalizeJob → validateJob を通す。誤りの間は閉じない。
+ */
+export class JobDialog {
+  constructor({ onSave, onDelete }) {
+    this.onSave = onSave
+    this.onDelete = onDelete
+    this._before = null
+    this.el = createElement('div', {
+      className: 'kuro-recipe-dialog kuro-job-dialog',
+      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '求人カードの編集' },
+    })
+    this._box = createElement('div', { className: 'kuro-recipe-dialog__box' })
+    const head = createElement('div', { className: 'kuro-recipe-dialog__head' })
+    head.appendChild(createElement('div', { className: 'kuro-recipe-dialog__title', html: '求人カード' }))
+    const tools = createElement('div', { className: 'kuro-recipe-dialog__tools' })
+    this._deleteBtn = createElement('button', {
+      className: 'kuro-recipe-dialog__tool kuro-recipe-dialog__tool--danger kuro-del-btn',
+      html: `${ICON.trash}<span>削除</span>`,
+      attrs: { type: 'button', title: 'この求人カードを削除', 'aria-label': 'この求人カードを削除' },
+    })
+    this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
+    tools.appendChild(this._deleteBtn)
+    head.appendChild(tools)
+    this._box.appendChild(head)
+    this._box.appendChild(createElement('p', {
+      className: 'kuro-recipe-dialog__note',
+      html: '職種名は記事のタイトル、仕事の説明は本文を使います。募集を止めるときは「募集中」を切ります(記事は消さずに、また人が足りなくなったら入れ直せます)。',
+    }))
+
+    // ── 募集中の入切 + 募集を始めた日 ───────────────────────────────────
+    const state = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    const openWrap = createElement('label', { className: 'kuro-recipe-dialog__field kuro-job-dialog__open' })
+    this._openInput = createElement('input', { attrs: { type: 'checkbox', class: 'toggle' } })
+    openWrap.appendChild(this._openInput)
+    openWrap.appendChild(createElement('span', { className: 'kuro-recipe-dialog__label', html: '募集中' }))
+    state.appendChild(openWrap)
+    this._openedInput = this._field(state, '募集を始めた日', { type: 'date' })
+    this._box.appendChild(state)
+
+    // ── 雇用形態 ────────────────────────────────────────────────────────
+    const typesSec = this._section('雇用形態(1 つ以上)')
+    this._typeInputs = []
+    const typesRow = createElement('div', { className: 'kuro-job-dialog__types' })
+    for (const [key, label] of EMPLOYMENT_TYPES) {
+      const l = createElement('label', { className: 'kuro-job-dialog__type' })
+      const cb = createElement('input', { attrs: { type: 'checkbox', value: key } })
+      l.appendChild(cb)
+      l.appendChild(document.createTextNode(label))
+      typesRow.appendChild(l)
+      this._typeInputs.push(cb)
+    }
+    typesSec.appendChild(typesRow)
+
+    // ── 給与 ────────────────────────────────────────────────────────────
+    const salSec = this._section('給与(任意)')
+    const salRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._unitSelect = this._select(salRow, '単位', SALARY_UNITS)
+    this._minInput = this._field(salRow, '下限', { type: 'number', min: '0', inputmode: 'numeric' })
+    this._maxInput = this._field(salRow, '上限(任意)', { type: 'number', min: '0', inputmode: 'numeric' })
+    this._currencySelect = this._select(salRow, '通貨', SALARY_CURRENCIES.map((c) => [c, c]))
+    salSec.appendChild(salRow)
+    const noteRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._salaryNoteInput = this._field(noteRow, '給与の補足(任意)', { placeholder: '交通費支給 など', maxlength: String(JOB_LIMITS.noteMax) })
+    salSec.appendChild(noteRow)
+
+    // ── 勤務地 ──────────────────────────────────────────────────────────
+    const locSec = this._section('勤務地')
+    const locRow1 = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._postalInput = this._field(locRow1, '郵便番号(任意)', { placeholder: '277-0825' })
+    this._regionInput = this._field(locRow1, '都道府県', { placeholder: '千葉県' })
+    this._localityInput = this._field(locRow1, '市区町村', { placeholder: '柏市' })
+    locSec.appendChild(locRow1)
+    const locRow2 = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._streetInput = this._field(locRow2, '番地・建物(任意)', {})
+    this._countryInput = this._field(locRow2, '国', { maxlength: '2', placeholder: 'JP' })
+    locSec.appendChild(locRow2)
+
+    // ── 勤務時間・応募資格・期限 ──────────────────────────────────────────
+    const moreSec = this._section('そのほか(任意)')
+    this._hoursInput = this._area(moreSec, '勤務時間', JOB_LIMITS.hoursMax)
+    this._reqInput = this._area(moreSec, '応募資格・歓迎する経験', JOB_LIMITS.requirementsMax)
+    const vtRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._validInput = this._field(vtRow, '掲載期限(決まっている求人だけ)', { type: 'date' })
+    moreSec.appendChild(vtRow)
+
+    this._errors = createElement('ul', { className: 'kuro-recipe-dialog__errors' })
+    this._errors.hidden = true
+    this._box.appendChild(this._errors)
+    const footer = createElement('div', { className: 'kuro-recipe-dialog__footer' })
+    const cancel = createElement('button', { className: 'kuro-recipe-dialog__btn', html: 'キャンセル', attrs: { type: 'button' } })
+    const save = createElement('button', { className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--primary', html: '保存', attrs: { type: 'button' } })
+    cancel.addEventListener('click', () => this.hide())
+    save.addEventListener('click', () => this._submit())
+    footer.appendChild(cancel)
+    footer.appendChild(save)
+    this._box.appendChild(footer)
+    this.el.appendChild(this._box)
+    this.el.addEventListener('mousedown', (e) => { if (!this._box.contains(e.target)) this.hide() })
+    this._onKeydown = (e) => {
+      if (!this.isVisible || isImeComposing(e)) return
+      if (e.key === 'Escape') { e.preventDefault(); this.hide() }
+    }
+    document.addEventListener('keydown', this._onKeydown)
+    document.body.appendChild(this.el)
+  }
+
+  _section(title) {
+    const sec = createElement('div', { className: 'kuro-recipe-dialog__section' })
+    sec.appendChild(createElement('h4', { className: 'kuro-recipe-dialog__h', html: title }))
+    this._box.appendChild(sec)
+    return sec
+  }
+
+  _field(parent, label, attrs = {}) {
+    const wrap = createElement('label', { className: 'kuro-recipe-dialog__field' })
+    wrap.appendChild(createElement('span', { className: 'kuro-recipe-dialog__label', html: label }))
+    const input = createElement('input', { className: 'kuro-recipe-dialog__input', attrs: { type: 'text', spellcheck: 'false', ...attrs } })
+    wrap.appendChild(input)
+    parent.appendChild(wrap)
+    return input
+  }
+
+  _select(parent, label, pairs) {
+    const wrap = createElement('label', { className: 'kuro-recipe-dialog__field' })
+    wrap.appendChild(createElement('span', { className: 'kuro-recipe-dialog__label', html: label }))
+    const sel = createElement('select', { className: 'kuro-recipe-dialog__input' })
+    for (const [v, t] of pairs) {
+      const o = document.createElement('option')
+      o.value = v; o.textContent = t
+      sel.appendChild(o)
+    }
+    wrap.appendChild(sel)
+    parent.appendChild(wrap)
+    return sel
+  }
+
+  _area(parent, label, max) {
+    const wrap = createElement('label', { className: 'kuro-recipe-dialog__field kuro-recipe-dialog__field--wide' })
+    wrap.appendChild(createElement('span', { className: 'kuro-recipe-dialog__label', html: label }))
+    const ta = createElement('textarea', { className: 'kuro-recipe-dialog__input', attrs: { rows: '3', maxlength: String(max) } })
+    wrap.appendChild(ta)
+    parent.appendChild(wrap)
+    return ta
+  }
+
+  get isVisible() { return this.el.classList.contains('kuro-recipe-dialog--visible') }
+
+  _read() {
+    return {
+      version: JOB_VERSION,
+      open: this._openInput.checked,
+      openedAt: this._openedInput.value,
+      employmentType: this._typeInputs.filter((c) => c.checked).map((c) => c.value),
+      salary: { currency: this._currencySelect.value, unit: this._unitSelect.value, min: this._minInput.value, max: this._maxInput.value },
+      salaryNote: this._salaryNoteInput.value,
+      location: {
+        country: this._countryInput.value, postalCode: this._postalInput.value,
+        region: this._regionInput.value, locality: this._localityInput.value, street: this._streetInput.value,
+      },
+      hours: this._hoursInput.value,
+      requirements: this._reqInput.value,
+      validThrough: this._validInput.value,
+    }
+  }
+
+  _showErrors(list) {
+    this._errors.textContent = ''
+    for (const msg of list) {
+      const li = createElement('li')
+      li.textContent = msg
+      this._errors.appendChild(li)
+    }
+    this._errors.hidden = list.length === 0
+  }
+
+  _submit() {
+    const job = stampOpenedAt(this._before, normalizeJob(this._read()), localIsoDate())
+    const errors = validateJob(job)
+    this._showErrors(errors)
+    if (errors.length) return
+    this.onSave(job)
+    this.hide()
+  }
+
+  /** @param {object|null} job 既存カードの内容(null = 新規) */
+  open(job = null) {
+    this._before = job ? normalizeJob(job) : null
+    const j = normalizeJob(job ?? emptyJob())
+    this._openInput.checked = j.open
+    this._openedInput.value = j.openedAt ?? ''
+    for (const cb of this._typeInputs) cb.checked = j.employmentType.includes(cb.value)
+    this._unitSelect.value = j.salary?.unit ?? 'HOUR'
+    this._currencySelect.value = j.salary?.currency ?? 'JPY'
+    this._minInput.value = j.salary?.min ?? ''
+    this._maxInput.value = j.salary?.max ?? ''
+    this._salaryNoteInput.value = j.salaryNote ?? ''
+    this._countryInput.value = j.location.country
+    this._postalInput.value = j.location.postalCode ?? ''
+    this._regionInput.value = j.location.region
+    this._localityInput.value = j.location.locality
+    this._streetInput.value = j.location.street ?? ''
+    this._hoursInput.value = j.hours ?? ''
+    this._reqInput.value = j.requirements ?? ''
+    this._validInput.value = j.validThrough ?? ''
+    this._showErrors([])
+    this.el.classList.add('kuro-recipe-dialog--visible')
+    this._openInput.focus()
+  }
+
+  hide() { this.el.classList.remove('kuro-recipe-dialog--visible') }
+
+  destroy() {
+    document.removeEventListener('keydown', this._onKeydown)
+    this.el.remove()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTACT DIALOG — ContactForm の唯一の編集手段(仕様 editor-editor-spec-contact)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 問い合わせフォームの形(件名・案内・項目・ボタンの文・送信後の文)を入力するモーダル。
+ * ⚠ 送り先の欄は作らない(ホストの設定で決める)。
+ */
+export class ContactDialog {
+  constructor({ onSave, onDelete }) {
+    this.onSave = onSave
+    this.onDelete = onDelete
+    this.el = createElement('div', {
+      className: 'kuro-recipe-dialog kuro-contact-dialog',
+      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '問い合わせフォームの編集' },
+    })
+    this._box = createElement('div', { className: 'kuro-recipe-dialog__box' })
+    const head = createElement('div', { className: 'kuro-recipe-dialog__head' })
+    head.appendChild(createElement('div', { className: 'kuro-recipe-dialog__title', html: '問い合わせフォーム' }))
+    const tools = createElement('div', { className: 'kuro-recipe-dialog__tools' })
+    this._deleteBtn = createElement('button', {
+      className: 'kuro-recipe-dialog__tool kuro-recipe-dialog__tool--danger kuro-del-btn',
+      html: `${ICON.trash}<span>削除</span>`,
+      attrs: { type: 'button', title: 'このフォームを削除', 'aria-label': 'このフォームを削除' },
+    })
+    this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
+    tools.appendChild(this._deleteBtn)
+    head.appendChild(tools)
+    this._box.appendChild(head)
+    this._box.appendChild(createElement('p', {
+      className: 'kuro-recipe-dialog__note',
+      html: '送られた内容は、サイトの設定で選んだ管理者へメールで届きます。送り先はここでは決めません。',
+    }))
+    const top = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._subjectInput = JobDialog.prototype._field.call(this, top, '件名(届くメールの件名)', { maxlength: String(CONTACT_LIMITS.subjectMax) })
+    this._box.appendChild(top)
+    const noteSec = createElement('div', { className: 'kuro-recipe-dialog__section' })
+    this._noteInput = JobDialog.prototype._area.call(this, noteSec, 'フォームの上の案内(任意)', CONTACT_LIMITS.noteMax)
+    this._box.appendChild(noteSec)
+
+    const sec = createElement('div', { className: 'kuro-recipe-dialog__section' })
+    sec.appendChild(createElement('h4', { className: 'kuro-recipe-dialog__h', html: '項目' }))
+    this._list = createElement('div', { className: 'kuro-recipe-dialog__list' })
+    sec.appendChild(this._list)
+    const add = createElement('button', { className: 'kuro-recipe-dialog__add', html: '＋ 項目を追加', attrs: { type: 'button' } })
+    add.addEventListener('click', () => this._addField({ kind: 'text', label: '', required: false }))
+    sec.appendChild(add)
+    this._box.appendChild(sec)
+
+    const tail = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._submitInput = JobDialog.prototype._field.call(this, tail, 'ボタンの文(任意)', { placeholder: CONTACT_DEFAULTS.submitLabel, maxlength: String(CONTACT_LIMITS.submitMax) })
+    this._doneInput = JobDialog.prototype._field.call(this, tail, '送信後の文(任意)', { placeholder: CONTACT_DEFAULTS.doneMessage, maxlength: String(CONTACT_LIMITS.doneMax) })
+    this._box.appendChild(tail)
+
+    this._errors = createElement('ul', { className: 'kuro-recipe-dialog__errors' })
+    this._errors.hidden = true
+    this._box.appendChild(this._errors)
+    const footer = createElement('div', { className: 'kuro-recipe-dialog__footer' })
+    const cancel = createElement('button', { className: 'kuro-recipe-dialog__btn', html: 'キャンセル', attrs: { type: 'button' } })
+    const save = createElement('button', { className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--primary', html: '保存', attrs: { type: 'button' } })
+    cancel.addEventListener('click', () => this.hide())
+    save.addEventListener('click', () => this._submit())
+    footer.appendChild(cancel)
+    footer.appendChild(save)
+    this._box.appendChild(footer)
+    this.el.appendChild(this._box)
+    this.el.addEventListener('mousedown', (e) => { if (!this._box.contains(e.target)) this.hide() })
+    this._onKeydown = (e) => {
+      if (!this.isVisible || isImeComposing(e)) return
+      if (e.key === 'Escape') { e.preventDefault(); this.hide() }
+    }
+    document.addEventListener('keydown', this._onKeydown)
+    document.body.appendChild(this.el)
+  }
+
+  _addField(f) {
+    const row = createElement('div', { className: 'kuro-recipe-dialog__item kuro-contact-dialog__item' })
+    const kind = createElement('select', { className: 'kuro-recipe-dialog__input kuro-contact-dialog__kind', attrs: { 'aria-label': '種類' } })
+    for (const [k, t] of FIELD_KINDS) {
+      const o = document.createElement('option')
+      o.value = k; o.textContent = t
+      kind.appendChild(o)
+    }
+    kind.value = f.kind
+    const label = createElement('input', { className: 'kuro-recipe-dialog__input', attrs: { type: 'text', placeholder: '項目の名前', 'aria-label': '項目の名前', maxlength: String(CONTACT_LIMITS.labelMax) } })
+    label.value = f.label ?? ''
+    const reqWrap = createElement('label', { className: 'kuro-contact-dialog__req' })
+    const req = createElement('input', { attrs: { type: 'checkbox' } })
+    req.checked = f.required === true
+    reqWrap.appendChild(req)
+    reqWrap.appendChild(document.createTextNode('必須'))
+    const opts = createElement('textarea', { className: 'kuro-recipe-dialog__input kuro-contact-dialog__options', attrs: { rows: '3', placeholder: '選択肢(1 行に 1 つ)', 'aria-label': '選択肢' } })
+    opts.value = (f.options ?? []).join('\n')
+    const syncKind = () => {
+      opts.hidden = kind.value !== 'select'
+      // 名前が空なら種類の既定の名前を入れる(書き手が名前を打つ手間を省く)
+      if (!label.value.trim()) label.value = new Map(FIELD_KINDS).get(kind.value) ?? ''
+    }
+    kind.addEventListener('change', syncKind)
+    syncKind()
+    const del = createElement('button', { className: 'kuro-recipe-dialog__row-del', html: ICON.trash, attrs: { type: 'button', title: 'この項目を削除', 'aria-label': 'この項目を削除' } })
+    del.addEventListener('click', () => row.remove())
+    row.append(kind, label, reqWrap, del, opts)
+    this._list.appendChild(row)
+  }
+
+  get isVisible() { return this.el.classList.contains('kuro-recipe-dialog--visible') }
+
+  _read() {
+    return {
+      version: CONTACT_VERSION,
+      subject: this._subjectInput.value,
+      note: this._noteInput.value,
+      submitLabel: this._submitInput.value,
+      doneMessage: this._doneInput.value,
+      fields: [...this._list.querySelectorAll('.kuro-contact-dialog__item')].map((row) => ({
+        kind: row.querySelector('.kuro-contact-dialog__kind').value,
+        label: row.querySelector('input[type="text"]').value,
+        required: row.querySelector('input[type="checkbox"]').checked,
+        options: row.querySelector('.kuro-contact-dialog__options').value.split(/\r?\n/),
+      })),
+    }
+  }
+
+  _showErrors(list) { JobDialog.prototype._showErrors.call(this, list) }
+
+  _submit() {
+    const form = normalizeContactForm(this._read())
+    const errors = validateContactForm(form)
+    this._showErrors(errors)
+    if (errors.length) return
+    this.onSave(form)
+    this.hide()
+  }
+
+  open(form = null) {
+    const c = normalizeContactForm(form ?? emptyContactForm())
+    this._subjectInput.value = c.subject
+    this._noteInput.value = c.note ?? ''
+    this._submitInput.value = c.submitLabel ?? ''
+    this._doneInput.value = c.doneMessage ?? ''
+    this._list.textContent = ''
+    for (const f of c.fields) this._addField(f)
+    this._showErrors([])
+    this.el.classList.add('kuro-recipe-dialog--visible')
+    this._subjectInput.focus()
+  }
+
+  hide() { this.el.classList.remove('kuro-recipe-dialog--visible') }
+
+  destroy() {
+    document.removeEventListener('keydown', this._onKeydown)
+    this.el.remove()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MEDIA DIALOG — custom popup for image / video insertion
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -6727,6 +7157,10 @@ export class KuroEditor {
    *                                // レシピを扱わないホスト（メモアプリ等）は false を渡して
    *                                // ボタンごと消す。本文に置ける RecipeCard は 1 個で、
    *                                // 2 度目の押下は既存カードの編集になる。
+   *   jobUi?: boolean,             // 鍋の右に「求人」ボタンを出し、JobCard(求人の構造化ブロック)を
+   *                                // 挿入・編集できるようにする(既定 false)。本文に置けるのは 1 個。
+   *   contactUi?: boolean,         // 「フォーム」ボタンを出し、ContactForm(問い合わせフォームの形)を
+   *                                // 挿入・編集できるようにする(既定 false)。送り先はホストが持つ。
    *   clipControl?: boolean,       // true で文字選択ポップアップにコピー/切り取り/貼り付けの
    *                                // 3 ボタンを表示（既定 false = 非表示）。WebView 埋め込み等、
    *                                // ホストがクリップボードを仲介する環境向け。
@@ -6785,6 +7219,8 @@ export class KuroEditor {
       // 公式の操作マニュアル（書く人向け）。ホストが独自マニュアルを持つなら差し替える
       helpUrl: 'https://kuro.boo/kuroeditor/guide/',
       recipeUi: true,
+      jobUi: false,
+      contactUi: false,
       blockIds: false,
       canvasColors: null,
       canvasDarkColors: null,
@@ -6904,6 +7340,10 @@ export class KuroEditor {
       // recipeUi: true のときだけ 🔗 の右に鍋を足す（タブバー下段と同じ並び）
       ...(this.options.recipeUi
         ? [{ label: ICON.pot, id: 'recipe', title: 'レシピカード' }] : []),
+      ...(this.options.jobUi
+        ? [{ label: ICON.job, id: 'job', title: '求人カード' }] : []),
+      ...(this.options.contactUi
+        ? [{ label: ICON.form, id: 'contact', title: '問い合わせフォーム' }] : []),
     ]
 
     this._mmenuBtns = {}
@@ -7011,6 +7451,10 @@ export class KuroEditor {
       // ボタンなので、既定では要素ごと作らない（disabled ではなく非表示）。
       ...(this.options.recipeUi
         ? [{ label: ICON.pot, id: 'recipe', title: 'レシピカード（材料・時間・手順）' }] : []),
+      ...(this.options.jobUi
+        ? [{ label: ICON.job, id: 'job', title: KuroEditor.JOB_BTN_TITLE }] : []),
+      ...(this.options.contactUi
+        ? [{ label: ICON.form, id: 'contact', title: KuroEditor.CONTACT_BTN_TITLE }] : []),
     ]
     this._tabActionBtns = {}
     for (const { label, id, title } of tabActionDefs) {
@@ -7276,6 +7720,13 @@ export class KuroEditor {
           onSave: (recipe, layout) => this._applyRecipe(recipe, layout),
           onDelete: () => this._deleteRecipeCard(),
         })
+      : null
+    // JobCard・ContactForm の編集モーダル。オプションが off なら作らない
+    this.jobDialog = this.options.jobUi
+      ? new JobDialog({ onSave: (job) => this._applyAtomicCard('job', job), onDelete: () => this._deleteAtomicCard('job') })
+      : null
+    this.contactDialog = this.options.contactUi
+      ? new ContactDialog({ onSave: (form) => this._applyAtomicCard('contact', form), onDelete: () => this._deleteAtomicCard('contact') })
       : null
     this.tableManager  = new TableManager(this)
     this.tableInserter = new TableInserter(this.wysiwyg, {
@@ -7888,6 +8339,20 @@ export class KuroEditor {
       e.preventDefault()
       this._openRecipeCard(card)
     })
+    // JobCard・ContactForm もクリックでモーダルを開く(レシピと同じ導線)
+    this.wysiwyg.addEventListener('click', (e) => {
+      if (this._mode !== 'wysiwyg') return
+      for (const kind of ['job', 'contact']) {
+        const spec = this._atomicSpec(kind)
+        if (!spec.dialog) continue
+        const card = e.target?.closest?.(spec.sel)
+        if (!card || !this.wysiwyg.contains(card)) continue
+        e.preventDefault()
+        this._editingAtomic = { kind, card }
+        spec.dialog.open(spec.decode(card.getAttribute(spec.attr)))
+        return
+      }
+    })
 
     // タブバーの幅が変わるたびに文字カウンターの居場所を測り直す。
     // viewport ではなくタブバー自身を見る（エディタはホストの任意幅の中に
@@ -7965,6 +8430,7 @@ export class KuroEditor {
       this._ensureCaretSlots()
       this._updateCharCount()
       this._syncRecipeBtn()   // 貼付・削除・undo/redo でカードの有無が変わる
+      this._syncJobBtn()
       if (this.imageMenu.isVisible) this.imageMenu.deactivate()
       // Code blocks are <textarea>-based now; their own input listener handles
       // gutter sync. Nothing to do at the wysiwyg level.
@@ -8264,6 +8730,7 @@ export class KuroEditor {
     this._serializeCodeBlocksToHtml(root)
     // RecipeCard の内側を正本(data-recipe)から作り直す = 編集用 chrome を保存しない
     this._serializeRecipeCards(root)
+    this._serializeAtomicCards(root)
     this._stripCaretSlots(root)
     // Strip the presentational atomic-block wrappers so the stored form is the
     // same token-based shape as before this feature (no migration, no drift).
@@ -9020,6 +9487,7 @@ export class KuroEditor {
       const clone = this.wysiwyg.cloneNode(true)
       this._serializeCodeBlocksToHtml(clone)
       this._serializeRecipeCards(clone)   // HTML タブにも編集用ボタンを見せない
+      this._serializeAtomicCards(clone)
       this._stripCaretSlots(clone)        // 編集専用の着地点は HTML タブへ出さない
       this.sourceArea.value = prettifyHTML(unrenderSpecialLinks(clone.innerHTML))
       this.pane.classList.add('kuro-pane--source')
@@ -9041,6 +9509,7 @@ export class KuroEditor {
         })
         this._enhanceUrlCards()  // 簡易カード描画後に豪華表示を後追い取得
         this._syncRecipeBtn()
+        this._syncJobBtn()
         this.pane.classList.remove('kuro-pane--source')
         this.charCount.classList.remove('kuro-charcount--hidden')
         this._syncCharCountSlot()   // 非表示中は測れないので、戻したここで再判定
@@ -9065,6 +9534,8 @@ export class KuroEditor {
     this.linkEditPopup.close()
     this.linkOpenDialog.hide()
     this.recipeDialog?.hide()   // 閲覧 / ソースへ移るときは編集モーダルも畳む
+    this.jobDialog?.hide()
+    this.contactDialog?.hide()
   }
 
   /**
@@ -10981,6 +11452,8 @@ export class KuroEditor {
       case 'media':    this._promptMedia();     break
       case 'roundbox': this._insertRoundbox();  break
       case 'recipe':   this._openRecipeDialog(); break
+      case 'job':      this._openAtomicDialog('job'); break
+      case 'contact':  this._openAtomicDialog('contact'); break
     }
   }
 
@@ -11471,6 +11944,7 @@ export class KuroEditor {
       this.toc._doUpdate()
       this._updateCharCount()
       this._syncRecipeBtn()   // 履歴の復元でカードの有無が変わる
+      this._syncJobBtn()
     } finally {
       this._histBusy = false
     }
@@ -11686,6 +12160,90 @@ export class KuroEditor {
       range.collapse(false)
     }
     this.linkEditPopup.openNew(range)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // JOB CARD・CONTACT FORM — 求人カード(jobUi)・問い合わせフォーム(contactUi)
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // どちらもレシピカードと同じ原子的ブロック(contenteditable="false"・正本は data 属性・
+  // 編集はモーダルだけ・プレビューは保存のたびに正本から作り直す)。違いは数の上限だけ:
+  // 求人は 1 本文に 1 個(1 記事 = 1 求人)、フォームは CONTACT_LIMITS.perBody 個まで。
+
+  static get JOB_BTN_TITLE() { return '求人カード(雇用形態・給与・勤務地・募集中の入切)' }
+  static get JOB_BTN_LOCKED_TITLE() { return '1 記事につき求人カードは 1 つまでです。編集するにはカードをクリックしてください' }
+  static get CONTACT_BTN_TITLE() { return '問い合わせフォーム' }
+
+  _atomicSpec(kind) {
+    return kind === 'job'
+      ? { dialog: this.jobDialog, sel: JOB_CARD_SEL, attr: 'data-job', decode: decodeJob, build: buildJobCardHtml }
+      : { dialog: this.contactDialog, sel: CONTACT_CARD_SEL, attr: 'data-contact', decode: decodeContactForm, build: buildContactCardHtml }
+  }
+
+  /** 求人ボタンは挿入専用。本文にカードがあれば淡くして押せなくする(レシピと同じ・disabled は使わない)。 */
+  _syncJobBtn() {
+    if (!this.options.jobUi) return
+    const locked = !!this.wysiwyg.querySelector(JOB_CARD_SEL)
+    const title = locked ? KuroEditor.JOB_BTN_LOCKED_TITLE : KuroEditor.JOB_BTN_TITLE
+    for (const btn of [this._tabActionBtns?.job, this._mmenuBtns?.job]) {
+      if (!btn) continue
+      btn.classList.toggle('kuro-btn-locked', locked)
+      btn.setAttribute('aria-disabled', locked ? 'true' : 'false')
+      btn.setAttribute('title', title)
+    }
+  }
+
+  /** 保存・HTML タブ用の複製で、カードの内側を正本から作り直す。復号できないカードは触らない。 */
+  _serializeAtomicCards(root) {
+    for (const card of root.querySelectorAll(JOB_CARD_SEL)) {
+      const data = decodeJob(card.getAttribute('data-job'))
+      if (data) card.innerHTML = renderJobPreview(normalizeJob(data))
+    }
+    for (const card of root.querySelectorAll(CONTACT_CARD_SEL)) {
+      const data = decodeContactForm(card.getAttribute('data-contact'))
+      if (data) card.innerHTML = renderContactPreview(normalizeContactForm(data))
+    }
+  }
+
+  /** ボタンの入口(新しく置く)。上限に達していれば開かない(理由は tooltip・フォームは数で止める)。 */
+  _openAtomicDialog(kind) {
+    const spec = this._atomicSpec(kind)
+    if (!spec.dialog) return
+    const count = this.wysiwyg.querySelectorAll(spec.sel).length
+    if (kind === 'job' && count >= 1) return
+    if (kind === 'contact' && count >= CONTACT_LIMITS.perBody) return
+    this._saveRange()
+    this._editingAtomic = null
+    spec.dialog.open(null)
+  }
+
+  _deleteAtomicCard(kind) {
+    const card = this._editingAtomic?.kind === kind ? this._editingAtomic.card : null
+    this._editingAtomic = null
+    if (!card?.isConnected) return
+    card.remove()
+    this._syncJobBtn()
+    this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  /** モーダルの保存。編集中のカードは差し替え(data-bid を引き継ぐ)、無ければキャレットの行の後ろへ。 */
+  _applyAtomicCard(kind, data) {
+    const spec = this._atomicSpec(kind)
+    const holder = document.createElement('div')
+    holder.innerHTML = spec.build(data)
+    const card = holder.firstElementChild
+    if (!card) return
+    const current = this._editingAtomic?.kind === kind ? this._editingAtomic.card : null
+    if (current?.isConnected) {
+      const bid = current.getAttribute('data-bid')
+      if (bid) card.setAttribute('data-bid', bid)
+      current.replaceWith(card)
+    } else {
+      this._insertRecipeCardAtCaret(card)
+    }
+    this._editingAtomic = null
+    this._syncJobBtn()
+    this.wysiwyg.dispatchEvent(new Event('input', { bubbles: true }))
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -12967,6 +13525,8 @@ export class KuroEditor {
     this.toc.destroy()
     this.roundboxMenu.destroy()
     this.recipeDialog?.destroy()
+    this.jobDialog?.destroy()
+    this.contactDialog?.destroy()
     this.tableManager.destroy()
     this.tableInserter.destroy()
     this.tableResizer.destroy()

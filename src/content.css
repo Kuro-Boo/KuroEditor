@@ -382,6 +382,105 @@ h5[id^='kuro-h-'] {
    ので、公開ページでも JS 無しに同じ見え方になる。 */
 .kuro-content [data-kuro-block="recipe-card"] { max-width: 100%; }
 
+/* ── JobCard(data-kuro-block="job-card")・ContactForm ─────────────────────────
+   レシピカードと同じく、編集画面のプレビューと公開ページの最低限の体裁。サイトの色は
+   持ち込まず --kuro-* 変数で組む(公開ページの本番のデザインはテンプレートが上書きする)。 */
+.kuro-content [data-kuro-block="job-card"],
+.kuro-content [data-kuro-block="contact-form"],
+.kuro-content .kuro-contact--live {
+  margin: 1.25rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--kuro-box-border);
+  border-radius: 0.625rem;
+  background: var(--kuro-box-bg);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 100%;
+}
+.kuro-content [data-kuro-block="job-card"],
+.kuro-content [data-kuro-block="contact-form"] { user-select: none; }
+.kuro-content .kuro-job__head,
+.kuro-content .kuro-contact__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--kuro-box-border);
+}
+.kuro-content .kuro-job__label,
+.kuro-content .kuro-contact__label-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.15em 0.6em;
+  border-radius: 9999px;
+  border: 1px solid var(--kuro-box-border);
+  opacity: 0.85;
+}
+.kuro-content .kuro-contact--live .kuro-contact__head { display: none; }
+.kuro-content .kuro-contact__subject { font-weight: 600; }
+.kuro-content .kuro-job__state { font-weight: 700; }
+.kuro-content .kuro-job__state--open { color: #15803d; }
+.kuro-content .kuro-job__state--closed { opacity: 0.7; }
+.kuro-content .kuro-job__table { width: 100%; border-collapse: collapse; margin: 0; }
+.kuro-content .kuro-job__table th,
+.kuro-content .kuro-job__table td {
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-bottom: 1px dotted var(--kuro-box-border);
+  text-align: left;
+  vertical-align: top;
+  background: none;
+}
+.kuro-content .kuro-job__table th { width: 7em; font-weight: 600; white-space: nowrap; opacity: 0.8; }
+.kuro-content .kuro-contact__note { margin: 0 0 0.6rem; opacity: 0.85; }
+.kuro-content .kuro-contact__row { display: flex; flex-direction: column; gap: 0.2rem; margin: 0 0 0.6rem; }
+.kuro-content .kuro-contact__label { font-weight: 600; }
+.kuro-content .kuro-contact__req {
+  margin-left: 0.5em;
+  font-size: 0.75em;
+  font-weight: 700;
+  color: #b91c1c;
+}
+.kuro-content .kuro-contact__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--kuro-box-border);
+  border-radius: 0.375rem;
+  background: #fff;
+  color: #111;
+  font: inherit;
+}
+.kuro-content .kuro-contact__input[aria-invalid="true"] { border-color: #b91c1c; }
+.kuro-content .kuro-contact__actions { margin-top: 0.4rem; }
+.kuro-content .kuro-contact__submit {
+  padding: 0.45rem 1.4rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: #333;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.kuro-content .kuro-contact__submit[disabled] { opacity: 0.6; cursor: default; }
+.kuro-content .kuro-contact__error { margin: 0.15rem 0 0; font-size: 0.85em; color: #b91c1c; }
+.kuro-content .kuro-contact__status { margin: 0.5rem 0 0; }
+.kuro-content .kuro-contact__status:empty { display: none; }
+.kuro-content .kuro-contact__done { margin: 0.5rem 0 0; font-weight: 600; }
+.kuro-content .kuro-contact__nojs { margin: 0.5rem 0 0; color: #b91c1c; }
+/* 罠の欄: 人には見せない(display:none だと入れないロボットもいるので、画面の外へ出す) */
+.kuro-content .kuro-contact__trap {
+  position: absolute !important;
+  left: -10000px !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
 /* Blockquote — left vertical accent bar */
 .kuro-content blockquote {
   margin: 1rem 0;
