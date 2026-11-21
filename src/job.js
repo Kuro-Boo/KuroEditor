@@ -52,9 +52,12 @@ export const SALARY_UNITS = [
 export const SALARY_CURRENCIES = ['JPY', 'USD', 'EUR']
 
 export const JOB_LIMITS = {
-  noteMax: 200,
-  hoursMax: 200,
+  noteMax: 500,
+  hoursMax: 500,
   requirementsMax: 1000,
+  benefitsMax: 1000,
+  openingsMax: 100,
+  contactMax: 300,
   addressPartMax: 100,
   salaryMax: 1e9,
 }
@@ -121,6 +124,12 @@ export function normalizeJob(raw) {
   if (hours) out.hours = hours
   const req = str(src.requirements)
   if (req) out.requirements = req
+  const benefits = str(src.benefits)
+  if (benefits) out.benefits = benefits
+  const openings = str(src.openings)
+  if (openings) out.openings = openings
+  const contact = str(src.contact)
+  if (contact) out.contact = contact
   const vt = str(src.validThrough)
   if (vt) out.validThrough = vt
   return out
@@ -159,6 +168,9 @@ export function validateJob(j) {
   }
   if ((j.hours ?? '').length > L.hoursMax) errors.push(`勤務時間は ${L.hoursMax} 文字以内で入力してください。`)
   if ((j.requirements ?? '').length > L.requirementsMax) errors.push(`応募資格は ${L.requirementsMax} 文字以内で入力してください。`)
+  if ((j.benefits ?? '').length > L.benefitsMax) errors.push(`待遇は ${L.benefitsMax} 文字以内で入力してください。`)
+  if ((j.openings ?? '').length > L.openingsMax) errors.push(`募集人数は ${L.openingsMax} 文字以内で入力してください。`)
+  if ((j.contact ?? '').length > L.contactMax) errors.push(`問い合わせ先は ${L.contactMax} 文字以内で入力してください。`)
   if (j.validThrough !== undefined) {
     if (!isIsoDate(j.validThrough)) errors.push('掲載期限は YYYY-MM-DD の正しい日付で入力してください。')
     else if (j.openedAt && isIsoDate(j.openedAt) && j.validThrough < j.openedAt) errors.push('掲載期限は募集を始めた日以後にしてください。')
@@ -216,6 +228,21 @@ export function formatSalary(j) {
   return `${unit} ${range}`.trim()
 }
 
+/**
+ * 募集人数の文から人数を読む(構造化データの totalJobOpenings)。「3」「3名」「3 人」だけを数として読み、
+ * 「数名」「若干名」「3名(資格者尚可)」のような文は null(数に言い換えない —— 見えない値を作らない)。
+ */
+export function openingsCount(j) {
+  const m = /^(\d{1,4})\s*(?:名|人)?$/.exec(str(j?.openings).normalize('NFKC'))
+  return m ? Number(m[1]) : null
+}
+
+/** 問い合わせ先の文から、最初の電話番号を読む(構造化データの applicationContact.telephone)。無ければ空。 */
+export function contactTelephone(j) {
+  const m = /\+?\d[\d\-() ]{7,}\d/.exec(str(j?.contact).normalize('NFKC'))
+  return m ? m[0].trim() : ''
+}
+
 /** 「〒277-0825 千葉県柏市布施138-5」 */
 export function formatLocation(j) {
   const l = j?.location ?? {}
@@ -245,6 +272,9 @@ export function renderJobPreview(j, opt = {}) {
   if (loc) row('勤務地', _escapeHtml(loc))
   if (j.hours) row('勤務時間', multiline(j.hours))
   if (j.requirements) row('応募資格', multiline(j.requirements))
+  if (j.benefits) row('待遇', multiline(j.benefits))
+  if (j.openings) row('募集人数', multiline(j.openings))
+  if (j.contact) row('問い合わせ', multiline(j.contact))
   if (j.validThrough) row('掲載期限', _escapeHtml(j.validThrough.replace(/-/g, '/')))
   return `<div class="kuro-job__head">` +
       `<span class="kuro-job__label">求人</span>` +

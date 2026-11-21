@@ -27,6 +27,12 @@ export interface Job {
   location: JobLocation;
   hours?: string;
   requirements?: string;
+  /** 待遇(賞与・保険・通勤費・休暇など・複数行・jobBenefits)。 */
+  benefits?: string;
+  /** 募集人数(「3名」「数名」など・数だけのときは totalJobOpenings)。 */
+  openings?: string;
+  /** 問い合わせ先(電話番号と補足・複数行・applicationContact)。 */
+  contact?: string;
   /** 掲載期限(YYYY-MM-DD・決まっている求人だけ)。 */
   validThrough?: string;
 }
@@ -37,7 +43,7 @@ export const JOB_CARD_SEL: string;
 export const EMPLOYMENT_TYPES: [string, string][];
 export const SALARY_UNITS: [string, string][];
 export const SALARY_CURRENCIES: string[];
-export const JOB_LIMITS: { noteMax: number; hoursMax: number; requirementsMax: number; addressPartMax: number; salaryMax: number };
+export const JOB_LIMITS: { noteMax: number; hoursMax: number; requirementsMax: number; benefitsMax: number; openingsMax: number; contactMax: number; addressPartMax: number; salaryMax: number };
 export function isIsoDate(s: unknown): boolean;
 export function normalizeJob(raw: unknown): Job;
 export function validateJob(j: unknown): string[];
@@ -48,6 +54,10 @@ export function jobIsOpen(j: Job | null | undefined, today?: string): boolean;
 export function employmentLabels(j: Job): string[];
 export function formatSalary(j: Job): string;
 export function formatLocation(j: Job): string;
+/** 募集人数が数だけ(「3」「3名」)のときの人数。ほかは null。 */
+export function openingsCount(j: Job | null | undefined): number | null;
+/** 問い合わせ先の最初の電話番号。無ければ空。 */
+export function contactTelephone(j: Job | null | undefined): string;
 export function renderJobPreview(j: Job, opt?: { today?: string }): string;
 export function buildJobCardHtml(j: Job, opt?: { today?: string }): string;
 export function emptyJob(): Job;

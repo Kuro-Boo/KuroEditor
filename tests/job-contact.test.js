@@ -22,6 +22,8 @@ import {
   renderContactFormHtml,
   validateSubmission,
   emptyContactForm,
+  openingsCount,
+  contactTelephone,
 } from '../src/editor.js'
 
 const JOB = {
@@ -56,6 +58,37 @@ describe('normalizeJob / validateJob', () => {
     const j = normalizeJob(JOB)
     expect(j.validThrough).toBeUndefined()
     expect(validateJob(j)).toEqual([])
+  })
+})
+
+describe('待遇・募集人数・問い合わせ先', () => {
+  const FULL = { ...JOB, benefits: '賞与 年2回\n労災保険・雇用保険', openings: '数名', contact: '04-7168-0711\n繋がらない時は本部へ', salaryNote: '夜勤 1回 16,100円\n予想月収 11万9500円' }
+  it('保存の形に残り、カードに行として出る(複数行は改行のまま)', () => {
+    const j = normalizeJob(FULL)
+    expect(validateJob(j)).toEqual([])
+    const html = renderJobPreview(j)
+    expect(html).toMatch('<th>待遇</th><td>賞与 年2回<br>労災保険・雇用保険</td>')
+    expect(html).toMatch('<th>募集人数</th><td>数名</td>')
+    expect(html).toMatch('<th>問い合わせ</th><td>04-7168-0711<br>繋がらない時は本部へ</td>')
+    expect(html).toMatch('予想月収')
+  })
+  it('空なら行を出さず、キーごと落とす', () => {
+    const j = normalizeJob({ ...JOB, benefits: ' ', openings: '', contact: null })
+    expect('benefits' in j || 'openings' in j || 'contact' in j).toBe(false)
+    expect(renderJobPreview(j)).not.toMatch('募集人数')
+  })
+  it('字数の上限', () => {
+    expect(validateJob(normalizeJob({ ...JOB, openings: 'x'.repeat(101) })).join()).toMatch('募集人数')
+  })
+  it('人数は数だけのときに読み、「数名」は数に言い換えない', () => {
+    expect(openingsCount(normalizeJob({ ...JOB, openings: '3名' }))).toBe(3)
+    expect(openingsCount(normalizeJob({ ...JOB, openings: '３人' }))).toBe(3)
+    expect(openingsCount(normalizeJob({ ...JOB, openings: '数名' }))).toBeNull()
+    expect(openingsCount(normalizeJob({ ...JOB, openings: '3名(資格者尚可)' }))).toBeNull()
+  })
+  it('問い合わせ先から最初の電話番号を読む', () => {
+    expect(contactTelephone(normalizeJob(FULL))).toBe('04-7168-0711')
+    expect(contactTelephone(normalizeJob({ ...JOB, contact: '本部へメールで' }))).toBe('')
   })
 })
 

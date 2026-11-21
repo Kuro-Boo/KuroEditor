@@ -7,6 +7,8 @@
  * Repo: https://github.com/Kuro-Boo/KuroEditor
  */
 
+// IME 変換中のキー入力の判定（管理画面など、エディタの外と共通の唯一実装）。
+import { isImeComposing } from './ime.js'
 // DOM 非依存の共有ブロック純関数（Worker / 同期サーバーと共通の唯一実装）。
 import {
   isValidBid,
@@ -147,7 +149,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.46.0'
+export const VERSION = '2.47.0'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -746,17 +748,8 @@ export function getSelectionRect() {
   return sel.getRangeAt(0).getBoundingClientRect()
 }
 
-/**
- * IME 変換中のキー入力か。
- * 日本語入力では変換候補の確定に Enter を押すが、その keydown は
- * 「文字を確定するための Enter」であって「Enter キーを押した」ではない。
- * 素通しすると入力欄が閉じたり、本文で改行処理が走ったりする。
- * isComposing が正、keyCode 229 は古い Safari / Android IME 向けの保険。
- * @param {KeyboardEvent} e
- */
-export function isImeComposing(e) {
-  return !!(e?.isComposing || e?.keyCode === 229)
-}
+// IME 変換中のキー入力か —— 判定は ime.js(管理画面など、エディタの外の入力欄も同じものを使う)
+export { isImeComposing }
 
 /** Simple debounce helper */
 function debounce(fn, ms) {
@@ -6269,9 +6262,7 @@ export class JobDialog {
     this._maxInput = this._field(salRow, '上限(任意)', { type: 'number', min: '0', inputmode: 'numeric' })
     this._currencySelect = this._select(salRow, '通貨', SALARY_CURRENCIES.map((c) => [c, c]))
     salSec.appendChild(salRow)
-    const noteRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._salaryNoteInput = this._field(noteRow, '給与の補足(任意)', { placeholder: '交通費支給 など', maxlength: String(JOB_LIMITS.noteMax) })
-    salSec.appendChild(noteRow)
+    this._salaryNoteInput = this._area(salSec, '給与の補足(任意・夜勤の手当や予想月収など)', JOB_LIMITS.noteMax)
 
     // ── 勤務地 ──────────────────────────────────────────────────────────
     const locSec = this._section('勤務地')
@@ -6285,10 +6276,15 @@ export class JobDialog {
     this._countryInput = this._field(locRow2, '国', { maxlength: '2', placeholder: 'JP' })
     locSec.appendChild(locRow2)
 
-    // ── 勤務時間・応募資格・期限 ──────────────────────────────────────────
+    // ── 勤務時間・応募資格・待遇・募集人数・問い合わせ・期限 ──────────────────
     const moreSec = this._section('そのほか(任意)')
-    this._hoursInput = this._area(moreSec, '勤務時間', JOB_LIMITS.hoursMax)
+    this._hoursInput = this._area(moreSec, '勤務時間・勤務日数', JOB_LIMITS.hoursMax)
     this._reqInput = this._area(moreSec, '応募資格・歓迎する経験', JOB_LIMITS.requirementsMax)
+    this._benefitsInput = this._area(moreSec, '待遇(賞与・保険・通勤費・休暇など)', JOB_LIMITS.benefitsMax)
+    const openRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
+    this._openingsInput = this._field(openRow, '募集人数', { placeholder: '数名・3名 など', maxlength: String(JOB_LIMITS.openingsMax) })
+    moreSec.appendChild(openRow)
+    this._contactInput = this._area(moreSec, '問い合わせ先(電話番号と補足)', JOB_LIMITS.contactMax)
     const vtRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
     this._validInput = this._field(vtRow, '掲載期限(決まっている求人だけ)', { type: 'date' })
     moreSec.appendChild(vtRow)
@@ -6369,6 +6365,9 @@ export class JobDialog {
       },
       hours: this._hoursInput.value,
       requirements: this._reqInput.value,
+      benefits: this._benefitsInput.value,
+      openings: this._openingsInput.value,
+      contact: this._contactInput.value,
       validThrough: this._validInput.value,
     }
   }
@@ -6411,6 +6410,9 @@ export class JobDialog {
     this._streetInput.value = j.location.street ?? ''
     this._hoursInput.value = j.hours ?? ''
     this._reqInput.value = j.requirements ?? ''
+    this._benefitsInput.value = j.benefits ?? ''
+    this._openingsInput.value = j.openings ?? ''
+    this._contactInput.value = j.contact ?? ''
     this._validInput.value = j.validThrough ?? ''
     this._showErrors([])
     this.el.classList.add('kuro-recipe-dialog--visible')
