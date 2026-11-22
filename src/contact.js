@@ -2,8 +2,10 @@
  * ContactForm — 問い合わせ・申し込みのフォームの形を持つ原子的ブロック(仕様 editor-editor-spec-contact・cms-contact)。
  *
  * recipe.js・job.js と同じ流儀: **DOM に触らない純関数だけ・外部依存ゼロ**。
- * KuroEditor が持つのはフォームの形(件名・項目・ボタンの文)だけ。送り先・送り方・ロボット避けはホストが持つ。
- * ⚠ 本文に送り先を書く欄は作らない(書ける人が誰でも宛先を変えられると、サイトが他人へのメールの踏み台になる)。
+ * KuroEditor が持つのはフォームの形(件名・項目・ボタンの文)と、送り先の**名前**(to)だけ。
+ * アドレス・送り方・ロボット避けはホストが持つ(KuroCMS はサイト文字 mail-to-<名前> にアドレスを置く)。
+ * ⚠ 本文にアドレスを書く欄は作らない(書ける人が誰でも宛先を変えられると、サイトが他人へのメールの踏み台になる)。
+ *   名前はホストが登録した送り先を指すだけなので、名前を書き換えても登録の外へは送れない。
  *
  * ## 保存形式
  * ```html
@@ -49,6 +51,8 @@ export const CONTACT_LIMITS = {
   submitMax: 20,
   doneMax: 200,
   noteMax: 300,
+  /** 送り先の名前の数(本部と事業所、のように複数へ同じ内容を届ける) */
+  toMax: 5,
   /** 送られる値の上限(1 行・複数行) */
   valueMax: 200,
   textareaMax: 5000,
@@ -60,6 +64,9 @@ export const CONTACT_DEFAULTS = {
 }
 
 const KIND_KEYS = new Set(FIELD_KINDS.map(([k]) => k))
+
+/** 送り先の名前の形(ホストの登録の名前。KuroCMS ではサイト文字 mail-to-<名前> の <名前>)。 */
+export const RECIPIENT_NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
 
 function str(v) {
   return typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim()
@@ -83,6 +90,8 @@ export function normalizeContactForm(raw) {
     const v = str(src[k])
     if (v) out[k] = v
   }
+  const to = [...new Set((Array.isArray(src.to) ? src.to : []).map(str).map((v) => v.toLowerCase()).filter(Boolean))]
+  if (to.length) out.to = to
   return out
 }
 
@@ -113,6 +122,9 @@ export function validateContactForm(c) {
   if ((c.submitLabel ?? '').length > L.submitMax) errors.push(`ボタンの文は ${L.submitMax} 文字以内で入力してください。`)
   if ((c.doneMessage ?? '').length > L.doneMax) errors.push(`送信後の文は ${L.doneMax} 文字以内で入力してください。`)
   if ((c.note ?? '').length > L.noteMax) errors.push(`案内の文は ${L.noteMax} 文字以内で入力してください。`)
+  const to = Array.isArray(c.to) ? c.to : []
+  if (to.length > L.toMax) errors.push(`送り先は ${L.toMax} か所までです。`)
+  if (to.some((n) => !RECIPIENT_NAME_RE.test(n))) errors.push('送り先の名前が読み取れません。')
   return errors
 }
 

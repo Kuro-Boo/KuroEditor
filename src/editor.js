@@ -85,6 +85,7 @@ import {
   CONTACT_LIMITS,
   CONTACT_VERSION,
   FIELD_KINDS,
+  RECIPIENT_NAME_RE,
   buildContactCardHtml,
   decodeContactForm,
   emptyContactForm,
@@ -149,7 +150,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.47.0'
+export const VERSION = '2.48.0'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -6436,9 +6437,14 @@ export class JobDialog {
  * ⚠ 送り先の欄は作らない(ホストの設定で決める)。
  */
 export class ContactDialog {
-  constructor({ onSave, onDelete }) {
+  /**
+   * @param {{ onSave, onDelete, recipients?: { name: string, label: string }[] }} opts
+   *   recipients はホストが登録した送り先の候補(名前と表示名だけ。アドレスは受け取らない)。
+   */
+  constructor({ onSave, onDelete, recipients = [] }) {
     this.onSave = onSave
     this.onDelete = onDelete
+    this._recipients = (Array.isArray(recipients) ? recipients : []).filter((r) => r && RECIPIENT_NAME_RE.test(r.name))
     this.el = createElement('div', {
       className: 'kuro-recipe-dialog kuro-contact-dialog',
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '問い合わせフォームの編集' },
@@ -6458,8 +6464,13 @@ export class ContactDialog {
     this._box.appendChild(head)
     this._box.appendChild(createElement('p', {
       className: 'kuro-recipe-dialog__note',
-      html: '送られた内容は、サイトの設定で選んだ管理者へメールで届きます。送り先はここでは決めません。',
+      html: '送られた内容は、下で選んだ送り先へメールで届きます。アドレスはサイトの側で登録します(ここには書きません)。',
     }))
+    const toSec = createElement('div', { className: 'kuro-recipe-dialog__section' })
+    toSec.appendChild(createElement('h4', { className: 'kuro-recipe-dialog__h', html: `送り先(${CONTACT_LIMITS.toMax} か所まで)` }))
+    this._toList = createElement('div', { className: 'kuro-contact-dialog__to' })
+    toSec.appendChild(this._toList)
+    this._box.appendChild(toSec)
     const top = createElement('div', { className: 'kuro-recipe-dialog__row' })
     this._subjectInput = JobDialog.prototype._field.call(this, top, '件名(届くメールの件名)', { maxlength: String(CONTACT_LIMITS.subjectMax) })
     this._box.appendChild(top)
@@ -6533,11 +6544,38 @@ export class ContactDialog {
     this._list.appendChild(row)
   }
 
+  /** 送り先の選択欄。登録に無い名前が保存されていれば、黙って落とさずに印を付けて残す。 */
+  _renderTo(selected) {
+    this._toList.textContent = ''
+    const known = new Set(this._recipients.map((r) => r.name))
+    const rows = [
+      ...this._recipients.map((r) => ({ name: r.name, label: r.label || r.name, missing: false })),
+      ...selected.filter((n) => !known.has(n)).map((n) => ({ name: n, label: `${n}(登録がありません)`, missing: true })),
+    ]
+    if (!rows.length) {
+      this._toList.appendChild(createElement('p', {
+        className: 'kuro-recipe-dialog__note',
+        html: '選べる送り先がありません。サイトの側で送り先を登録してください。',
+      }))
+      return
+    }
+    for (const r of rows) {
+      const wrap = createElement('label', { className: 'kuro-contact-dialog__req' })
+      const cb = createElement('input', { attrs: { type: 'checkbox', value: r.name } })
+      cb.checked = selected.includes(r.name)
+      wrap.appendChild(cb)
+      wrap.appendChild(document.createTextNode(r.label))
+      if (r.missing) wrap.classList.add('kuro-contact-dialog__to--missing')
+      this._toList.appendChild(wrap)
+    }
+  }
+
   get isVisible() { return this.el.classList.contains('kuro-recipe-dialog--visible') }
 
   _read() {
     return {
       version: CONTACT_VERSION,
+      to: [...this._toList.querySelectorAll('input[type="checkbox"]')].filter((i) => i.checked).map((i) => i.value),
       subject: this._subjectInput.value,
       note: this._noteInput.value,
       submitLabel: this._submitInput.value,
@@ -6568,6 +6606,7 @@ export class ContactDialog {
     this._noteInput.value = c.note ?? ''
     this._submitInput.value = c.submitLabel ?? ''
     this._doneInput.value = c.doneMessage ?? ''
+    this._renderTo(c.to ?? [])
     this._list.textContent = ''
     for (const f of c.fields) this._addField(f)
     this._showErrors([])
@@ -7162,7 +7201,10 @@ export class KuroEditor {
    *   jobUi?: boolean,             // 鍋の右に「求人」ボタンを出し、JobCard(求人の構造化ブロック)を
    *                                // 挿入・編集できるようにする(既定 false)。本文に置けるのは 1 個。
    *   contactUi?: boolean,         // 「フォーム」ボタンを出し、ContactForm(問い合わせフォームの形)を
-   *                                // 挿入・編集できるようにする(既定 false)。送り先はホストが持つ。
+   *                                // 挿入・編集できるようにする(既定 false)。アドレスはホストが持つ。
+   *   contactRecipients?: { name: string, label: string }[],
+   *                                // フォームの送り先の候補(ホストが登録した名前と表示名。既定 [])。
+   *                                // フォームには選んだ名前だけを保存する(アドレスは渡さない)。
    *   clipControl?: boolean,       // true で文字選択ポップアップにコピー/切り取り/貼り付けの
    *                                // 3 ボタンを表示（既定 false = 非表示）。WebView 埋め込み等、
    *                                // ホストがクリップボードを仲介する環境向け。
@@ -7223,6 +7265,7 @@ export class KuroEditor {
       recipeUi: true,
       jobUi: false,
       contactUi: false,
+      contactRecipients: [],
       blockIds: false,
       canvasColors: null,
       canvasDarkColors: null,
@@ -7728,7 +7771,7 @@ export class KuroEditor {
       ? new JobDialog({ onSave: (job) => this._applyAtomicCard('job', job), onDelete: () => this._deleteAtomicCard('job') })
       : null
     this.contactDialog = this.options.contactUi
-      ? new ContactDialog({ onSave: (form) => this._applyAtomicCard('contact', form), onDelete: () => this._deleteAtomicCard('contact') })
+      ? new ContactDialog({ onSave: (form) => this._applyAtomicCard('contact', form), onDelete: () => this._deleteAtomicCard('contact'), recipients: this.options.contactRecipients })
       : null
     this.tableManager  = new TableManager(this)
     this.tableInserter = new TableInserter(this.wysiwyg, {

@@ -6,7 +6,7 @@ export interface ContactField {
   required: boolean;
   options?: string[];
 }
-/** ContactForm の保存データ(`data-contact` の正本)。送り先は持たない。 */
+/** ContactForm の保存データ(`data-contact` の正本)。アドレスは持たない(to はホストが登録した送り先の名前)。 */
 export interface ContactForm {
   version: number;
   subject: string;
@@ -14,6 +14,12 @@ export interface ContactForm {
   submitLabel?: string;
   doneMessage?: string;
   note?: string;
+  to?: string[];
+}
+/** ホストが渡す送り先の候補(名前と表示名だけ。アドレスはエディタに渡さない)。 */
+export interface ContactRecipientOption {
+  name: string;
+  label: string;
 }
 export interface SubmissionResult {
   ok: boolean;
@@ -24,10 +30,11 @@ export interface SubmissionResult {
 export const CONTACT_VERSION: number;
 export const CONTACT_BLOCK: string;
 export const CONTACT_CARD_SEL: string;
+export const RECIPIENT_NAME_RE: RegExp;
 export const FIELD_KINDS: [string, string][];
 export const CONTACT_LIMITS: {
   perBody: number; subjectMax: number; fieldsMax: number; labelMax: number; optionsMax: number;
-  optionMax: number; submitMax: number; doneMax: number; noteMax: number; valueMax: number; textareaMax: number;
+  optionMax: number; submitMax: number; doneMax: number; noteMax: number; toMax: number; valueMax: number; textareaMax: number;
 };
 export const CONTACT_DEFAULTS: { submitLabel: string; doneMessage: string };
 export function normalizeContactForm(raw: unknown): ContactForm;

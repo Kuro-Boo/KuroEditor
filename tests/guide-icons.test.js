@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { KuroEditor } from '../src/editor.js'
 import { buildRecipeCardHtml, decodeRecipe } from '../src/recipe.js'
+import { buildJobCardHtml, decodeJob, normalizeJob } from '../src/job.js'
 
 /** 属性順・空白の揺れを均して比べる（innerHTML はブラウザ実装で整形が違う） */
 const norm = (html) => html.replace(/\s+/g, ' ').replace(/> </g, '><').trim()
@@ -23,10 +24,10 @@ describe('マニュアルのボタン見本', () => {
 
   const mount = document.createElement('div')
   document.body.appendChild(mount)
-  const ed = new KuroEditor(mount, { recipeUi: true })
+  const ed = new KuroEditor(mount, { recipeUi: true, jobUi: true })
 
   const buttons = {
-    ...ed._tabActionBtns,          // 絵文字 / 表 / メディア / コード / 水平線 / 角丸 / リンク / レシピ
+    ...ed._tabActionBtns,          // 絵文字 / 表 / メディア / コード / 水平線 / 角丸 / リンク / レシピ / 求人
     undo: ed._tabUndoBtn,
     redo: ed._tabRedoBtn,
     help: ed.tabHelpBtn,
@@ -60,7 +61,7 @@ describe('マニュアルのボタン見本', () => {
           // kuro-recipe__* はカードの markup ごと下のテストで照合するので除く
           // （grid の子など、CSS を持たない構造上のクラスも含まれるため）
           if (cls.startsWith('kuro-') && cls !== 'kuro-content' &&
-              !cls.startsWith('kuro-recipe__')) used.add(cls)
+              !cls.startsWith('kuro-recipe__') && !cls.startsWith('kuro-job__')) used.add(cls)
         }
       }
     }
@@ -79,6 +80,13 @@ describe('マニュアルのボタン見本', () => {
       align: card.match(/data-align="([^"]*)"/)[1],
     }
     expect(norm(card)).toBe(norm(buildRecipeCardHtml(decodeRecipe(data), layout)))
+  })
+
+  it('求人カードの例は、いまの生成器が吐く markup と同じ', () => {
+    const card = guide.match(/<div data-kuro-block="job-card"[^]*?<\/table><\/div>/)?.[0]
+    expect(card, 'マニュアルに求人カードの例が無い').toBeTruthy()
+    const data = card.match(/data-job="([^"]*)"/)[1]
+    expect(norm(card)).toBe(norm(buildJobCardHtml(normalizeJob(decodeJob(data)))))
   })
 
   // ポップアップ類は実物のスクリーンショット（build-scripts/capture-guide-shots.mjs）。

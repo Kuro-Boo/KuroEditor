@@ -130,7 +130,7 @@
     <div class="max-w-6xl mx-auto px-6 py-24 sm:py-32 text-center">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-medium mb-6">
         <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
-        <span data-i18n="hero.badge">v2.47.0 — 公開中</span>
+        <span data-i18n="hero.badge">v2.48.0 — 公開中</span>
       </div>
 
       <h1 class="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6" data-i18n="hero.title">
@@ -234,6 +234,11 @@
         <div class="w-12 h-12 rounded-xl bg-teal-500/15 flex items-center justify-center mb-4 text-2xl">🪄</div>
         <h3 class="text-lg font-bold mb-2" data-i18n="features.f9_t">目次自動生成</h3>
         <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f9_d">見出しから右側パネルに目次を自動生成。クリックでスムーススクロール。</p>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
+        <div class="w-12 h-12 rounded-xl bg-amber-500/15 flex items-center justify-center mb-4 text-2xl">💼</div>
+        <h3 class="text-lg font-bold mb-2" data-i18n="features.f10_t">求人カード（Google しごと検索に対応）</h3>
+        <p class="text-sm text-neutral-400 leading-relaxed" data-i18n="features.f10_d">雇用形態・給与・勤務地・勤務時間・待遇・募集人数を、1 枚のカードとして本文に保持。崩れない構造化データで持つので、KuroCMS などのホストが Google の求人検索（Google しごと検索）向けの JobPosting を自動で出力できます。「募集中」の入切つき。<code class="inline">jobUi: true</code> で有効。</p>
       </div>
     </div>
   </section>
@@ -388,6 +393,8 @@
         'features.f8_d': '✏️ 編集 / 👁 閲覧（編集不可） / &lt;/&gt; HTML ソースをタブで切り替え。閲覧モードは読むことに専念でき、パワーユーザーは生 HTML で細かい調整もできます。',
         'features.f9_t': '目次自動生成',
         'features.f9_d': '見出しから右側パネルに目次を自動生成。クリックでスムーススクロール。',
+        'features.f10_t': '求人カード（Google しごと検索に対応）',
+        'features.f10_d': '雇用形態・給与・勤務地・勤務時間・待遇・募集人数を、1 枚のカードとして本文に保持。崩れない構造化データで持つので、KuroCMS などのホストが Google の求人検索（Google しごと検索）向けの JobPosting を自動で出力できます。「募集中」の入切つき。<code class="inline">jobUi: true</code> で有効。',
         'qs.heading': 'クイックスタート',
         'qs.sub': '2 ファイル読み込むだけで使えます。',
         'qs.s1_t': 'ファイルを設置',
@@ -442,6 +449,8 @@
         'features.f8_d': 'Switch between ✏️ edit, 👁 read-only view and &lt;/&gt; HTML source via tabs. The view mode is for distraction-free reading; power users can fine-tune the raw markup.',
         'features.f9_t': 'Auto outline',
         'features.f9_d': 'A table of contents is generated automatically from headings. Click to smooth-scroll.',
+        'features.f10_t': 'Job card (Google for Jobs ready)',
+        'features.f10_d': 'Keep employment type, pay, location, hours, benefits and openings as one card in the article. The data is stored as structured data that never breaks, so a host such as KuroCMS can output JobPosting automatically for Google’s job search (Google for Jobs). Includes an open/closed switch. Enable with <code class="inline">jobUi: true</code>.',
         'qs.heading': 'Quick Start',
         'qs.sub': 'Load just two files and you are ready.',
         'qs.s1_t': 'Place the files',
@@ -496,6 +505,8 @@
         'features.f8_d': 'Per Tabs zwischen ✏️ Bearbeiten, 👁 Nur-Lesen und &lt;/&gt; HTML-Quelltext wechseln.',
         'features.f9_t': 'Automatisches Inhaltsverzeichnis',
         'features.f9_d': 'Aus den Überschriften wird automatisch ein Inhaltsverzeichnis erzeugt — mit sanftem Scrollen beim Klick.',
+        'features.f10_t': 'Stellenkarte (bereit für Google for Jobs)',
+        'features.f10_d': 'Beschäftigungsart, Vergütung, Arbeitsort, Arbeitszeiten, Leistungen und Anzahl der Stellen als eine Karte im Artikel. Die Daten werden als strukturierte Daten gespeichert, die nicht zerbrechen – so kann ein Host wie KuroCMS automatisch JobPosting für die Jobsuche von Google (Google for Jobs) ausgeben. Mit Schalter für offen/geschlossen. Aktivieren mit <code class="inline">jobUi: true</code>.',
         'qs.heading': 'Schnellstart',
         'qs.sub': 'Nur zwei Dateien laden — fertig.',
         'qs.s1_t': 'Dateien platzieren',
@@ -550,6 +561,8 @@
         'features.f8_d': 'Basculez entre ✏️ édition, 👁 lecture seule et &lt;/&gt; source HTML via les onglets.',
         'features.f9_t': 'Sommaire automatique',
         'features.f9_d': 'Un sommaire est généré à partir des titres. Défilement fluide au clic.',
+        'features.f10_t': 'Fiche d’offre d’emploi (compatible Google for Jobs)',
+        'features.f10_d': 'Type de contrat, rémunération, lieu, horaires, avantages et nombre de postes réunis dans une fiche au sein de l’article. Les données sont conservées sous forme de données structurées qui ne se cassent pas : un hôte comme KuroCMS peut ainsi générer automatiquement un JobPosting pour la recherche d’emploi de Google (Google for Jobs). Avec un interrupteur ouvert/fermé. Activez-la avec <code class="inline">jobUi: true</code>.',
         'qs.heading': 'Démarrage rapide',
         'qs.sub': 'Chargez deux fichiers et c\'est parti.',
         'qs.s1_t': 'Placer les fichiers',
@@ -604,6 +617,8 @@
         'features.f8_d': 'Alterna entre ✏️ edición, 👁 solo lectura y &lt;/&gt; fuente HTML mediante pestañas.',
         'features.f9_t': 'Índice automático',
         'features.f9_d': 'Se genera un índice a partir de los encabezados. Desplazamiento suave al hacer clic.',
+        'features.f10_t': 'Tarjeta de empleo (lista para Google for Jobs)',
+        'features.f10_d': 'Tipo de contrato, salario, ubicación, horario, beneficios y número de vacantes en una sola tarjeta dentro del artículo. Los datos se guardan como datos estructurados que no se rompen, así que un host como KuroCMS puede generar automáticamente JobPosting para la búsqueda de empleo de Google (Google for Jobs). Incluye un interruptor de abierta/cerrada. Actívala con <code class="inline">jobUi: true</code>.',
         'qs.heading': 'Inicio rápido',
         'qs.sub': 'Carga dos archivos y ya está.',
         'qs.s1_t': 'Coloca los archivos',
@@ -658,6 +673,8 @@
         'features.f8_d': 'Alterne por abas entre ✏️ edição, 👁 leitura (sem edição) e &lt;/&gt; código HTML. O modo leitura deixa você focar na leitura, e usuários avançados podem ajustar detalhes no HTML puro.',
         'features.f9_t': 'Sumário automático',
         'features.f9_d': 'Um sumário é gerado automaticamente no painel direito a partir dos títulos. Clique para rolar suavemente.',
+        'features.f10_t': 'Cartão de vaga (pronto para o Google for Jobs)',
+        'features.f10_d': 'Tipo de contratação, salário, local, horário, benefícios e número de vagas em um só cartão dentro do artigo. Os dados ficam guardados como dados estruturados que não se quebram, então um host como o KuroCMS pode gerar automaticamente JobPosting para a busca de vagas do Google (Google for Jobs). Com chave de aberta/fechada. Ative com <code class="inline">jobUi: true</code>.',
         'qs.heading': 'Início rápido',
         'qs.sub': 'Basta carregar dois arquivos.',
         'qs.s1_t': 'Coloque os arquivos',
@@ -712,6 +729,8 @@
         'features.f8_d': 'Passa tra ✏️ modifica, 👁 sola lettura e &lt;/&gt; sorgente HTML con i tab.',
         'features.f9_t': 'Sommario automatico',
         'features.f9_d': 'Sommario generato dai titoli. Scorrimento fluido al clic.',
+        'features.f10_t': 'Scheda offerta di lavoro (pronta per Google for Jobs)',
+        'features.f10_d': 'Tipo di contratto, retribuzione, sede, orari, benefit e numero di posti in un’unica scheda dentro l’articolo. I dati sono salvati come dati strutturati che non si rompono, così un host come KuroCMS può generare automaticamente JobPosting per la ricerca di lavoro di Google (Google for Jobs). Con interruttore aperta/chiusa. Attivala con <code class="inline">jobUi: true</code>.',
         'qs.heading': 'Avvio rapido',
         'qs.sub': 'Carica due file e sei pronto.',
         'qs.s1_t': 'Posiziona i file',
@@ -766,6 +785,8 @@
         'features.f8_d': 'Перемикання вкладками між ✏️ редагуванням, 👁 переглядом (лише читання) і &lt;/&gt; HTML-кодом.',
         'features.f9_t': 'Автозміст',
         'features.f9_d': 'Зміст автоматично формується із заголовків. Плавна прокрутка по кліку.',
+        'features.f10_t': 'Картка вакансії (готова для Google for Jobs)',
+        'features.f10_d': 'Тип зайнятості, оплата, місце роботи, графік, пільги та кількість місць — в одній картці в статті. Дані зберігаються як структуровані дані, що не ламаються, тож хост, як-от KuroCMS, може автоматично виводити JobPosting для пошуку вакансій Google (Google for Jobs). З перемикачем «відкрита/закрита». Увімкніть через <code class="inline">jobUi: true</code>.',
         'qs.heading': 'Швидкий старт',
         'qs.sub': 'Завантажте два файли — і готово.',
         'qs.s1_t': 'Розмістіть файли',
@@ -820,6 +841,8 @@
         'features.f8_d': '通过标签页在 ✏️ 编辑、👁 只读浏览与 &lt;/&gt; HTML 源码之间切换。',
         'features.f9_t': '目录自动生成',
         'features.f9_d': '根据标题自动生成目录,点击平滑滚动。',
+        'features.f10_t': '招聘卡片（支持 Google 招聘搜索）',
+        'features.f10_d': '将雇佣类型、薪资、工作地点、工作时间、福利和招聘人数作为一张卡片保存在文章中。数据以不会损坏的结构化数据保存，因此 KuroCMS 等宿主可以自动输出 Google 招聘搜索（Google for Jobs）所用的 JobPosting。附带“招聘中”开关。通过 <code class="inline">jobUi: true</code> 启用。',
         'qs.heading': '快速开始',
         'qs.sub': '加载两个文件即可使用。',
         'qs.s1_t': '放置文件',
@@ -874,6 +897,8 @@
         'features.f8_d': '✏️ 편집 / 👁 읽기 전용 / &lt;/&gt; HTML 소스를 탭으로 전환. 파워 유저는 직접 HTML을 미세 조정할 수 있습니다.',
         'features.f9_t': '목차 자동 생성',
         'features.f9_d': '제목으로부터 목차를 자동 생성. 클릭 시 부드러운 스크롤.',
+        'features.f10_t': '채용 카드 (Google 채용 검색 대응)',
+        'features.f10_d': '고용 형태·급여·근무지·근무 시간·복리후생·모집 인원을 한 장의 카드로 글에 담습니다. 데이터는 깨지지 않는 구조화 데이터로 저장되므로, KuroCMS 같은 호스트가 Google 채용 검색(Google for Jobs)용 JobPosting을 자동으로 출력할 수 있습니다. 모집 중 켜기/끄기 포함. <code class="inline">jobUi: true</code>로 사용합니다.',
         'qs.heading': '빠른 시작',
         'qs.sub': '파일 두 개만 로드하면 끝.',
         'qs.s1_t': '파일 배치',
@@ -928,6 +953,8 @@
         'features.f8_d': 'بدّل عبر الألسنة بين ✏️ التحرير و👁 القراءة (بلا تحرير) و&lt;/&gt; شيفرة HTML. يتيح وضع القراءة التركيز على القراءة، ويمكن للمستخدمين المتقدمين ضبط التفاصيل في HTML مباشرة.',
         'features.f9_t': 'فهرس تلقائي',
         'features.f9_d': 'يُنشأ فهرس تلقائيًا من العناوين في اللوحة الجانبية، مع تمرير سلس عند النقر.',
+        'features.f10_t': 'بطاقة وظيفة (جاهزة لـ Google for Jobs)',
+        'features.f10_d': 'نوع التوظيف والراتب ومكان العمل وساعات العمل والمزايا وعدد الشواغر في بطاقة واحدة داخل المقال. تُحفظ البيانات كبيانات منظَّمة لا تتعطّل، لذا يستطيع مضيف مثل KuroCMS إخراج JobPosting تلقائيًا لبحث الوظائف في Google (Google for Jobs). مع مفتاح «مفتوحة/مغلقة». فعّلها بـ <code class="inline">jobUi: true</code>.',
         'qs.heading': 'البدء السريع',
         'qs.sub': 'يكفي تحميل ملفين.',
         'qs.s1_t': 'ضع الملفات',

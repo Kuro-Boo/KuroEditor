@@ -156,6 +156,14 @@ describe('ContactForm', () => {
     holder.innerHTML = html
     expect(decodeContactForm(holder.querySelector(CONTACT_CARD_SEL).getAttribute('data-contact')).subject).toBe('お問い合わせ')
   })
+  it('送り先は名前だけを持つ(重複は 1 つに・形の違う名前と多すぎる数は断る)', () => {
+    const c = normalizeContactForm({ ...emptyContactForm(), to: ['honbu', 'Syurou-A', 'honbu', ''] })
+    expect(c.to).toEqual(['honbu', 'syurou-a'])
+    expect(validateContactForm(c)).toEqual([])
+    expect(validateContactForm(normalizeContactForm({ ...emptyContactForm(), to: ['a@b.com'] })).join()).toMatch('送り先の名前')
+    expect(validateContactForm(normalizeContactForm({ ...emptyContactForm(), to: ['a', 'b', 'c', 'd', 'e', 'f'] })).join()).toMatch('5 か所まで')
+    expect(normalizeContactForm(emptyContactForm()).to).toBeUndefined()
+  })
   it('公開ページのフォームは欄の名前を並びの番号にし、罠の欄を持つ', () => {
     const html = renderContactFormHtml(normalizeContactForm(emptyContactForm()), { form: 'abc', sig: 'def', endpoint: '/_contact' })
     expect(html).toMatch('name="f0"')
@@ -219,6 +227,17 @@ describe('エディタの組み込み', () => {
     expect(out).toMatch('kuro-job__table')
     expect(out).not.toMatch('壊れた')
     expect(out).toMatch('kuro-contact__subject')
+  })
+  it('フォームのモーダルは、ホストの候補から送り先を選ばせ、登録に無い名前も黙って落とさない', () => {
+    const ed = new KuroEditor(mount(), { contactUi: true, contactRecipients: [{ name: 'honbu', label: '本部' }, { name: 'syurou-a', label: 'A型' }] })
+    const d = ed.contactDialog
+    d.open({ ...emptyContactForm(), to: ['honbu', 'old'] })
+    const boxes = [...d._toList.querySelectorAll('input[type="checkbox"]')]
+    expect(boxes.map((b) => [b.value, b.checked])).toEqual([['honbu', true], ['syurou-a', false], ['old', true]])
+    expect(d._toList.textContent).toMatch('old(登録がありません)')
+    boxes[1].checked = true
+    boxes[2].checked = false
+    expect(normalizeContactForm(d._read()).to).toEqual(['honbu', 'syurou-a'])
   })
   it('モーダルで保存すると、キャレットの後ろにカードが入る', () => {
     const ed = new KuroEditor(mount(), { jobUi: true })
