@@ -387,7 +387,8 @@ h5[id^='kuro-h-'] {
    持ち込まず --kuro-* 変数で組む(公開ページの本番のデザインはテンプレートが上書きする)。 */
 .kuro-content [data-kuro-block="job-card"],
 .kuro-content [data-kuro-block="contact-form"],
-.kuro-content .kuro-contact--live {
+.kuro-content .kuro-contact--live,
+.kuro-content .kuro-contact--closed {
   margin: 1.25rem 0;
   padding: 0.9rem 1rem;
   border: 1px solid var(--kuro-box-border);
@@ -419,7 +420,10 @@ h5[id^='kuro-h-'] {
   border: 1px solid var(--kuro-box-border);
   opacity: 0.85;
 }
-.kuro-content .kuro-contact--live .kuro-contact__head { display: none; }
+.kuro-content .kuro-contact--live .kuro-contact__head,
+.kuro-content .kuro-contact--closed .kuro-contact__head { display: none; }
+/* 受け付けていないフォーム(送り先が無い・確認待ち): 押せない見本の上に知らせを出す(項目と見た目は確かめられる) */
+.kuro-content .kuro-contact__closed-note { margin: 0 0 0.6rem; font-weight: 600; color: #b45309; }
 .kuro-content .kuro-contact__subject { font-weight: 600; }
 .kuro-content .kuro-job__state { font-weight: 700; }
 .kuro-content .kuro-job__state--open { color: #15803d; }
