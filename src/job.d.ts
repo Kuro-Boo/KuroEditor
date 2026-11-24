@@ -43,22 +43,28 @@ export const JOB_CARD_SEL: string;
 export const EMPLOYMENT_TYPES: [string, string][];
 export const SALARY_UNITS: [string, string][];
 export const SALARY_CURRENCIES: string[];
+export const EMPLOYMENT_TYPES_EN: [string, string][];
+export const SALARY_UNITS_EN: [string, string][];
+/** 日本語なら 'ja'・それ以外はすべて 'en'(空は 'ja')。 */
+export function jobLang(lang: unknown): "ja" | "en";
+export function employmentTypes(lang?: string): [string, string][];
+export function salaryUnits(lang?: string): [string, string][];
 export const JOB_LIMITS: { noteMax: number; hoursMax: number; requirementsMax: number; benefitsMax: number; openingsMax: number; contactMax: number; addressPartMax: number; salaryMax: number };
 export function isIsoDate(s: unknown): boolean;
 export function normalizeJob(raw: unknown): Job;
-export function validateJob(j: unknown): string[];
+export function validateJob(j: unknown, lang?: string): string[];
 export function encodeJob(j: Job): string;
 export function decodeJob(attr: unknown): Record<string, unknown> | null;
 /** 募集中か(open が真で、期限が無いか today 以後)。today を渡さなければ期限は見ない。 */
 export function jobIsOpen(j: Job | null | undefined, today?: string): boolean;
-export function employmentLabels(j: Job): string[];
-export function formatSalary(j: Job): string;
-export function formatLocation(j: Job): string;
+export function employmentLabels(j: Job, lang?: string): string[];
+export function formatSalary(j: Job, lang?: string): string;
+export function formatLocation(j: Job, lang?: string): string;
 /** 募集人数が数だけ(「3」「3名」)のときの人数。ほかは null。 */
 export function openingsCount(j: Job | null | undefined): number | null;
 /** 問い合わせ先の最初の電話番号。無ければ空。 */
 export function contactTelephone(j: Job | null | undefined): string;
-export function renderJobPreview(j: Job, opt?: { today?: string }): string;
-export function buildJobCardHtml(j: Job, opt?: { today?: string }): string;
+export function renderJobPreview(j: Job, opt?: { today?: string; lang?: string }): string;
+export function buildJobCardHtml(j: Job, opt?: { today?: string; lang?: string }): string;
 export function emptyJob(): Job;
 export function stampOpenedAt(before: Job | null, after: Job, today: string): Job;

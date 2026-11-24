@@ -24,6 +24,8 @@ import {
   emptyContactForm,
   openingsCount,
   contactTelephone,
+  jobLang,
+  formatLocation,
 } from '../src/editor.js'
 
 const JOB = {
@@ -244,5 +246,52 @@ describe('エディタの組み込み', () => {
     ed.setContent('<p>前</p>')
     ed._applyAtomicCard('job', normalizeJob(JOB))
     expect(ed.wysiwyg.querySelectorAll(JOB_CARD_SEL).length).toBe(1)
+  })
+})
+
+describe('求人カードの言語(日本語なら日本語・それ以外は英語)', () => {
+  const mount = () => { const el = document.createElement('div'); document.body.appendChild(el); return el }
+  it('jobLang は ja・ja-JP・空を日本語、ほかを英語にする', () => {
+    expect(jobLang('ja')).toBe('ja')
+    expect(jobLang('ja-JP')).toBe('ja')
+    expect(jobLang('')).toBe('ja')
+    expect(jobLang('en')).toBe('en')
+    expect(jobLang('fr')).toBe('en')
+  })
+  it('英語の本文では、カードの見出し・雇用形態・給与・勤務地を英語で出す', () => {
+    const j = normalizeJob({ ...JOB, hours: '9:00-17:00', location: { country: 'JP', postalCode: '277-0825', region: 'Chiba', locality: 'Kashiwa', street: '138-5 Fuse' } })
+    const html = renderJobPreview(j, { lang: 'en' })
+    expect(html).toMatch('Employment type')
+    expect(html).toMatch('Part-time')
+    expect(html).toMatch('Hiring')
+    expect(html).not.toMatch(/[ぁ-んァ-ン]/)
+    expect(formatSalary(j, 'en')).toBe('Hourly ¥1,500+')
+    expect(formatLocation(j, 'en')).toBe('138-5 Fuse, Kashiwa, Chiba 277-0825')
+    expect(renderJobPreview(normalizeJob({ ...JOB, open: false }), { lang: 'en' })).toMatch('Not currently hiring')
+    expect(buildJobCardHtml(j, { lang: 'en' })).toMatch('aria-label="Job card"')
+  })
+  it('既定(言語なし)は今までどおり日本語', () => {
+    const j = normalizeJob(JOB)
+    expect(renderJobPreview(j)).toMatch('雇用形態')
+    expect(formatSalary(j)).toBe('時給 1,500円〜')
+  })
+  it('誤りの文も英語にできる', () => {
+    const errs = validateJob(normalizeJob({ ...JOB, employmentType: [] }), 'en')
+    expect(errs).toContain('Choose at least one employment type.')
+  })
+  it('入力画面は uiLang、カードの表示は contentLang に従い、setContentLang で作り直す', () => {
+    const ed = new KuroEditor(mount(), { jobUi: true, uiLang: 'en', contentLang: 'ja' })
+    expect(ed.jobDialog.el.getAttribute('aria-label')).toBe('Edit job card')
+    expect(ed.jobDialog.el.textContent).toMatch('Employment type (one or more)')
+    expect(ed._tabActionBtns.job.getAttribute('title')).toMatch('Job card')
+    ed.setContent(buildJobCardHtml(normalizeJob(JOB)))
+    expect(ed.wysiwyg.querySelector(JOB_CARD_SEL).textContent).toMatch('雇用形態')
+    ed.setContentLang('en')
+    expect(ed.wysiwyg.querySelector(JOB_CARD_SEL).textContent).toMatch('Employment type')
+    expect(ed.getContent()).toMatch('Employment type')
+  })
+  it('uiLang が日本語なら入力画面は日本語', () => {
+    const ed = new KuroEditor(mount(), { jobUi: true, uiLang: 'ja' })
+    expect(ed.jobDialog.el.getAttribute('aria-label')).toBe('求人カードの編集')
   })
 })

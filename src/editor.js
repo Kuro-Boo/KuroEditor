@@ -68,12 +68,13 @@ import {
   JOB_CARD_SEL,
   JOB_LIMITS,
   JOB_VERSION,
-  EMPLOYMENT_TYPES,
-  SALARY_UNITS,
   SALARY_CURRENCIES,
   buildJobCardHtml,
   decodeJob,
   emptyJob,
+  employmentTypes,
+  jobLang,
+  salaryUnits,
   normalizeJob,
   renderJobPreview,
   stampOpenedAt,
@@ -150,7 +151,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.48.1'
+export const VERSION = '2.48.2'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -6200,27 +6201,68 @@ function localIsoDate(d = new Date()) {
 }
 
 /**
+ * 求人カードの入力画面の文(仕様 #spec-i18n の方針どおり、日本語なら日本語・それ以外は英語)。
+ * エディタ全体の文言はまだ日本語だけで、ここは求人カードの分だけ先に 2 言語にした(2026-11-24 利用者
+ * 「エディタの求人カードも英語に対応してください」)。
+ */
+const JOB_UI = {
+  ja: {
+    dialog: '求人カードの編集', title: '求人カード', del: '削除', delTitle: 'この求人カードを削除',
+    note: '職種名は記事のタイトル、仕事の説明は本文を使います。募集を止めるときは「募集中」を切ります(記事は消さずに、また人が足りなくなったら入れ直せます)。',
+    open: '募集中', openedAt: '募集を始めた日', types: '雇用形態(1 つ以上)',
+    salary: '給与(任意)', unit: '単位', min: '下限', max: '上限(任意)', currency: '通貨',
+    salaryNote: '給与の補足(任意・夜勤の手当や予想月収など)',
+    location: '勤務地', postal: '郵便番号(任意)', postalPh: '277-0825', region: '都道府県', regionPh: '千葉県',
+    locality: '市区町村', localityPh: '柏市', street: '番地・建物(任意)', country: '国',
+    more: 'そのほか(任意)', hours: '勤務時間・勤務日数', requirements: '応募資格・歓迎する経験',
+    benefits: '待遇(賞与・保険・通勤費・休暇など)', openings: '募集人数', openingsPh: '数名・3名 など',
+    contact: '問い合わせ先(電話番号と補足)', validThrough: '掲載期限(決まっている求人だけ)',
+    cancel: 'キャンセル', save: '保存',
+    btn: '求人カード(雇用形態・給与・勤務地・募集中の入切)', btnShort: '求人カード',
+    btnLocked: '1 記事につき求人カードは 1 つまでです。編集するにはカードをクリックしてください',
+  },
+  en: {
+    dialog: 'Edit job card', title: 'Job card', del: 'Delete', delTitle: 'Delete this job card',
+    note: 'The job title is the article title and the job description is the body. To stop hiring, turn off “Hiring” (keep the article and turn it on again when you need people).',
+    open: 'Hiring', openedAt: 'Posting date', types: 'Employment type (one or more)',
+    salary: 'Salary (optional)', unit: 'Unit', min: 'Minimum', max: 'Maximum (optional)', currency: 'Currency',
+    salaryNote: 'Salary note (optional, such as night-shift allowances or expected monthly pay)',
+    location: 'Location', postal: 'Postal code (optional)', postalPh: '94105', region: 'State / prefecture', regionPh: 'CA',
+    locality: 'City', localityPh: 'San Francisco', street: 'Street and building (optional)', country: 'Country',
+    more: 'Other (optional)', hours: 'Working hours and days', requirements: 'Requirements and welcome experience',
+    benefits: 'Benefits (bonus, insurance, commuting, leave and so on)', openings: 'Openings', openingsPh: 'e.g. 3, a few',
+    contact: 'Contact (phone number and notes)', validThrough: 'Closing date (only if fixed)',
+    cancel: 'Cancel', save: 'Save',
+    btn: 'Job card (employment type, salary, location, hiring on/off)', btnShort: 'Job card',
+    btnLocked: 'An article can have only one job card. Click the card to edit it',
+  },
+}
+
+/**
  * 求人(募集中の入切・雇用形態・給与・勤務地・勤務時間・応募資格・期限)を入力するモーダル。
  * 見た目はレシピのモーダルと共通(kuro-recipe-dialog の部品を使う)。
  * ⚠ 保存時は必ず normalizeJob → validateJob を通す。誤りの間は閉じない。
  */
 export class JobDialog {
-  constructor({ onSave, onDelete }) {
+  /** @param {{onSave: Function, onDelete: Function, lang?: string}} opt lang = 書き手の画面の言語 */
+  constructor({ onSave, onDelete, lang }) {
     this.onSave = onSave
     this.onDelete = onDelete
     this._before = null
+    this.lang = jobLang(lang)
+    const U = JOB_UI[this.lang]
     this.el = createElement('div', {
       className: 'kuro-recipe-dialog kuro-job-dialog',
-      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '求人カードの編集' },
+      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': U.dialog, lang: this.lang },
     })
     this._box = createElement('div', { className: 'kuro-recipe-dialog__box' })
     const head = createElement('div', { className: 'kuro-recipe-dialog__head' })
-    head.appendChild(createElement('div', { className: 'kuro-recipe-dialog__title', html: '求人カード' }))
+    head.appendChild(createElement('div', { className: 'kuro-recipe-dialog__title', html: U.title }))
     const tools = createElement('div', { className: 'kuro-recipe-dialog__tools' })
     this._deleteBtn = createElement('button', {
       className: 'kuro-recipe-dialog__tool kuro-recipe-dialog__tool--danger kuro-del-btn',
-      html: `${ICON.trash}<span>削除</span>`,
-      attrs: { type: 'button', title: 'この求人カードを削除', 'aria-label': 'この求人カードを削除' },
+      html: `${ICON.trash}<span>${U.del}</span>`,
+      attrs: { type: 'button', title: U.delTitle, 'aria-label': U.delTitle },
     })
     this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
     tools.appendChild(this._deleteBtn)
@@ -6228,7 +6270,7 @@ export class JobDialog {
     this._box.appendChild(head)
     this._box.appendChild(createElement('p', {
       className: 'kuro-recipe-dialog__note',
-      html: '職種名は記事のタイトル、仕事の説明は本文を使います。募集を止めるときは「募集中」を切ります(記事は消さずに、また人が足りなくなったら入れ直せます)。',
+      html: U.note,
     }))
 
     // ── 募集中の入切 + 募集を始めた日 ───────────────────────────────────
@@ -6236,16 +6278,16 @@ export class JobDialog {
     const openWrap = createElement('label', { className: 'kuro-recipe-dialog__field kuro-job-dialog__open' })
     this._openInput = createElement('input', { attrs: { type: 'checkbox', class: 'toggle' } })
     openWrap.appendChild(this._openInput)
-    openWrap.appendChild(createElement('span', { className: 'kuro-recipe-dialog__label', html: '募集中' }))
+    openWrap.appendChild(createElement('span', { className: 'kuro-recipe-dialog__label', html: U.open }))
     state.appendChild(openWrap)
-    this._openedInput = this._field(state, '募集を始めた日', { type: 'date' })
+    this._openedInput = this._field(state, U.openedAt, { type: 'date' })
     this._box.appendChild(state)
 
     // ── 雇用形態 ────────────────────────────────────────────────────────
-    const typesSec = this._section('雇用形態(1 つ以上)')
+    const typesSec = this._section(U.types)
     this._typeInputs = []
     const typesRow = createElement('div', { className: 'kuro-job-dialog__types' })
-    for (const [key, label] of EMPLOYMENT_TYPES) {
+    for (const [key, label] of employmentTypes(this.lang)) {
       const l = createElement('label', { className: 'kuro-job-dialog__type' })
       const cb = createElement('input', { attrs: { type: 'checkbox', value: key } })
       l.appendChild(cb)
@@ -6256,46 +6298,46 @@ export class JobDialog {
     typesSec.appendChild(typesRow)
 
     // ── 給与 ────────────────────────────────────────────────────────────
-    const salSec = this._section('給与(任意)')
+    const salSec = this._section(U.salary)
     const salRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._unitSelect = this._select(salRow, '単位', SALARY_UNITS)
-    this._minInput = this._field(salRow, '下限', { type: 'number', min: '0', inputmode: 'numeric' })
-    this._maxInput = this._field(salRow, '上限(任意)', { type: 'number', min: '0', inputmode: 'numeric' })
-    this._currencySelect = this._select(salRow, '通貨', SALARY_CURRENCIES.map((c) => [c, c]))
+    this._unitSelect = this._select(salRow, U.unit, salaryUnits(this.lang))
+    this._minInput = this._field(salRow, U.min, { type: 'number', min: '0', inputmode: 'numeric' })
+    this._maxInput = this._field(salRow, U.max, { type: 'number', min: '0', inputmode: 'numeric' })
+    this._currencySelect = this._select(salRow, U.currency, SALARY_CURRENCIES.map((c) => [c, c]))
     salSec.appendChild(salRow)
-    this._salaryNoteInput = this._area(salSec, '給与の補足(任意・夜勤の手当や予想月収など)', JOB_LIMITS.noteMax)
+    this._salaryNoteInput = this._area(salSec, U.salaryNote, JOB_LIMITS.noteMax)
 
     // ── 勤務地 ──────────────────────────────────────────────────────────
-    const locSec = this._section('勤務地')
+    const locSec = this._section(U.location)
     const locRow1 = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._postalInput = this._field(locRow1, '郵便番号(任意)', { placeholder: '277-0825' })
-    this._regionInput = this._field(locRow1, '都道府県', { placeholder: '千葉県' })
-    this._localityInput = this._field(locRow1, '市区町村', { placeholder: '柏市' })
+    this._postalInput = this._field(locRow1, U.postal, { placeholder: U.postalPh })
+    this._regionInput = this._field(locRow1, U.region, { placeholder: U.regionPh })
+    this._localityInput = this._field(locRow1, U.locality, { placeholder: U.localityPh })
     locSec.appendChild(locRow1)
     const locRow2 = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._streetInput = this._field(locRow2, '番地・建物(任意)', {})
-    this._countryInput = this._field(locRow2, '国', { maxlength: '2', placeholder: 'JP' })
+    this._streetInput = this._field(locRow2, U.street, {})
+    this._countryInput = this._field(locRow2, U.country, { maxlength: '2', placeholder: 'JP' })
     locSec.appendChild(locRow2)
 
     // ── 勤務時間・応募資格・待遇・募集人数・問い合わせ・期限 ──────────────────
-    const moreSec = this._section('そのほか(任意)')
-    this._hoursInput = this._area(moreSec, '勤務時間・勤務日数', JOB_LIMITS.hoursMax)
-    this._reqInput = this._area(moreSec, '応募資格・歓迎する経験', JOB_LIMITS.requirementsMax)
-    this._benefitsInput = this._area(moreSec, '待遇(賞与・保険・通勤費・休暇など)', JOB_LIMITS.benefitsMax)
+    const moreSec = this._section(U.more)
+    this._hoursInput = this._area(moreSec, U.hours, JOB_LIMITS.hoursMax)
+    this._reqInput = this._area(moreSec, U.requirements, JOB_LIMITS.requirementsMax)
+    this._benefitsInput = this._area(moreSec, U.benefits, JOB_LIMITS.benefitsMax)
     const openRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._openingsInput = this._field(openRow, '募集人数', { placeholder: '数名・3名 など', maxlength: String(JOB_LIMITS.openingsMax) })
+    this._openingsInput = this._field(openRow, U.openings, { placeholder: U.openingsPh, maxlength: String(JOB_LIMITS.openingsMax) })
     moreSec.appendChild(openRow)
-    this._contactInput = this._area(moreSec, '問い合わせ先(電話番号と補足)', JOB_LIMITS.contactMax)
+    this._contactInput = this._area(moreSec, U.contact, JOB_LIMITS.contactMax)
     const vtRow = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._validInput = this._field(vtRow, '掲載期限(決まっている求人だけ)', { type: 'date' })
+    this._validInput = this._field(vtRow, U.validThrough, { type: 'date' })
     moreSec.appendChild(vtRow)
 
     this._errors = createElement('ul', { className: 'kuro-recipe-dialog__errors' })
     this._errors.hidden = true
     this._box.appendChild(this._errors)
     const footer = createElement('div', { className: 'kuro-recipe-dialog__footer' })
-    const cancel = createElement('button', { className: 'kuro-recipe-dialog__btn', html: 'キャンセル', attrs: { type: 'button' } })
-    const save = createElement('button', { className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--primary', html: '保存', attrs: { type: 'button' } })
+    const cancel = createElement('button', { className: 'kuro-recipe-dialog__btn', html: U.cancel, attrs: { type: 'button' } })
+    const save = createElement('button', { className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--primary', html: U.save, attrs: { type: 'button' } })
     cancel.addEventListener('click', () => this.hide())
     save.addEventListener('click', () => this._submit())
     footer.appendChild(cancel)
@@ -6385,7 +6427,7 @@ export class JobDialog {
 
   _submit() {
     const job = stampOpenedAt(this._before, normalizeJob(this._read()), localIsoDate())
-    const errors = validateJob(job)
+    const errors = validateJob(job, this.lang)
     this._showErrors(errors)
     if (errors.length) return
     this.onSave(job)
@@ -7200,6 +7242,10 @@ export class KuroEditor {
    *                                // 2 度目の押下は既存カードの編集になる。
    *   jobUi?: boolean,             // 鍋の右に「求人」ボタンを出し、JobCard(求人の構造化ブロック)を
    *                                // 挿入・編集できるようにする(既定 false)。本文に置けるのは 1 個。
+   *   uiLang?: string,             // 書き手の画面の言語(既定はブラウザの言語)。いまは求人カードの
+   *                                // 入力画面だけが従う(日本語なら日本語・それ以外は英語・#spec-i18n)。
+   *   contentLang?: string,        // 本文の言語(既定 null = 日本語)。求人カードの表示(公開ページにも
+   *                                // 出る)の見出し・雇用形態・給与の書き方が従う。setContentLang() で変える。
    *   contactUi?: boolean,         // 「フォーム」ボタンを出し、ContactForm(問い合わせフォームの形)を
    *                                // 挿入・編集できるようにする(既定 false)。アドレスはホストが持つ。
    *   contactRecipients?: { name: string, label: string }[],
@@ -7264,6 +7310,8 @@ export class KuroEditor {
       helpUrl: 'https://kuro.boo/kuroeditor/guide/',
       recipeUi: true,
       jobUi: false,
+      uiLang: (typeof navigator !== 'undefined' && navigator.language) || 'ja',
+      contentLang: null,
       contactUi: false,
       contactRecipients: [],
       blockIds: false,
@@ -7386,7 +7434,7 @@ export class KuroEditor {
       ...(this.options.recipeUi
         ? [{ label: ICON.pot, id: 'recipe', title: 'レシピカード' }] : []),
       ...(this.options.jobUi
-        ? [{ label: ICON.job, id: 'job', title: '求人カード' }] : []),
+        ? [{ label: ICON.job, id: 'job', title: JOB_UI[jobLang(this.options.uiLang)].btnShort }] : []),
       ...(this.options.contactUi
         ? [{ label: ICON.form, id: 'contact', title: '問い合わせフォーム' }] : []),
     ]
@@ -7497,7 +7545,7 @@ export class KuroEditor {
       ...(this.options.recipeUi
         ? [{ label: ICON.pot, id: 'recipe', title: 'レシピカード（材料・時間・手順）' }] : []),
       ...(this.options.jobUi
-        ? [{ label: ICON.job, id: 'job', title: KuroEditor.JOB_BTN_TITLE }] : []),
+        ? [{ label: ICON.job, id: 'job', title: JOB_UI[jobLang(this.options.uiLang)].btn }] : []),
       ...(this.options.contactUi
         ? [{ label: ICON.form, id: 'contact', title: KuroEditor.CONTACT_BTN_TITLE }] : []),
     ]
@@ -7768,7 +7816,7 @@ export class KuroEditor {
       : null
     // JobCard・ContactForm の編集モーダル。オプションが off なら作らない
     this.jobDialog = this.options.jobUi
-      ? new JobDialog({ onSave: (job) => this._applyAtomicCard('job', job), onDelete: () => this._deleteAtomicCard('job') })
+      ? new JobDialog({ lang: this.options.uiLang, onSave: (job) => this._applyAtomicCard('job', job), onDelete: () => this._deleteAtomicCard('job') })
       : null
     this.contactDialog = this.options.contactUi
       ? new ContactDialog({ onSave: (form) => this._applyAtomicCard('contact', form), onDelete: () => this._deleteAtomicCard('contact'), recipients: this.options.contactRecipients })
@@ -12215,13 +12263,29 @@ export class KuroEditor {
   // 編集はモーダルだけ・プレビューは保存のたびに正本から作り直す)。違いは数の上限だけ:
   // 求人は 1 本文に 1 個(1 記事 = 1 求人)、フォームは CONTACT_LIMITS.perBody 個まで。
 
-  static get JOB_BTN_TITLE() { return '求人カード(雇用形態・給与・勤務地・募集中の入切)' }
-  static get JOB_BTN_LOCKED_TITLE() { return '1 記事につき求人カードは 1 つまでです。編集するにはカードをクリックしてください' }
+  static get JOB_BTN_TITLE() { return JOB_UI.ja.btn }
+  static get JOB_BTN_LOCKED_TITLE() { return JOB_UI.ja.btnLocked }
+
+  /**
+   * 本文の言語を変える(ホストが言語のタブを切り替えたとき)。本文の求人カードの表示を作り直す。
+   * ⚠ カードの表示は本文の言語で作る(公開ページにも出る)。書き手の画面の言語(uiLang)ではない。
+   */
+  setContentLang(lang) {
+    this.options.contentLang = lang ?? null
+    for (const card of this.wysiwyg.querySelectorAll(JOB_CARD_SEL)) {
+      const data = decodeJob(card.getAttribute('data-job'))
+      if (!data) continue
+      this._suspendDirty(() => {
+        card.innerHTML = renderJobPreview(normalizeJob(data), { lang: this.options.contentLang })
+        card.setAttribute('aria-label', jobLang(this.options.contentLang) === 'ja' ? '求人カード' : 'Job card')
+      })
+    }
+  }
   static get CONTACT_BTN_TITLE() { return '問い合わせフォーム' }
 
   _atomicSpec(kind) {
     return kind === 'job'
-      ? { dialog: this.jobDialog, sel: JOB_CARD_SEL, attr: 'data-job', decode: decodeJob, build: buildJobCardHtml }
+      ? { dialog: this.jobDialog, sel: JOB_CARD_SEL, attr: 'data-job', decode: decodeJob, build: (j) => buildJobCardHtml(j, { lang: this.options.contentLang }) }
       : { dialog: this.contactDialog, sel: CONTACT_CARD_SEL, attr: 'data-contact', decode: decodeContactForm, build: buildContactCardHtml }
   }
 
@@ -12229,7 +12293,8 @@ export class KuroEditor {
   _syncJobBtn() {
     if (!this.options.jobUi) return
     const locked = !!this.wysiwyg.querySelector(JOB_CARD_SEL)
-    const title = locked ? KuroEditor.JOB_BTN_LOCKED_TITLE : KuroEditor.JOB_BTN_TITLE
+    const U = JOB_UI[jobLang(this.options.uiLang)]
+    const title = locked ? U.btnLocked : U.btn
     for (const btn of [this._tabActionBtns?.job, this._mmenuBtns?.job]) {
       if (!btn) continue
       btn.classList.toggle('kuro-btn-locked', locked)
@@ -12242,7 +12307,7 @@ export class KuroEditor {
   _serializeAtomicCards(root) {
     for (const card of root.querySelectorAll(JOB_CARD_SEL)) {
       const data = decodeJob(card.getAttribute('data-job'))
-      if (data) card.innerHTML = renderJobPreview(normalizeJob(data))
+      if (data) card.innerHTML = renderJobPreview(normalizeJob(data), { lang: this.options.contentLang })
     }
     for (const card of root.querySelectorAll(CONTACT_CARD_SEL)) {
       const data = decodeContactForm(card.getAttribute('data-contact'))

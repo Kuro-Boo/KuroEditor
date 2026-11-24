@@ -51,6 +51,112 @@ export const SALARY_UNITS = [
 
 export const SALARY_CURRENCIES = ['JPY', 'USD', 'EUR']
 
+/**
+ * 言語(仕様 editor-editor-spec-job・#spec-i18n): **日本語なら日本語・それ以外はすべて英語**の 2 言語。
+ * 入力画面と誤りの文は書き手の画面の言語、カードの表示(公開ページにも出る)は本文の言語で選ぶ。
+ * @param {unknown} lang 'ja'・'ja-JP'・'en'・'fr' など。空なら日本語
+ * @returns {'ja'|'en'}
+ */
+export function jobLang(lang) {
+  const v = typeof lang === 'string' ? lang.trim().toLowerCase() : ''
+  return !v || v === 'ja' || v.startsWith('ja-') ? 'ja' : 'en'
+}
+
+/** 英語の名前(EMPLOYMENT_TYPES・SALARY_UNITS の並びと同じ鍵)。 */
+export const EMPLOYMENT_TYPES_EN = [
+  ['FULL_TIME', 'Full-time'],
+  ['PART_TIME', 'Part-time'],
+  ['CONTRACTOR', 'Contractor'],
+  ['TEMPORARY', 'Temporary'],
+  ['INTERN', 'Internship'],
+  ['VOLUNTEER', 'Volunteer'],
+  ['PER_DIEM', 'Per diem'],
+  ['OTHER', 'Other'],
+]
+export const SALARY_UNITS_EN = [
+  ['HOUR', 'Hourly'],
+  ['DAY', 'Daily'],
+  ['WEEK', 'Weekly'],
+  ['MONTH', 'Monthly'],
+  ['YEAR', 'Yearly'],
+]
+
+/** 言語ごとの雇用形態・給与の単位の [鍵, 名前] の並び。 */
+export function employmentTypes(lang) {
+  return jobLang(lang) === 'ja' ? EMPLOYMENT_TYPES : EMPLOYMENT_TYPES_EN
+}
+export function salaryUnits(lang) {
+  return jobLang(lang) === 'ja' ? SALARY_UNITS : SALARY_UNITS_EN
+}
+
+/** 誤りの文(validateJob)。{n} は上限の数。 */
+const JOB_ERRORS = {
+  ja: {
+    unreadable: '求人の内容が読み取れません。',
+    open: '募集中かどうかが読み取れません。',
+    openedAt: '募集を始めた日は YYYY-MM-DD の正しい日付で入力してください。',
+    typesMin: '雇用形態を 1 つ以上選んでください。',
+    typesUnknown: '雇用形態に知らない値があります。',
+    currency: '給与の通貨は JPY・USD・EUR から選んでください。',
+    unit: '給与の単位が読み取れません。',
+    minMissing: '給与の下限を入力してください(上限だけは入れられません)。',
+    minPositive: '給与の下限は正の数で入力してください。',
+    maxPositive: '給与の上限は正の数で入力してください。',
+    maxBelowMin: '給与の上限は下限以上にしてください。',
+    noteMax: '給与の補足は {n} 文字以内で入力してください。',
+    country: '勤務地の国は 2 文字の国コード(例 JP)で入力してください。',
+    region: '勤務地の都道府県を入力してください。',
+    locality: '勤務地の市区町村を入力してください。',
+    addressMax: '勤務地の各欄は {n} 文字以内で入力してください。',
+    hoursMax: '勤務時間は {n} 文字以内で入力してください。',
+    requirementsMax: '応募資格は {n} 文字以内で入力してください。',
+    benefitsMax: '待遇は {n} 文字以内で入力してください。',
+    openingsMax: '募集人数は {n} 文字以内で入力してください。',
+    contactMax: '問い合わせ先は {n} 文字以内で入力してください。',
+    validThrough: '掲載期限は YYYY-MM-DD の正しい日付で入力してください。',
+    validBeforeOpened: '掲載期限は募集を始めた日以後にしてください。',
+  },
+  en: {
+    unreadable: 'The job details cannot be read.',
+    open: 'Whether the job is open cannot be read.',
+    openedAt: 'Enter the posting date as a valid date (YYYY-MM-DD).',
+    typesMin: 'Choose at least one employment type.',
+    typesUnknown: 'The employment type has an unknown value.',
+    currency: 'Choose the salary currency from JPY, USD or EUR.',
+    unit: 'The salary unit cannot be read.',
+    minMissing: 'Enter the minimum salary (a maximum alone is not allowed).',
+    minPositive: 'Enter the minimum salary as a positive number.',
+    maxPositive: 'Enter the maximum salary as a positive number.',
+    maxBelowMin: 'The maximum salary must be at least the minimum.',
+    noteMax: 'Keep the salary note within {n} characters.',
+    country: 'Enter the country of the location as a 2-letter code (for example JP).',
+    region: 'Enter the state or prefecture of the location.',
+    locality: 'Enter the city of the location.',
+    addressMax: 'Keep each part of the location within {n} characters.',
+    hoursMax: 'Keep the working hours within {n} characters.',
+    requirementsMax: 'Keep the requirements within {n} characters.',
+    benefitsMax: 'Keep the benefits within {n} characters.',
+    openingsMax: 'Keep the number of openings within {n} characters.',
+    contactMax: 'Keep the contact within {n} characters.',
+    validThrough: 'Enter the closing date as a valid date (YYYY-MM-DD).',
+    validBeforeOpened: 'The closing date must be on or after the posting date.',
+  },
+}
+
+/** カードの表示の文(renderJobPreview)。 */
+const JOB_TEXT = {
+  ja: {
+    card: '求人カード', badge: '求人', open: '募集中', closed: '現在は募集していません',
+    types: '雇用形態', salary: '給与', location: '勤務地', hours: '勤務時間', requirements: '応募資格',
+    benefits: '待遇', openings: '募集人数', contact: '問い合わせ', validThrough: '掲載期限', sep: '・',
+  },
+  en: {
+    card: 'Job card', badge: 'Job', open: 'Hiring', closed: 'Not currently hiring',
+    types: 'Employment type', salary: 'Salary', location: 'Location', hours: 'Working hours', requirements: 'Requirements',
+    benefits: 'Benefits', openings: 'Openings', contact: 'Contact', validThrough: 'Closing date', sep: ', ',
+  },
+}
+
 export const JOB_LIMITS = {
   noteMax: 500,
   hoursMax: 500,
@@ -137,43 +243,46 @@ export function normalizeJob(raw) {
 
 /**
  * 保存してよい形か。**正規化済み**の値を渡す。
+ * @param {string} [lang] 誤りの文の言語(jobLang・既定は日本語)
  * @returns {string[]} 人が読める誤りの文(空なら OK)
  */
-export function validateJob(j) {
+export function validateJob(j, lang) {
   const errors = []
   const L = JOB_LIMITS
-  if (!j || typeof j !== 'object') return ['求人の内容が読み取れません。']
-  if (typeof j.open !== 'boolean') errors.push('募集中かどうかが読み取れません。')
-  if (j.openedAt !== undefined && !isIsoDate(j.openedAt)) errors.push('募集を始めた日は YYYY-MM-DD の正しい日付で入力してください。')
+  const M = JOB_ERRORS[jobLang(lang)]
+  const e = (key, n) => errors.push(n === undefined ? M[key] : M[key].replace('{n}', String(n)))
+  if (!j || typeof j !== 'object') return [M.unreadable]
+  if (typeof j.open !== 'boolean') e('open')
+  if (j.openedAt !== undefined && !isIsoDate(j.openedAt)) e('openedAt')
   const types = Array.isArray(j.employmentType) ? j.employmentType : []
-  if (types.length < 1) errors.push('雇用形態を 1 つ以上選んでください。')
-  if (types.some((t) => !EMPLOYMENT_KEYS.has(t))) errors.push('雇用形態に知らない値があります。')
+  if (types.length < 1) e('typesMin')
+  if (types.some((t) => !EMPLOYMENT_KEYS.has(t))) e('typesUnknown')
   if (j.salary) {
     const s = j.salary
-    if (!SALARY_CURRENCIES.includes(s.currency)) errors.push('給与の通貨は JPY・USD・EUR から選んでください。')
-    if (!UNIT_KEYS.has(s.unit)) errors.push('給与の単位が読み取れません。')
-    if (s.min === undefined) errors.push('給与の下限を入力してください(上限だけは入れられません)。')
-    for (const [label, v] of [['下限', s.min], ['上限', s.max]]) {
-      if (v !== undefined && !(typeof v === 'number' && v > 0 && v <= L.salaryMax)) errors.push(`給与の${label}は正の数で入力してください。`)
+    if (!SALARY_CURRENCIES.includes(s.currency)) e('currency')
+    if (!UNIT_KEYS.has(s.unit)) e('unit')
+    if (s.min === undefined) e('minMissing')
+    for (const [key, v] of [['minPositive', s.min], ['maxPositive', s.max]]) {
+      if (v !== undefined && !(typeof v === 'number' && v > 0 && v <= L.salaryMax)) e(key)
     }
-    if (typeof s.min === 'number' && typeof s.max === 'number' && s.max < s.min) errors.push('給与の上限は下限以上にしてください。')
+    if (typeof s.min === 'number' && typeof s.max === 'number' && s.max < s.min) e('maxBelowMin')
   }
-  if ((j.salaryNote ?? '').length > L.noteMax) errors.push(`給与の補足は ${L.noteMax} 文字以内で入力してください。`)
+  if ((j.salaryNote ?? '').length > L.noteMax) e('noteMax', L.noteMax)
   const loc = j.location && typeof j.location === 'object' ? j.location : {}
-  if (!/^[A-Z]{2}$/.test(loc.country ?? '')) errors.push('勤務地の国は 2 文字の国コード(例 JP)で入力してください。')
-  if (!loc.region) errors.push('勤務地の都道府県を入力してください。')
-  if (!loc.locality) errors.push('勤務地の市区町村を入力してください。')
+  if (!/^[A-Z]{2}$/.test(loc.country ?? '')) e('country')
+  if (!loc.region) e('region')
+  if (!loc.locality) e('locality')
   for (const k of ['region', 'locality', 'street', 'postalCode']) {
-    if ((loc[k] ?? '').length > L.addressPartMax) { errors.push(`勤務地の各欄は ${L.addressPartMax} 文字以内で入力してください。`); break }
+    if ((loc[k] ?? '').length > L.addressPartMax) { e('addressMax', L.addressPartMax); break }
   }
-  if ((j.hours ?? '').length > L.hoursMax) errors.push(`勤務時間は ${L.hoursMax} 文字以内で入力してください。`)
-  if ((j.requirements ?? '').length > L.requirementsMax) errors.push(`応募資格は ${L.requirementsMax} 文字以内で入力してください。`)
-  if ((j.benefits ?? '').length > L.benefitsMax) errors.push(`待遇は ${L.benefitsMax} 文字以内で入力してください。`)
-  if ((j.openings ?? '').length > L.openingsMax) errors.push(`募集人数は ${L.openingsMax} 文字以内で入力してください。`)
-  if ((j.contact ?? '').length > L.contactMax) errors.push(`問い合わせ先は ${L.contactMax} 文字以内で入力してください。`)
+  if ((j.hours ?? '').length > L.hoursMax) e('hoursMax', L.hoursMax)
+  if ((j.requirements ?? '').length > L.requirementsMax) e('requirementsMax', L.requirementsMax)
+  if ((j.benefits ?? '').length > L.benefitsMax) e('benefitsMax', L.benefitsMax)
+  if ((j.openings ?? '').length > L.openingsMax) e('openingsMax', L.openingsMax)
+  if ((j.contact ?? '').length > L.contactMax) e('contactMax', L.contactMax)
   if (j.validThrough !== undefined) {
-    if (!isIsoDate(j.validThrough)) errors.push('掲載期限は YYYY-MM-DD の正しい日付で入力してください。')
-    else if (j.openedAt && isIsoDate(j.openedAt) && j.validThrough < j.openedAt) errors.push('掲載期限は募集を始めた日以後にしてください。')
+    if (!isIsoDate(j.validThrough)) e('validThrough')
+    else if (j.openedAt && isIsoDate(j.openedAt) && j.validThrough < j.openedAt) e('validBeforeOpened')
   }
   return errors
 }
@@ -203,12 +312,16 @@ export function jobIsOpen(j, today) {
   return true
 }
 
-export function employmentLabels(j) {
-  const names = new Map(EMPLOYMENT_TYPES)
+export function employmentLabels(j, lang) {
+  const names = new Map(employmentTypes(lang))
   return (Array.isArray(j?.employmentType) ? j.employmentType : []).map((k) => names.get(k) ?? k)
 }
 
-function money(n, currency) {
+function money(n, currency, lang) {
+  if (lang === 'en') {
+    const sign = { JPY: '¥', USD: '$', EUR: '€' }[currency]
+    return sign ? `${sign}${n.toLocaleString('en-US')}` : `${n.toLocaleString('en-US')} ${currency}`
+  }
   if (currency === 'JPY') {
     if (n >= 10000 && n % 10000 === 0) return `${(n / 10000).toLocaleString('ja-JP')}万円`
     if (n >= 10000 && n % 1000 === 0) return `${(n / 10000).toLocaleString('ja-JP', { maximumFractionDigits: 1 })}万円`
@@ -217,14 +330,17 @@ function money(n, currency) {
   return `${n.toLocaleString('en-US')} ${currency}`
 }
 
-/** 「時給 1,500円〜」「月給 20万円〜25万円」。給与が無ければ空。 */
-export function formatSalary(j) {
+/** 「時給 1,500円〜」「月給 20万円〜25万円」(英語は「Hourly ¥1,500+」「Monthly ¥200,000–¥250,000」)。給与が無ければ空。 */
+export function formatSalary(j, lang) {
   const s = j?.salary
   if (!s || typeof s.min !== 'number') return ''
-  const unit = new Map(SALARY_UNITS).get(s.unit) ?? ''
+  const lg = jobLang(lang)
+  const unit = new Map(salaryUnits(lg)).get(s.unit) ?? ''
+  const m = (n) => money(n, s.currency, lg)
+  const [dash, plus] = lg === 'ja' ? ['〜', '〜'] : ['–', '+']
   const range = typeof s.max === 'number' && s.max !== s.min
-    ? `${money(s.min, s.currency)}〜${money(s.max, s.currency)}`
-    : typeof s.max === 'number' ? money(s.min, s.currency) : `${money(s.min, s.currency)}〜`
+    ? `${m(s.min)}${dash}${m(s.max)}`
+    : typeof s.max === 'number' ? m(s.min) : `${m(s.min)}${plus}`
   return `${unit} ${range}`.trim()
 }
 
@@ -243,9 +359,15 @@ export function contactTelephone(j) {
   return m ? m[0].trim() : ''
 }
 
-/** 「〒277-0825 千葉県柏市布施138-5」 */
-export function formatLocation(j) {
+/** 「〒277-0825 千葉県柏市布施138-5」(英語は「138-5 Fuse, Kashiwa, Chiba 277-0825」の順)。 */
+export function formatLocation(j, lang) {
   const l = j?.location ?? {}
+  if (jobLang(lang) === 'en') {
+    const tail = [l.region, l.postalCode].filter(Boolean).join(' ')
+    const parts = [l.street, l.locality, tail].filter(Boolean)
+    if (l.country && l.country !== 'JP') parts.push(l.country)
+    return parts.join(', ')
+  }
   const pc = l.postalCode ? `〒${l.postalCode} ` : ''
   const country = l.country && l.country !== 'JP' ? ` (${l.country})` : ''
   return `${pc}${l.region ?? ''}${l.locality ?? ''}${l.street ?? ''}${country}`.trim()
@@ -258,27 +380,30 @@ function multiline(s) {
 /**
  * プレビュー(エディタと公開ページで同じ)の内側 HTML。JSON からだけ作る。
  * @param {object} j 正規化済み
- * @param {{today?: string}} [opt] 公開ページの作成日(サイトの時計)。渡すと期限を過ぎた求人を「募集していません」と出す
+ * @param {{today?: string, lang?: string}} [opt] today = 公開ページの作成日(サイトの時計)。渡すと期限を過ぎた
+ *   求人を「募集していません」と出す。lang = 本文の言語(jobLang・既定は日本語)
  */
 export function renderJobPreview(j, opt = {}) {
+  const lang = jobLang(opt.lang)
+  const T = JOB_TEXT[lang]
   const open = jobIsOpen(j, opt.today)
   const rows = []
   const row = (k, v) => rows.push(`<tr><th>${_escapeHtml(k)}</th><td>${v}</td></tr>`)
-  const types = employmentLabels(j)
-  if (types.length) row('雇用形態', _escapeHtml(types.join('・')))
-  const sal = formatSalary(j)
-  if (sal || j.salaryNote) row('給与', [_escapeHtml(sal), j.salaryNote ? multiline(j.salaryNote) : ''].filter(Boolean).join('<br>'))
-  const loc = formatLocation(j)
-  if (loc) row('勤務地', _escapeHtml(loc))
-  if (j.hours) row('勤務時間', multiline(j.hours))
-  if (j.requirements) row('応募資格', multiline(j.requirements))
-  if (j.benefits) row('待遇', multiline(j.benefits))
-  if (j.openings) row('募集人数', multiline(j.openings))
-  if (j.contact) row('問い合わせ', multiline(j.contact))
-  if (j.validThrough) row('掲載期限', _escapeHtml(j.validThrough.replace(/-/g, '/')))
+  const types = employmentLabels(j, lang)
+  if (types.length) row(T.types, _escapeHtml(types.join(T.sep)))
+  const sal = formatSalary(j, lang)
+  if (sal || j.salaryNote) row(T.salary, [_escapeHtml(sal), j.salaryNote ? multiline(j.salaryNote) : ''].filter(Boolean).join('<br>'))
+  const loc = formatLocation(j, lang)
+  if (loc) row(T.location, _escapeHtml(loc))
+  if (j.hours) row(T.hours, multiline(j.hours))
+  if (j.requirements) row(T.requirements, multiline(j.requirements))
+  if (j.benefits) row(T.benefits, multiline(j.benefits))
+  if (j.openings) row(T.openings, multiline(j.openings))
+  if (j.contact) row(T.contact, multiline(j.contact))
+  if (j.validThrough) row(T.validThrough, _escapeHtml(lang === 'ja' ? j.validThrough.replace(/-/g, '/') : j.validThrough))
   return `<div class="kuro-job__head">` +
-      `<span class="kuro-job__label">求人</span>` +
-      `<span class="kuro-job__state kuro-job__state--${open ? 'open' : 'closed'}">${open ? '募集中' : '現在は募集していません'}</span>` +
+      `<span class="kuro-job__label">${T.badge}</span>` +
+      `<span class="kuro-job__state kuro-job__state--${open ? 'open' : 'closed'}">${open ? T.open : T.closed}</span>` +
     `</div>` +
     `<table class="kuro-job__table"><tbody>${rows.join('')}</tbody></table>`
 }
@@ -288,7 +413,7 @@ export function buildJobCardHtml(j, opt = {}) {
   return `<div data-kuro-block="${JOB_BLOCK}"` +
     ` data-job-version="${JOB_VERSION}"` +
     ` data-job="${encodeJob(j)}"` +
-    ` contenteditable="false" role="group" aria-label="求人カード">` +
+    ` contenteditable="false" role="group" aria-label="${JOB_TEXT[jobLang(opt.lang)].card}">` +
     renderJobPreview(j, opt) +
     `</div>`
 }
