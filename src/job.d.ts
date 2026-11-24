@@ -52,7 +52,7 @@ export function salaryUnits(lang?: string): [string, string][];
 export const JOB_LIMITS: { noteMax: number; hoursMax: number; requirementsMax: number; benefitsMax: number; openingsMax: number; contactMax: number; addressPartMax: number; salaryMax: number };
 export function isIsoDate(s: unknown): boolean;
 export function normalizeJob(raw: unknown): Job;
-export function validateJob(j: unknown, lang?: string): string[];
+export function validateJob(j: unknown, lang?: string | ((key: string, n?: number) => string)): string[];
 export function encodeJob(j: Job): string;
 export function decodeJob(attr: unknown): Record<string, unknown> | null;
 /** 募集中か(open が真で、期限が無いか today 以後)。today を渡さなければ期限は見ない。 */
@@ -66,5 +66,6 @@ export function openingsCount(j: Job | null | undefined): number | null;
 export function contactTelephone(j: Job | null | undefined): string;
 export function renderJobPreview(j: Job, opt?: { today?: string; lang?: string }): string;
 export function buildJobCardHtml(j: Job, opt?: { today?: string; lang?: string }): string;
+export function jobCardLabel(lang?: string): string;
 export function emptyJob(): Job;
 export function stampOpenedAt(before: Job | null, after: Job, today: string): Job;

@@ -141,44 +141,55 @@ export function normalizeRecipe(raw) {
   return out
 }
 
+/** 誤りの文(日本語)。エディタは画面の辞書の recipeErr.<鍵> で引き直す(#spec-i18n)。 */
+const RECIPE_ERRORS = {
+  unreadable: 'レシピの内容が読み取れません。',
+  yield: '人数を入力してください。',
+  yieldMax: '人数は {n} 文字以内で入力してください。',
+  prepTime: '下準備時間は 0〜{n} 分の整数で入力してください。',
+  cookTime: '調理時間は 0〜{n} 分の整数で入力してください。',
+  timeRequired: '下準備時間か調理時間のどちらかを入力してください。',
+  ingredients: '材料を 1 行以上入力してください。',
+  ingredientsMax: '材料は {n} 行までです。',
+  instructions: '手順を 1 行以上入力してください。',
+  instructionsMax: '手順は {n} 行までです。',
+  instructionTextMax: '手順は 1 行 {n} 文字以内で入力してください。',
+}
+
 /**
  * 保存してよい形かを検査する（仕様 §10「KuroEditorモーダル保存」）。
  * **正規化済みの値**を渡すこと（空行落としは normalizeRecipe の役目）。
- *
  * @param {object} r
+ * @param {(key: string, vars?: object) => string} [tr] 文を作る関数(省くと日本語)
  * @returns {string[]} 人が読めるエラー文の配列（空なら OK）
  */
-export function validateRecipe(r) {
+export function validateRecipe(r, tr) {
   const errors = []
   const L = RECIPE_LIMITS
-  if (!r || typeof r !== 'object') return ['レシピの内容が読み取れません。']
+  const msg = (key, vars) => tr ? tr(key, vars) : RECIPE_ERRORS[key].replace(/\{(\w+)\}/g, (m, k) => String(vars?.[k] ?? m))
+  const e = (key, vars) => errors.push(msg(key, vars))
+  if (!r || typeof r !== 'object') return [msg('unreadable')]
 
-  if (!r.yield) errors.push('人数を入力してください。')
-  else if (r.yield.length > L.yieldMax) errors.push(`人数は ${L.yieldMax} 文字以内で入力してください。`)
+  if (!r.yield) e('yield')
+  else if (r.yield.length > L.yieldMax) e('yieldMax', { n: L.yieldMax })
 
   const prep = r.prepTimeMinutes
   const cook = r.cookTimeMinutes
-  for (const [label, v] of [['下準備時間', prep], ['調理時間', cook]]) {
+  for (const [key, v] of [['prepTime', prep], ['cookTime', cook]]) {
     if (v === undefined) continue
-    if (!Number.isInteger(v) || v < 0 || v > L.timeMax) {
-      errors.push(`${label}は 0〜${L.timeMax} 分の整数で入力してください。`)
-    }
+    if (!Number.isInteger(v) || v < 0 || v > L.timeMax) e(key, { n: L.timeMax })
   }
   // 仕様 §4: 下準備・調理のいずれかは必須（両方任意だが両方空は不可）
-  if (prep === undefined && cook === undefined) {
-    errors.push('下準備時間か調理時間のどちらかを入力してください。')
-  }
+  if (prep === undefined && cook === undefined) e('timeRequired')
 
   const ing = Array.isArray(r.ingredients) ? r.ingredients : []
-  if (ing.length < 1) errors.push('材料を 1 行以上入力してください。')
-  else if (ing.length > L.ingredientsMax) errors.push(`材料は ${L.ingredientsMax} 行までです。`)
+  if (ing.length < 1) e('ingredients')
+  else if (ing.length > L.ingredientsMax) e('ingredientsMax', { n: L.ingredientsMax })
 
   const ins = Array.isArray(r.instructions) ? r.instructions : []
-  if (ins.length < 1) errors.push('手順を 1 行以上入力してください。')
-  else if (ins.length > L.instructionsMax) errors.push(`手順は ${L.instructionsMax} 行までです。`)
-  if (ins.some((s) => (s?.text ?? '').length > L.instructionTextMax)) {
-    errors.push(`手順は 1 行 ${L.instructionTextMax} 文字以内で入力してください。`)
-  }
+  if (ins.length < 1) e('instructions')
+  else if (ins.length > L.instructionsMax) e('instructionsMax', { n: L.instructionsMax })
+  if (ins.some((x) => (x?.text ?? '').length > L.instructionTextMax)) e('instructionTextMax', { n: L.instructionTextMax })
   return errors
 }
 

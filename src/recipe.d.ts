@@ -43,7 +43,7 @@ export const RECIPE_LIMITS: {
 /** 入力を保存する形へ正規化する（空行落とし・trim・数値寄せ）。 */
 export function normalizeRecipe(raw: unknown): Recipe;
 /** 保存してよい形かを検査する。空配列なら OK。 */
-export function validateRecipe(r: unknown): string[];
+export function validateRecipe(r: unknown, tr?: (key: string, vars?: Record<string, unknown>) => string): string[];
 export function normalizeRecipeLayout(layout: unknown): RecipeLayout;
 /** インライン style 文字列（左右寄せは float で回り込む）。 */
 export function recipeLayoutStyle(layout: unknown): string;

@@ -7,6 +7,10 @@
 document.execCommand = vi.fn(() => true)
 document.queryCommandState = vi.fn(() => false)
 
+// 画面の言語(#spec-i18n): 既定はブラウザの言語。happy-dom は en-US を名乗るので、
+// 既存の試験(日本語の文言を見張る)のために日本語のブラウザとして動かす。英語などは uiLang を渡して試す。
+Object.defineProperty(navigator, 'language', { value: 'ja-JP', configurable: true })
+
 // ── 作った editor を必ず destroy する（全テストファイル共通） ───────────────
 // destroy し忘れた editor は dirty 検知の setTimeout(_histTimer, 400ms) を抱えた
 // まま生き延び、happy-dom の teardown 後に発火して「document is not defined」の

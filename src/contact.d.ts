@@ -38,7 +38,7 @@ export const CONTACT_LIMITS: {
 };
 export const CONTACT_DEFAULTS: { submitLabel: string; doneMessage: string };
 export function normalizeContactForm(raw: unknown): ContactForm;
-export function validateContactForm(c: unknown): string[];
+export function validateContactForm(c: unknown, tr?: (key: string, vars?: Record<string, unknown>) => string): string[];
 export function encodeContactForm(c: ContactForm): string;
 export function decodeContactForm(attr: unknown): Record<string, unknown> | null;
 export function renderContactPreview(c: ContactForm): string;

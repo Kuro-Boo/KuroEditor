@@ -73,6 +73,7 @@ import {
   decodeJob,
   emptyJob,
   employmentTypes,
+  jobCardLabel,
   jobLang,
   salaryUnits,
   normalizeJob,
@@ -143,6 +144,9 @@ export {
   totalMinutes,
   validateRecipe,
 } from './recipe.js'
+// エディタ UI の言語(辞書)。仕様 #spec-i18n
+import { t as tr, lz, setUiLocale, getUiLocale, loadLocale, setLocaleBase, normalizeUiLang, UI_LANGS } from './i18n.js'
+export { tr as kuroT, getUiLocale, loadLocale, setLocaleBase, normalizeUiLang, UI_LANGS }
 // JobCard・ContactForm の純関数(ホストのサーバー側検証・公開ページ生成が同じ実装を使う)
 export * from './job.js'
 export * from './contact.js'
@@ -151,7 +155,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.48.2'
+export const VERSION = '2.49.0'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -174,27 +178,27 @@ export const LINK_RE = {
 
 /** Grouped preset colours — 5 categories × 9 colours (3 cols × 3 rows each) */
 const COLOR_GROUPS = [
-  { name: 'モノトーン', colors: [
+  { name: lz('colorgroups.name'), colors: [
     '#ffffff', '#e5e7eb', '#d1d5db',
     '#9ca3af', '#6b7280', '#4b5563',
     '#374151', '#1f2937', '#111827',
   ]},
-  { name: '赤系', colors: [
+  { name: lz('colorgroups.name2'), colors: [
     '#fecdd3', '#fca5a5', '#f87171',
     '#ef4444', '#dc2626', '#b91c1c',
     '#fb7185', '#f43f5e', '#e11d48',
   ]},
-  { name: '青系', colors: [
+  { name: lz('colorgroups.name3'), colors: [
     '#bae6fd', '#93c5fd', '#60a5fa',
     '#3b82f6', '#2563eb', '#1d4ed8',
     '#38bdf8', '#0ea5e9', '#0284c7',
   ]},
-  { name: '緑系', colors: [
+  { name: lz('colorgroups.name4'), colors: [
     '#bbf7d0', '#86efac', '#4ade80',
     '#22c55e', '#16a34a', '#15803d',
     '#a3e635', '#5eead4', '#14b8a6',
   ]},
-  { name: 'その他', colors: [
+  { name: lz('colorgroups.name5'), colors: [
     '#fed7aa', '#fb923c', '#f97316',
     '#fde68a', '#fbbf24', '#eab308',
     '#e9d5ff', '#c084fc', '#a855f7',
@@ -282,7 +286,7 @@ export function makeMenuIcon(svg, title) {
  * @param {string} [title]      ホバー説明（何のメニューか＋移動できること）
  * @param {string} [extraClass] 追加クラス（popm は目印アイコンを置かない分 --wide）
  */
-export function makeDragGrip(title = 'ドラッグでこのメニューを移動', extraClass = '') {
+export function makeDragGrip(title = tr('makeDragGrip.default'), extraClass = '') {
   return createElement('span', {
     className: 'kuro-drag-grip' + (extraClass ? ` ${extraClass}` : ''),
     html: '<svg width="6" height="16" viewBox="0 0 6 16" fill="currentColor" aria-hidden="true">' +
@@ -324,12 +328,12 @@ const FONT_SIZE_OPTIONS = [
  */
 const FONT_FAMILY_OPTIONS = [
   {
-    label: 'ゴシック',
+    label: lz('fontfamilyoptions.label'),
     value: 'sans-serif',
     base:  true,
   },
   {
-    label: '明朝',
+    label: lz('fontfamilyoptions.label2'),
     value: 'serif',
   },
 ]
@@ -344,19 +348,19 @@ const FONT_FAMILY_OPTIONS = [
  * base:true = ブラウザ既定と同じ 0.5em（クラスを付けない＝素の <ruby>）。
  */
 const RUBY_SIZE_OPTIONS = [
-  { label: '小',   value: 'kuro-ruby--sm', title: 'ルビを小さく（親文字の 40%）' },
-  { label: '標準', value: '',              title: 'ルビは標準の大きさ（親文字の 50%）', base: true },
-  { label: '大',   value: 'kuro-ruby--lg', title: 'ルビを大きく（親文字の 65%）' },
+  { label: lz('rubysizeoptions.label'),   value: 'kuro-ruby--sm', title: lz('rubysizeoptions.title') },
+  { label: lz('rubysizeoptions.label2'), value: '',              title: lz('rubysizeoptions.title2'), base: true },
+  { label: lz('rubysizeoptions.label3'),   value: 'kuro-ruby--lg', title: lz('rubysizeoptions.title3') },
 ]
 
 /** Line-height presets.  1.6 = editor default (leading-relaxed). */
 const LINE_HEIGHT_OPTIONS = [
-  { label: '詰め',    value: '1.2' },
-  { label: '狭め',    value: '1.4' },
-  { label: '標準',    value: '1.6', base: true },
-  { label: '広め',    value: '1.8' },
-  { label: '2倍',     value: '2.0' },
-  { label: '2.5倍',   value: '2.5' },
+  { label: lz('lineheightoptions.label'),    value: '1.2' },
+  { label: lz('lineheightoptions.label2'),    value: '1.4' },
+  { label: lz('lineheightoptions.label3'),    value: '1.6', base: true },
+  { label: lz('lineheightoptions.label4'),    value: '1.8' },
+  { label: lz('lineheightoptions.label5'),     value: '2.0' },
+  { label: lz('lineheightoptions.label6'),   value: '2.5' },
 ]
 
 /**
@@ -366,13 +370,13 @@ const LINE_HEIGHT_OPTIONS = [
  */
 const OL_STYLE_OPTIONS = [
   //          ボタンの見た目        適用するクラス            ホバーの説明（title）
-  { label: '1.',   value: 'kuro-list-decimal',     title: '番号リスト（十進数）'           },
-  { label: '①',   value: 'kuro-list-circled',     title: '番号リスト（丸数字）'           },
-  { label: '(1)', value: 'kuro-list-paren-num',   title: '番号リスト（括弧付き数字）'      },
-  { label: 'A.',   value: 'kuro-list-alpha',       title: '番号リスト（英大文字）'         },
-  { label: '(A)', value: 'kuro-list-paren-alpha', title: '番号リスト（括弧付き英大文字）'   },
-  { label: 'ア',  value: 'kuro-list-kata',        title: '番号リスト（カタカナ）'         },
-  { label: '(ア)',value: 'kuro-list-paren-kata',  title: '番号リスト（括弧付きカタカナ）'   },
+  { label: '1.',   value: 'kuro-list-decimal',     title: lz('olstyleoptions.title')           },
+  { label: '①',   value: 'kuro-list-circled',     title: lz('olstyleoptions.title2')           },
+  { label: '(1)', value: 'kuro-list-paren-num',   title: lz('olstyleoptions.title3')      },
+  { label: 'A.',   value: 'kuro-list-alpha',       title: lz('olstyleoptions.title4')         },
+  { label: '(A)', value: 'kuro-list-paren-alpha', title: lz('olstyleoptions.title5')   },
+  { label: 'ア',  value: 'kuro-list-kata',        title: lz('olstyleoptions.title6')         },
+  { label: '(ア)',value: 'kuro-list-paren-kata',  title: lz('olstyleoptions.title7')   },
 ]
 
 /**
@@ -424,9 +428,9 @@ const OL_NONE_CLASS = 'kuro-list-none'
  * @param {string} kind  '記号' | '番号'
  */
 const removeBtnTitle = (kind, inList, markerless) =>
-  !inList     ? `${kind}リストを解除`
-  : markerless ? 'リストから抜けて段落に戻す'
-  :              `${kind}を消す（もう一度押すと段落に戻る）`
+  !inList     ? tr('removeBtnTitle.text', { kind })
+  : markerless ? tr('removeBtnTitle.text2')
+  :              tr('removeBtnTitle.text3', { kind })
 
 /**
  * Unordered-list style presets — applied as CSS class on <ul>.
@@ -435,19 +439,19 @@ const removeBtnTitle = (kind, inList, markerless) =>
  */
 const UL_STYLE_OPTIONS = [
   //         ボタンの見た目          適用するクラス              ホバーの説明（title）
-  { label: '●',  value: 'kuro-ul-disc',       title: '記号リスト（黒丸）'         },   // CSS disc
-  { label: '○',  value: 'kuro-ul-circle',     title: '記号リスト（白丸）'         },   // CSS circle
-  { label: '■',  value: 'kuro-ul-square',     title: '記号リスト（黒四角）'       },   // CSS square
-  { label: '-',  value: 'kuro-ul-dash',       title: '記号リスト（半角ハイフン）'   },   // half-width -
-  { label: '#',  value: 'kuro-ul-hash',       title: '記号リスト（半角シャープ）'   },   // half-width #
-  { label: '*',  value: 'kuro-ul-asterisk',   title: '記号リスト（半角アスタリスク）' },   // half-width *
-  { label: '>',  value: 'kuro-ul-arrow',      title: '記号リスト（半角の大なり）'   },   // half-width >
-  { label: '◎',  value: 'kuro-ul-bullseye',   title: '記号リスト（二重丸）'       },   // full-width ◎
-  { label: '★',  value: 'kuro-ul-star',       title: '記号リスト（黒星）'         },   // full-width ★
-  { label: '☆',  value: 'kuro-ul-star-open',  title: '記号リスト（白星）'         },   // full-width ☆
-  { label: '▶',  value: 'kuro-ul-tri',        title: '記号リスト（黒三角）'       },   // full-width ▶
-  { label: '▷',  value: 'kuro-ul-tri-open',   title: '記号リスト（白三角）'       },   // full-width ▷
-  { label: '☑︎', value: CHECKLIST_CLASS,      title: 'チェックボックス（[]+スペースでも作れる）' },
+  { label: '●',  value: 'kuro-ul-disc',       title: lz('ulstyleoptions.title')         },   // CSS disc
+  { label: '○',  value: 'kuro-ul-circle',     title: lz('ulstyleoptions.title2')         },   // CSS circle
+  { label: '■',  value: 'kuro-ul-square',     title: lz('ulstyleoptions.title3')       },   // CSS square
+  { label: '-',  value: 'kuro-ul-dash',       title: lz('ulstyleoptions.title4')   },   // half-width -
+  { label: '#',  value: 'kuro-ul-hash',       title: lz('ulstyleoptions.title5')   },   // half-width #
+  { label: '*',  value: 'kuro-ul-asterisk',   title: lz('ulstyleoptions.title6') },   // half-width *
+  { label: '>',  value: 'kuro-ul-arrow',      title: lz('ulstyleoptions.title7')   },   // half-width >
+  { label: '◎',  value: 'kuro-ul-bullseye',   title: lz('ulstyleoptions.title8')       },   // full-width ◎
+  { label: '★',  value: 'kuro-ul-star',       title: lz('ulstyleoptions.title9')         },   // full-width ★
+  { label: '☆',  value: 'kuro-ul-star-open',  title: lz('ulstyleoptions.title10')         },   // full-width ☆
+  { label: '▶',  value: 'kuro-ul-tri',        title: lz('ulstyleoptions.title11')       },   // full-width ▶
+  { label: '▷',  value: 'kuro-ul-tri-open',   title: lz('ulstyleoptions.title12')       },   // full-width ▷
+  { label: '☑︎', value: CHECKLIST_CLASS,      title: lz('ulstyleoptions.title13') },
 ]
 
 // ─── SVG icon helpers ─────────────────────────────────────────────────────────
@@ -651,26 +655,26 @@ const EMOJI_LIST = [
  * ここに登録されていれば自動で title / aria-label に流れる。
  */
 const POPM_TITLES = {
-  clearFormat:         '文字装飾をすべて外す（太字・色・大きさ・書体など。リンクとルビは残す）',
-  bold:                '太字 (Ctrl/⌘+B)',
-  italic:              '斜体 (Ctrl/⌘+I)',
-  underline:           '下線 (Ctrl/⌘+U)',
-  strikeThrough:       '取り消し線',
-  h1:                  '見出し 1',
-  h2:                  '見出し 2',
-  h3:                  '見出し 3',
-  h4:                  '見出し 4',
-  blockquote:          '引用',
-  kbd:                 'キー表記 <kbd>',
-  justifyLeft:         '左寄せ',
-  justifyCenter:       '中央寄せ',
-  justifyRight:        '右寄せ',
-  justifyFull:         '両端揃え',
-  insertUnorderedList: '箇条書きリスト',
-  insertOrderedList:   '番号付きリスト',
-  clipCopy:            'コピー',
-  clipCut:             '切り取り',
-  clipPaste:           '貼り付け',
+  clearFormat:         lz('popmtitles.clearFormat'),
+  bold:                lz('popmtitles.bold'),
+  italic:              lz('popmtitles.italic'),
+  underline:           lz('popmtitles.underline'),
+  strikeThrough:       lz('popmtitles.strikeThrough'),
+  h1:                  lz('popmtitles.h1'),
+  h2:                  lz('popmtitles.h2'),
+  h3:                  lz('popmtitles.h3'),
+  h4:                  lz('popmtitles.h4'),
+  blockquote:          lz('popmtitles.blockquote'),
+  kbd:                 lz('popmtitles.kbd'),
+  justifyLeft:         lz('popmtitles.justifyLeft'),
+  justifyCenter:       lz('popmtitles.justifyCenter'),
+  justifyRight:        lz('popmtitles.justifyRight'),
+  justifyFull:         lz('popmtitles.justifyFull'),
+  insertUnorderedList: lz('popmtitles.insertUnorderedList'),
+  insertOrderedList:   lz('popmtitles.insertOrderedList'),
+  clipCopy:            lz('popmtitles.clipCopy'),
+  clipCut:             lz('popmtitles.clipCut'),
+  clipPaste:           lz('popmtitles.clipPaste'),
 }
 
 const EMOJI_SHORTCODES = {
@@ -1377,7 +1381,7 @@ export class ColorPicker {
         className: 'kuro-color-swatch',
         html: '×',
         attrs: {
-          type: 'button', title: '色なし', 'aria-label': '色なし',
+          type: 'button', title: tr('colorPicker.title'), 'aria-label': tr('colorPicker.title'),
           style: 'background:repeating-conic-gradient(#555 0% 25%,#333 0% 50%) 0/8px 8px;font-size:13px;line-height:1.25rem;color:#ef4444;font-weight:700',
         },
       })
@@ -1405,8 +1409,8 @@ export class ColorPicker {
       })
       const addBtn = createElement('button', {
         className: 'kuro-color-add-btn',
-        html: '＋ カラー追加',
-        attrs: { type: 'button', title: 'カスタムカラーを追加' },
+        html: tr('colorPicker.html'),
+        attrs: { type: 'button', title: tr('colorPicker.title2') },
       })
       addBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this.opts.onBeforePick?.() })
       addBtn.addEventListener('click', () => this._addInput.click())
@@ -1501,7 +1505,7 @@ export class PopupMenu {
     // Root element (position: fixed in CSS)
     this.el = createElement('div', {
       className: 'kuro-popm',
-      attrs: { role: 'toolbar', 'aria-label': 'テキスト書式' },
+      attrs: { role: 'toolbar', 'aria-label': tr('popupMenu.ariaLabel') },
     })
 
     // Main button row
@@ -1513,7 +1517,7 @@ export class PopupMenu {
     //   【もう一つの機能ボタン】に見える。統一感より誤解を招かないことを優先する。
     //   その分つまみを広くして（--wide）、取っ手として掴める大きさを保つ。
     this._mainRow.appendChild(bindFloaterDrag(
-      this.el, makeDragGrip('文字の書式（ドラッグで移動）', 'kuro-drag-grip--wide'),
+      this.el, makeDragGrip(tr('popupMenu.makeDragGrip'), 'kuro-drag-grip--wide'),
       () => { this._dragged = true }))
     this.el.appendChild(this._mainRow)
 
@@ -1686,7 +1690,7 @@ export class PopupMenu {
     const btn = createElement('button', {
       className: 'kuro-popm__btn kuro-popm__btn--color',
       html: '<span class="kuro-color-indicator">A</span>',
-      attrs: { type: 'button', 'aria-label': '文字色', title: '文字色' },
+      attrs: { type: 'button', 'aria-label': tr('popupMenu.ariaLabel2'), title: tr('popupMenu.ariaLabel2') },
     })
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -1717,7 +1721,7 @@ export class PopupMenu {
     this._sizeIndicatorEl = createElement('span', { className: 'kuro-size-indicator', html: '100%' })
     const btn = createElement('button', {
       className: 'kuro-popm__btn kuro-popm__btn--size',
-      attrs: { type: 'button', 'aria-label': 'フォントサイズ', title: 'フォントサイズ' },
+      attrs: { type: 'button', 'aria-label': tr('popupMenu.ariaLabel3'), title: tr('popupMenu.ariaLabel3') },
     })
     btn.appendChild(this._sizeIndicatorEl)
     btn.addEventListener('mousedown', (e) => {
@@ -1836,7 +1840,7 @@ export class PopupMenu {
         <polygon points="0.8,3 0,4.2 1.6,4.2" fill="currentColor"/>
         <polygon points="0.8,9.4 0,8.2 1.6,8.2" fill="currentColor"/>
       </svg>`,
-      attrs: { type: 'button', 'aria-label': '行間', title: '行間（line-height）' },
+      attrs: { type: 'button', 'aria-label': tr('popupMenu.ariaLabel4'), title: tr('popupMenu.title') },
     })
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -1858,7 +1862,7 @@ export class PopupMenu {
       const lb = createElement('button', {
         className: 'kuro-size-btn' + (base ? ' kuro-size-btn--base' : ''),
         html: label,
-        attrs: { type: 'button', title: `行間 ${value}`, 'data-lh': value },
+        attrs: { type: 'button', title: tr('popupMenu.title2', { value }), 'data-lh': value },
       })
       this._bindSubBtn(lb, () => { applyFn(value); this._hideLineHeights() })
       this._lhPanel.appendChild(lb)
@@ -1888,7 +1892,7 @@ export class PopupMenu {
     const btn = createElement('button', {
       className: 'kuro-popm__btn kuro-popm__btn--font',
       html: '<span class="kuro-font-indicator">F</span>',
-      attrs: { type: 'button', 'aria-label': 'フォント', title: 'フォント' },
+      attrs: { type: 'button', 'aria-label': tr('popupMenu.ariaLabel5'), title: tr('popupMenu.ariaLabel5') },
     })
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -1956,10 +1960,10 @@ export class PopupMenu {
     })
     if (webFonts.length === 0) {
       this._webFontsBtn.disabled = true
-      this._webFontsBtn.title    = '読み込まれている Web フォントがありません'
+      this._webFontsBtn.title    = tr('popupMenu.text')
       this._webFontsBtn.classList.add('kuro-size-btn--disabled')
     } else {
-      this._webFontsBtn.title = `${webFonts.length} 個の Web フォントが利用可能`
+      this._webFontsBtn.title = tr('popupMenu.text2', { length: webFonts.length })
       this._webFontsBtn.addEventListener('mousedown', (e) => {
         e.preventDefault()
         this._toggleWebFontList()
@@ -2160,7 +2164,7 @@ export class PopupMenu {
     this._calloutBtn = createElement('button', {
       className: 'kuro-popm__btn',
       html: ICON.callout,
-      attrs: { type: 'button', 'aria-label': 'コールアウト', title: 'コールアウト' },
+      attrs: { type: 'button', 'aria-label': tr('popupMenu.ariaLabel6'), title: tr('popupMenu.ariaLabel6') },
     })
     this._calloutBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -2179,10 +2183,10 @@ export class PopupMenu {
     this._calloutPanel = createElement('div', { className: 'kuro-popm__sizes' })
     this._calloutBtns  = []   // refs for _updateCalloutActive sync
     const types = [
-      { type: 'tip',    icon: '💡', label: 'ヒント' },
-      { type: 'warn',   icon: '⚠️', label: '注意'   },
-      { type: 'danger', icon: '❗', label: '警告'   },
-      { type: 'note',   icon: '📌', label: 'メモ'   },
+      { type: 'tip',    icon: '💡', label: tr('popupMenu.label') },
+      { type: 'warn',   icon: '⚠️', label: tr('popupMenu.label2')   },
+      { type: 'danger', icon: '❗', label: tr('popupMenu.label3')   },
+      { type: 'note',   icon: '📌', label: tr('popupMenu.label4')   },
     ]
     for (const { type, icon, label } of types) {
       const tb = createElement('button', {
@@ -2266,7 +2270,7 @@ export class PopupMenu {
     this._rubyBtn = createElement('button', {
       className: 'kuro-popm__btn kuro-popm__btn--ruby',
       html: ICON.ruby,
-      attrs: { type: 'button', 'aria-label': 'ルビ', title: 'ルビ（ふりがな）' },
+      attrs: { type: 'button', 'aria-label': tr('popupMenu.ariaLabel7'), title: tr('popupMenu.title3') },
     })
     this._rubyBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -2285,14 +2289,14 @@ export class PopupMenu {
     this._rubyPanel = createElement('div', { className: 'kuro-popm__sizes' })
 
     const field = createElement('label', { className: 'kuro-ruby-field' })
-    field.appendChild(createElement('span', { html: 'ルビ' }))
+    field.appendChild(createElement('span', { html: tr('popupMenu.ariaLabel7') }))
     this._rubyInput = createElement('input', {
       className: 'kuro-ruby-field__input',
       attrs: {
         type: 'text',
-        placeholder: 'よみがな',
-        title: '選んだ文字の上に振る読み（Enter で適用）',
-        'aria-label': 'ルビの読み',
+        placeholder: tr('popupMenu.placeholder'),
+        title: tr('popupMenu.title4'),
+        'aria-label': tr('popupMenu.ariaLabel8'),
       },
     })
     this._rubyInput.addEventListener('keydown', (e) => {
@@ -2333,8 +2337,8 @@ export class PopupMenu {
     // ⚠ ルビが無くても隠さない（同じメニューは常に同じ場所に同じボタン）。
     this._rubyRemoveBtn = createElement('button', {
       className: 'kuro-size-btn',
-      html: '解除',
-      attrs: { type: 'button', title: 'ルビを解除（親文字はそのまま残る）' },
+      html: tr('popupMenu.html'),
+      attrs: { type: 'button', title: tr('popupMenu.title5') },
     })
     this._bindSubBtn(this._rubyRemoveBtn, () => {
       clearFn()
@@ -2435,7 +2439,7 @@ export class PopupMenu {
     this._olMarkerColorBtn = createElement('button', {
       className: 'kuro-size-btn kuro-marker-color-btn',
       html: '●',
-      attrs: { type: 'button', title: '記号の色', 'aria-label': 'マーカー色' },
+      attrs: { type: 'button', title: tr('popupMenu.title6'), 'aria-label': tr('popupMenu.ariaLabel9') },
     })
     this._olMarkerColorBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -2446,8 +2450,8 @@ export class PopupMenu {
     // ── "解除" button — remove the OL ────────────────────────────────────
     this._olRemoveBtn = createElement('button', {
       className: 'kuro-size-btn',
-      html: '解除',
-      attrs: { type: 'button', title: '番号リストを解除', 'data-ol-style': 'kuro-list-remove' },
+      html: tr('popupMenu.html'),
+      attrs: { type: 'button', title: tr('popupMenu.title7'), 'data-ol-style': 'kuro-list-remove' },
     })
     this._bindSubBtn(this._olRemoveBtn, () => { applyFn('kuro-list-remove'); this._hideListStyles() })
     this._listStylePanel.appendChild(this._olRemoveBtn)
@@ -2463,12 +2467,12 @@ export class PopupMenu {
     //   キーボードを出して打つしかない＝実質使えない。<select> なら iOS/Android で
     //   ネイティブのドラム（ホイール）が開き、指だけで選べる。
     this._olStartWrap = createElement('label', { className: 'kuro-ol-start' })
-    this._olStartWrap.appendChild(createElement('span', { html: '開始' }))
+    this._olStartWrap.appendChild(createElement('span', { html: tr('popupMenu.html2') }))
     this._olStartSelect = createElement('select', {
       className: 'kuro-ol-start__select',
       attrs: {
-        title: 'このリストの開始番号（前のリストの続きにしたいときに）',
-        'aria-label': 'このリストの開始番号',
+        title: tr('popupMenu.title8'),
+        'aria-label': tr('popupMenu.ariaLabel10'),
       },
     })
     for (let n = 1; n <= OL_START_MAX; n++) {
@@ -2581,7 +2585,7 @@ export class PopupMenu {
     // "解除" is active when the cursor is NOT inside any OL, or already markerless
     this._olRemoveBtn?.classList.toggle('kuro-size-btn--active', !inOL || markerless)
     // 同じボタンが 2 段階で違う動きをするので、title で今どちらかを示す
-    if (this._olRemoveBtn) this._olRemoveBtn.title = removeBtnTitle('番号', inOL, markerless)
+    if (this._olRemoveBtn) this._olRemoveBtn.title = removeBtnTitle(tr('popupMenu.removeBtnTitle'), inOL, markerless)
 
     // 開始番号: リストの中にいるときだけ出す（リストが無ければ指定する先が無い）。
     // ⚠ 入力中は値を書き戻さない（打っている数字を横から書き換えてしまう）。
@@ -2642,7 +2646,7 @@ export class PopupMenu {
     this._ulMarkerColorBtn = createElement('button', {
       className: 'kuro-size-btn kuro-marker-color-btn',
       html: '●',
-      attrs: { type: 'button', title: '記号の色', 'aria-label': 'マーカー色' },
+      attrs: { type: 'button', title: tr('popupMenu.title6'), 'aria-label': tr('popupMenu.ariaLabel9') },
     })
     this._ulMarkerColorBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -2653,8 +2657,8 @@ export class PopupMenu {
     // ── "解除" button ──────────────────────────────────────────────────────
     this._ulRemoveBtn = createElement('button', {
       className: 'kuro-size-btn',
-      html: '解除',
-      attrs: { type: 'button', title: '記号リストを解除', 'data-ul-style': 'kuro-ul-remove' },
+      html: tr('popupMenu.html'),
+      attrs: { type: 'button', title: tr('popupMenu.title9'), 'data-ul-style': 'kuro-ul-remove' },
     })
     this._bindSubBtn(this._ulRemoveBtn, () => { applyFn('kuro-ul-remove'); this._hideULStyles() })
     this._ulStylePanel.appendChild(this._ulRemoveBtn)
@@ -2744,7 +2748,7 @@ export class PopupMenu {
     // "解除" is active when the cursor is NOT inside any UL, or already markerless
     this._ulRemoveBtn?.classList.toggle('kuro-size-btn--active', !inUL || markerless)
     // 同じボタンが 2 段階で違う動きをするので、title で今どちらかを示す
-    if (this._ulRemoveBtn) this._ulRemoveBtn.title = removeBtnTitle('記号', inUL, markerless)
+    if (this._ulRemoveBtn) this._ulRemoveBtn.title = removeBtnTitle(tr('popupMenu.removeBtnTitle2'), inUL, markerless)
 
     // Marker color button: only visible when inside a UL (no list = nothing to color)
     if (this._ulMarkerColorBtn) {
@@ -2957,12 +2961,12 @@ export class RoundboxMenu {
   _build() {
     this.el = createElement('div', {
       className: 'kuro-roundbox-menu',
-      attrs: { role: 'toolbar', 'aria-label': '角丸ボックス設定' },
+      attrs: { role: 'toolbar', 'aria-label': tr('roundboxMenu.ariaLabel') },
     })
     this.el.style.display = 'none'
 
     this.el.appendChild(bindFloaterDrag(
-      this.el, makeMenuIcon(ICON.roundbox, '角丸ボックス設定（ドラッグで移動）'),
+      this.el, makeMenuIcon(ICON.roundbox, tr('roundboxMenu.makeMenuIcon')),
       () => { this._dragged = true }))
     this.el.insertBefore(
       bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }), this.el.firstChild)
@@ -2970,7 +2974,7 @@ export class RoundboxMenu {
     // Width select
     this._widthSel = createElement('select', {
       className: 'kuro-roundbox-menu__select',
-      attrs: { title: '横幅 %' },
+      attrs: { title: tr('roundboxMenu.title') },
     })
     for (const w of ['30%','40%','50%','60%','70%','80%','90%','100%']) {
       const opt = document.createElement('option')
@@ -2991,9 +2995,9 @@ export class RoundboxMenu {
     this._alignBtns = []
     const alignWrap = createElement('div', { className: 'kuro-roundbox-menu__aligns' })
     for (const [align, icon, title] of [
-      ['left',   ICON.alignLeft,   '左寄せ（回り込み）'],
-      ['center', ICON.alignCenter, '中央'],
-      ['right',  ICON.alignRight,  '右寄せ（回り込み）'],
+      ['left',   ICON.alignLeft,   tr('roundboxMenu.text')],
+      ['center', ICON.alignCenter, tr('roundboxMenu.text2')],
+      ['right',  ICON.alignRight,  tr('roundboxMenu.text3')],
     ]) {
       const btn = createElement('button', {
         html: icon,
@@ -3016,8 +3020,8 @@ export class RoundboxMenu {
     // Delete button — removes the box, promotes its children to parent
     const delBtn = createElement('button', {
       className: 'kuro-roundbox-menu__del kuro-del-btn',
-      html: `${ICON.trash}<span>削除</span>`,   // 表現はエディタ共通（kuro-del-btn 参照）
-      attrs: { type: 'button', title: '角丸ボックスを削除' },
+      html: `${ICON.trash}<span>${tr('roundboxMenu.text4')}</span>`,   // 表現はエディタ共通（kuro-del-btn 参照）
+      attrs: { type: 'button', title: tr('roundboxMenu.title2') },
     })
     delBtn.addEventListener('mousedown', e => e.stopPropagation())
     delBtn.addEventListener('click', (e) => {
@@ -3114,8 +3118,8 @@ export class RoundboxMenu {
     // but also shift roundboxMenu if table menu is already placed above the box
     const tblEl = this._editor?.tableManager?.el
     if (tblEl?.classList.contains('kuro-table-menu--visible')) {
-      const tr = tblEl.getBoundingClientRect()
-      if (overlaps(top, tr)) {
+      const tblRect = tblEl.getBoundingClientRect()
+      if (overlaps(top, tblRect)) {
         top = (top === topAbove) ? topBelow : topAbove
       }
     }
@@ -3158,7 +3162,7 @@ export class TableManager {
 
     this.el = createElement('div', {
       className: 'kuro-table-menu',
-      attrs: { role: 'toolbar', 'aria-label': 'テーブル操作' },
+      attrs: { role: 'toolbar', 'aria-label': tr('tableManager.ariaLabel') },
     })
     this._build()
     document.body.appendChild(this.el)
@@ -3182,7 +3186,7 @@ export class TableManager {
       bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
     // ⚠ 文字ラベル（旧「TBL設定」）ではなく【上部ツールバーと同じアイコン】。
     //   どのメニューも同じ絵で「これは何の設定か」が分かるほうが統一感がある。
-    this._dragHandle = makeMenuIcon(ICON.table, 'テーブル設定（ドラッグで移動）')
+    this._dragHandle = makeMenuIcon(ICON.table, tr('tableManager.makeMenuIcon'))
     this._mainRow.appendChild(this._dragHandle)
     bindFloaterDrag(this.el, this._dragHandle, () => { this._dragged = true })
     this._mainRow.appendChild(createElement('span', { className: 'kuro-table-menu__divider' }))
@@ -3194,8 +3198,8 @@ export class TableManager {
         `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">` +
           `<rect x="0.5" y="0.5" width="12" height="12" rx="2" fill="#ef4444"/>` +
         `</svg>` +
-        `<span class="kuro-table-menu__btn-label">背景色</span>`,
-      attrs: { type: 'button', title: 'セル背景色' },
+        `<span class="kuro-table-menu__btn-label">${tr('tableManager.text')}</span>`,
+      attrs: { type: 'button', title: tr('tableManager.title') },
     })
     this._colorBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -3209,7 +3213,7 @@ export class TableManager {
     // neighbor to merge with — see _updateMergeSplitBtns)
     this._mergeDownBtn = createElement('button', {
       className: 'kuro-table-menu__btn',
-      html: '↓結合',
+      html: tr('tableManager.html'),
       attrs: { type: 'button' },
     })
     this._mergeDownBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._mergeDown(); this._updateMergeSplitBtns() })
@@ -3217,7 +3221,7 @@ export class TableManager {
 
     this._mergeRightBtn = createElement('button', {
       className: 'kuro-table-menu__btn',
-      html: '結合→',
+      html: tr('tableManager.html2'),
       attrs: { type: 'button' },
     })
     this._mergeRightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._mergeRight(); this._updateMergeSplitBtns() })
@@ -3228,7 +3232,7 @@ export class TableManager {
     // Split buttons (disabled when cell is not merged)
     this._splitDownBtn = createElement('button', {
       className: 'kuro-table-menu__btn',
-      html: '↓分割',
+      html: tr('tableManager.html3'),
       attrs: { type: 'button', disabled: '' },
     })
     this._splitDownBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitDown(); this._updateMergeSplitBtns() })
@@ -3236,7 +3240,7 @@ export class TableManager {
 
     this._splitRightBtn = createElement('button', {
       className: 'kuro-table-menu__btn',
-      html: '分割→',
+      html: tr('tableManager.html4'),
       attrs: { type: 'button', disabled: '' },
     })
     this._splitRightBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._splitRight(); this._updateMergeSplitBtns() })
@@ -3249,9 +3253,9 @@ export class TableManager {
     const SVG_MIDDLE = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><rect x="0.75" y="0.75" width="12.5" height="12.5" rx="1.5"/><line x1="3" y1="5.75" x2="11" y2="5.75"/><line x1="3" y1="8.25" x2="11" y2="8.25"/></svg>`
     const SVG_BOTTOM = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><rect x="0.75" y="0.75" width="12.5" height="12.5" rx="1.5"/><line x1="3" y1="7.75" x2="11" y2="7.75"/><line x1="3" y1="10.25" x2="11" y2="10.25"/></svg>`
     const valignDefs = [
-      { value: 'top',    title: '上揃え',   icon: SVG_TOP    },
-      { value: 'middle', title: '中央揃え', icon: SVG_MIDDLE },
-      { value: 'bottom', title: '下揃え',   icon: SVG_BOTTOM },
+      { value: 'top',    title: tr('tableManager.title2'),   icon: SVG_TOP    },
+      { value: 'middle', title: tr('tableManager.title3'), icon: SVG_MIDDLE },
+      { value: 'bottom', title: tr('tableManager.title4'),   icon: SVG_BOTTOM },
     ]
     this._valignBtns = []
     for (const def of valignDefs) {
@@ -3280,7 +3284,7 @@ export class TableManager {
       this._hoverBtn = createElement('button', {
         className: 'kuro-table-menu__btn kuro-table-menu__btn--valign',
         html: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3l6.5 17 2.3-7 7-2.3z"/><path d="M14 14l6 6"/></svg>`,
-        attrs: { type: 'button', title: '行・列のボタンをマウスを乗せたときだけ出す' },
+        attrs: { type: 'button', title: tr('tableManager.title5') },
       })
       this._hoverBtn.addEventListener('mousedown', (e) => {
         e.preventDefault()
@@ -3294,7 +3298,7 @@ export class TableManager {
     const delTableBtn = createElement('button', {
       className: 'kuro-table-menu__btn kuro-table-menu__btn--valign kuro-table-menu__btn--deltbl',
       html: `<svg width="11" height="12" viewBox="0 0 11 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="0.5,2.5 10.5,2.5"/><path d="M3.5,2.5v-1h4v1"/><path d="M1.5,2.5l.7,8h6.6l.7-8"/><line x1="4" y1="5" x2="4" y2="8.5"/><line x1="7" y1="5" x2="7" y2="8.5"/></svg>`,
-      attrs: { type: 'button', title: 'テーブルを削除' },
+      attrs: { type: 'button', title: tr('tableManager.title6') },
     })
     delTableBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._deleteTable() })
     this._mainRow.appendChild(delTableBtn)
@@ -3385,8 +3389,8 @@ export class TableManager {
     this._hoverBtn.classList.toggle('kuro-table-menu__btn--active', !!on)
     this._hoverBtn.setAttribute('aria-pressed', on ? 'true' : 'false')
     this._hoverBtn.title = on
-      ? '行・列のボタンをマウスを乗せたときだけ出す（入）— 押すと常に出す'
-      : '行・列のボタンをマウスを乗せたときだけ出す（切）'
+      ? tr('tableManager.text2')
+      : tr('tableManager.text3')
   }
 
   /** Highlight the active vertical-align button for the focused cell. */
@@ -3732,28 +3736,28 @@ export class TableInserter {
     })
 
     // Insert buttons — appear when mouse hovers near a border
-    this.rowBtn = this._makeInsertBtn('行を挿入', () => {
+    this.rowBtn = this._makeInsertBtn(tr('tableInserter.makeInsertBtn'), () => {
       if (this._pendingRowIdx !== null) this._insertRow(this._pendingRowIdx)
     })
-    this.colBtn = this._makeInsertBtn('列を挿入', () => {
+    this.colBtn = this._makeInsertBtn(tr('tableInserter.makeInsertBtn2'), () => {
       if (this._pendingColIdx !== null) this._insertCol(this._pendingColIdx)
     })
 
     // Delete buttons — appear at the cursor's row / column
-    this.rowDelBtn = this._makeDelBtn('行を削除', () => this._deleteRow())
-    this.colDelBtn = this._makeDelBtn('列を削除', () => this._deleteCol())
+    this.rowDelBtn = this._makeDelBtn(tr('tableInserter.makeDelBtn'), () => this._deleteRow())
+    this.colDelBtn = this._makeDelBtn(tr('tableInserter.makeDelBtn2'), () => this._deleteCol())
 
     // Move (drag-to-reorder) handles — hand icon. Row handle sits beside the
     // row-delete button (right edge, drag vertically); column handle mirrors
     // the column-delete button to the table's top edge (drag horizontally).
     this._rowDrag = null
     this._colDrag = null
-    this.rowMoveBtn = this._makeMoveBtn('つかんで行を並べ替え', 'row', (e) => this._startRowDrag(e))
-    this.colMoveBtn = this._makeMoveBtn('つかんで列を並べ替え', 'col', (e) => this._startColDrag(e))
+    this.rowMoveBtn = this._makeMoveBtn(tr('tableInserter.makeMoveBtn'), 'row', (e) => this._startRowDrag(e))
+    this.colMoveBtn = this._makeMoveBtn(tr('tableInserter.makeMoveBtn2'), 'col', (e) => this._startColDrag(e))
 
     // Border buttons — right (row border) / bottom (col border)
     // Clicking these opens the LinePopupMenu via the provided callbacks.
-    this.rowBorderBtn = this._makeBorderBtn('行の罫線', () => {
+    this.rowBorderBtn = this._makeBorderBtn(tr('tableInserter.makeBorderBtn'), () => {
       if (this._pendingRowBorderIdx !== null && this._onRowBorderClick) {
         this._onRowBorderClick(
           { table: this.activeTable, axis: 'row', idx: this._pendingRowBorderIdx },
@@ -3761,7 +3765,7 @@ export class TableInserter {
         )
       }
     })
-    this.colBorderBtn = this._makeBorderBtn('列の罫線', () => {
+    this.colBorderBtn = this._makeBorderBtn(tr('tableInserter.makeBorderBtn2'), () => {
       if (this._pendingColBorderIdx !== null && this._onColBorderClick) {
         this._onColBorderClick(
           { table: this.activeTable, axis: 'col', idx: this._pendingColBorderIdx },
@@ -4760,7 +4764,7 @@ export class LinePopupMenu {
 
     this.el = createElement('div', {
       className: 'kuro-line-popm',
-      attrs: { role: 'dialog', 'aria-label': '罫線スタイル' },
+      attrs: { role: 'dialog', 'aria-label': tr('linePopupMenu.ariaLabel') },
     })
     this._build()
     document.body.appendChild(this.el)
@@ -4771,12 +4775,12 @@ export class LinePopupMenu {
     const scopeRow = createElement('div', { className: 'kuro-line-popm__row kuro-line-popm__scope-row' })
     scopeRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
     scopeRow.appendChild(bindFloaterDrag(
-      this.el, makeMenuIcon(ICON.border, '罫線（ドラッグで移動）'), () => { this._dragged = true }))
+      this.el, makeMenuIcon(ICON.border, tr('linePopupMenu.makeMenuIcon')), () => { this._dragged = true }))
 
     const scopes = [
-      { value: 'outer',  title: '外枠', icon: `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>` },
-      { value: 'inner',  title: '中の罫線', icon: `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35"/><line x1="9" y1="2" x2="9" y2="16" stroke="currentColor" stroke-width="2"/><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/></svg>` },
-      { value: 'single', title: 'この罫線のみ', icon: `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35"/><line x1="9" y1="2" x2="9" y2="16" stroke="currentColor" stroke-width="2"/></svg>` },
+      { value: 'outer',  title: tr('linePopupMenu.title'), icon: `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>` },
+      { value: 'inner',  title: tr('linePopupMenu.title2'), icon: `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35"/><line x1="9" y1="2" x2="9" y2="16" stroke="currentColor" stroke-width="2"/><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/></svg>` },
+      { value: 'single', title: tr('linePopupMenu.title3'), icon: `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35"/><line x1="9" y1="2" x2="9" y2="16" stroke="currentColor" stroke-width="2"/></svg>` },
     ]
     this._scopeBtns = {}
     for (const { value, title, icon } of scopes) {
@@ -4814,10 +4818,10 @@ export class LinePopupMenu {
     // ── Style rows ────────────────────────────────────────────────────────
     const styleList = createElement('div', { className: 'kuro-line-popm__styles' })
     const styles = [
-      { key: 'dotted', label: '点線',   border: '1px dotted',  preview: '<svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 2"/></svg>' },
-      { key: 'thin',   label: '細線',   border: '1px solid',   preview: '<svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" stroke-width="1"/></svg>' },
-      { key: 'normal', label: '普通線', border: '2px solid',   preview: '<svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" stroke-width="2"/></svg>' },
-      { key: 'bold',   label: '太線',   border: '3px solid',   preview: '<svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" stroke-width="3.5"/></svg>' },
+      { key: 'dotted', label: tr('linePopupMenu.label'),   border: '1px dotted',  preview: '<svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 2"/></svg>' },
+      { key: 'thin',   label: tr('linePopupMenu.label2'),   border: '1px solid',   preview: '<svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" stroke-width="1"/></svg>' },
+      { key: 'normal', label: tr('linePopupMenu.label3'), border: '2px solid',   preview: '<svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" stroke-width="2"/></svg>' },
+      { key: 'bold',   label: tr('linePopupMenu.label4'),   border: '3px solid',   preview: '<svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" stroke-width="3.5"/></svg>' },
     ]
     for (const { key, label, border, preview } of styles) {
       const btn = createElement('button', {
@@ -5216,16 +5220,16 @@ export class TableOfContents {
       items[i].hasChildren = !!(next && next.level > items[i].level)
     }
 
-    let html = '<p class="kuro-toc__title">目次</p>'
+    let html = '<p class="kuro-toc__title">' + tr('tableOfContents.text') + '</p>'
     for (const it of items) {
       const indent = (it.level - 1) * 10
       const collapsed = this._collapsed.has(it.key)
       const toggle = it.hasChildren
-        ? `<button class="kuro-toc__toggle ${collapsed ? 'kuro-toc__toggle--collapsed' : ''}" data-toc-key="${it.key}" aria-label="${collapsed ? '展開' : '折りたたみ'}">▾</button>`
+        ? `<button class="kuro-toc__toggle ${collapsed ? 'kuro-toc__toggle--collapsed' : ''}" data-toc-key="${it.key}" aria-label="${collapsed ? tr('tableOfContents.text2') : tr('tableOfContents.text3')}">▾</button>`
         : `<span class="kuro-toc__toggle-spacer"></span>`
       // ⚠ 見出しテキストはユーザー入力。'<' を含む見出しで目次が壊れないよう必ず
       //   エスケープする（本文の HTML をそのまま流し込む場所ではない）。
-      const label = _escapeHtml(it.el.textContent || '（無題）')
+      const label = _escapeHtml(it.el.textContent || tr('tableOfContents.text4'))
       html +=
         `<div class="kuro-toc__row" data-toc-key="${it.key}" data-toc-level="${it.level}" style="padding-left:${indent + 4}px">` +
           toggle +
@@ -5300,7 +5304,7 @@ export class EmojiPanel {
     this.onSelect = onSelect
     this.el = createElement('div', {
       className: 'kuro-emoji-panel',
-      attrs: { role: 'dialog', 'aria-label': '絵文字' },
+      attrs: { role: 'dialog', 'aria-label': tr('emojiPanel.ariaLabel') },
     })
     this._build()
     document.body.appendChild(this.el)
@@ -5365,14 +5369,14 @@ export class HrColorPanel {
     this.onPick = onPick
     this.el = createElement('div', {
       className: 'kuro-emoji-panel kuro-hr-panel',
-      attrs: { role: 'dialog', 'aria-label': '水平線の色' },
+      attrs: { role: 'dialog', 'aria-label': tr('hrColorPanel.ariaLabel') },
     })
     const head = createElement('div', { className: 'kuro-hr-panel__head' })
-    head.appendChild(createElement('span', { className: 'kuro-hr-panel__title', html: '水平線の色' }))
+    head.appendChild(createElement('span', { className: 'kuro-hr-panel__title', html: tr('hrColorPanel.ariaLabel') }))
     const base = createElement('button', {
       className: 'kuro-hr-panel__base',
-      html: '標準の色',
-      attrs: { type: 'button', title: 'テーマの線の色で引く' },
+      html: tr('hrColorPanel.html'),
+      attrs: { type: 'button', title: tr('hrColorPanel.title') },
     })
     base.addEventListener('mousedown', (e) => { e.preventDefault(); this.hide(); this.onPick(null) })
     head.appendChild(base)
@@ -5431,9 +5435,9 @@ export class LinkEditPopup {
     this._reopenBlockedUntil = 0
     this.el = createElement('div', {
       className: 'kuro-link-edit',
-      attrs: { role: 'dialog', 'aria-label': 'リンク編集' },
+      attrs: { role: 'dialog', 'aria-label': tr('linkEditPopup.ariaLabel') },
     })
-    this._textInput = this._makeField('表示テキスト')
+    this._textInput = this._makeField(tr('linkEditPopup.makeField'))
     this._textRow   = this._textInput.closest('.kuro-link-edit__row')
     // 入力中は欄を消さない (_syncCardUi) ので、抜けた時点で実態に合わせ直す
     this._textInput.addEventListener('blur', () => {
@@ -5459,7 +5463,7 @@ export class LinkEditPopup {
     const btn = createElement('button', {
       className: 'kuro-link-edit__delete',
       html: ICON.trash,
-      attrs: { type: 'button', title: 'このリンクを削除', 'aria-label': 'このリンクを削除' },
+      attrs: { type: 'button', title: tr('linkEditPopup.title'), 'aria-label': tr('linkEditPopup.title') },
     })
     // mousedown を潰さないと caret が動いて selectionchange → close() が先に走る
     btn.addEventListener('mousedown', (e) => { e.preventDefault(); this._deleteLink() })
@@ -5520,8 +5524,8 @@ export class LinkEditPopup {
   _makeJumpButton() {
     const btn = createElement('button', {
       className: 'kuro-link-edit__jump-btn',
-      html: '↗ リンク先にジャンプ',
-      attrs: { type: 'button', title: 'リンク先にジャンプ（新規タブ）' },
+      html: tr('linkEditPopup.html'),
+      attrs: { type: 'button', title: tr('linkEditPopup.title2') },
     })
     btn.addEventListener('click', () => {
       const href = this.activeLink?.href
@@ -5565,7 +5569,7 @@ export class LinkEditPopup {
     const label = createElement('label', { className: 'kuro-link-edit__card-toggle' })
     const cb = createElement('input', { attrs: { type: 'checkbox' } })
     label.appendChild(cb)
-    label.appendChild(createElement('span', { html: 'カード表示（表題なし）' }))
+    label.appendChild(createElement('span', { html: tr('linkEditPopup.html2') }))
     row.appendChild(label)
     this._delBtn = this._makeDeleteButton()
     row.appendChild(this._delBtn)
@@ -5847,12 +5851,12 @@ export class LinkOpenDialog {
     this._href = null
     this.el = createElement('div', {
       className: 'kuro-link-open',
-      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'リンクを開く' },
+      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': tr('linkOpenDialog.ariaLabel') },
     })
     this._box = createElement('div', { className: 'kuro-link-open__box' })
     this._box.appendChild(createElement('div', {
       className: 'kuro-link-open__msg',
-      html: 'このリンクを新しいタブで開きますか？',
+      html: tr('linkOpenDialog.html'),
     }))
     this._url = createElement('div', { className: 'kuro-link-open__url' })
     this._box.appendChild(this._url)
@@ -5860,12 +5864,12 @@ export class LinkOpenDialog {
     const footer = createElement('div', { className: 'kuro-link-open__footer' })
     this._cancelBtn = createElement('button', {
       className: 'kuro-link-open__btn',
-      html: 'キャンセル',
+      html: tr('linkOpenDialog.html2'),
       attrs: { type: 'button' },
     })
     this._openBtn = createElement('button', {
       className: 'kuro-link-open__btn kuro-link-open__btn--primary',
-      html: '↗ 新しいタブで開く',
+      html: tr('linkOpenDialog.html3'),
       attrs: { type: 'button' },
     })
     this._cancelBtn.addEventListener('click', () => this.hide())
@@ -5942,14 +5946,14 @@ export class RecipeDialog {
     this._layout = { ...RECIPE_LAYOUT_DEFAULT }
     this.el = createElement('div', {
       className: 'kuro-recipe-dialog',
-      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'レシピカードの編集' },
+      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': tr('recipeDialog.ariaLabel') },
     })
     this._box = createElement('div', { className: 'kuro-recipe-dialog__box' })
 
     // タイトル行: 左に見出し、右にカードの設定（表示サイズ / 寄せ / 削除）
     const head = createElement('div', { className: 'kuro-recipe-dialog__head' })
     head.appendChild(createElement('div', {
-      className: 'kuro-recipe-dialog__title', html: 'レシピカード',
+      className: 'kuro-recipe-dialog__title', html: tr('recipeDialog.html'),
     }))
     const tools = createElement('div', { className: 'kuro-recipe-dialog__tools' })
 
@@ -5957,7 +5961,7 @@ export class RecipeDialog {
     // data-recipe には混ぜず、data-width/data-align + インライン style で持つ
     this._sizeSelect = createElement('select', {
       className: 'kuro-recipe-dialog__size',
-      attrs: { title: '表示サイズ', 'aria-label': '表示サイズ' },
+      attrs: { title: tr('recipeDialog.title'), 'aria-label': tr('recipeDialog.title') },
     })
     for (const w of RECIPE_WIDTHS) {
       const opt = document.createElement('option')
@@ -5969,9 +5973,9 @@ export class RecipeDialog {
     // 寄せ。左右は画像・角丸ボックスと同じ float で本文が回り込む
     this._alignBtns = []
     for (const [align, icon, title] of [
-      ['left',   ICON.alignLeft,   '左寄せ（回り込み）'],
-      ['center', ICON.alignCenter, '中央'],
-      ['right',  ICON.alignRight,  '右寄せ（回り込み）'],
+      ['left',   ICON.alignLeft,   tr('recipeDialog.text')],
+      ['center', ICON.alignCenter, tr('recipeDialog.text2')],
+      ['right',  ICON.alignRight,  tr('recipeDialog.text3')],
     ]) {
       const btn = createElement('button', {
         className: 'kuro-recipe-dialog__tool',
@@ -5986,8 +5990,8 @@ export class RecipeDialog {
     // 削除（既存カードの編集中だけ出す）。確認は挟まない（Undo で戻せる）
     this._deleteBtn = createElement('button', {
       className: 'kuro-recipe-dialog__tool kuro-recipe-dialog__tool--danger kuro-del-btn',
-      html: `${ICON.trash}<span>削除</span>`,
-      attrs: { type: 'button', title: 'このレシピカードを削除', 'aria-label': 'このレシピカードを削除' },
+      html: `${ICON.trash}<span>${tr('recipeDialog.text4')}</span>`,
+      attrs: { type: 'button', title: tr('recipeDialog.title2'), 'aria-label': tr('recipeDialog.title2') },
     })
     this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
     tools.appendChild(this._deleteBtn)
@@ -5997,19 +6001,19 @@ export class RecipeDialog {
     this._box.appendChild(createElement('p', {
       className: 'kuro-recipe-dialog__note',
       // 仕様 §4 の warn: 料理名・説明・完成画像・公開日は記事側の入力を使う
-      html: '料理名・説明・完成画像・公開日は記事のタイトル / 要約 / アイキャッチを使います。ここでは入力しません。',
+      html: tr('recipeDialog.html2'),
     }))
 
     // ── 人数・時間 ──────────────────────────────────────────────────────
     const basics = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._yieldInput = this._field(basics, '人数', { placeholder: '2人分' })
-    this._prepInput  = this._field(basics, '下準備（分）', { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
-    this._cookInput  = this._field(basics, '調理（分）',   { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
+    this._yieldInput = this._field(basics, tr('recipeDialog.field'), { placeholder: tr('recipeDialog.placeholder') })
+    this._prepInput  = this._field(basics, tr('recipeDialog.field2'), { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
+    this._cookInput  = this._field(basics, tr('recipeDialog.field3'),   { type: 'number', min: '0', max: String(RECIPE_LIMITS.timeMax) })
     this._box.appendChild(basics)
 
     // ── 材料 / 手順（可変行）────────────────────────────────────────────
-    this._ingList = this._listSection('材料', '材料を追加', () => this._addIngredient())
-    this._insList = this._listSection('手順', '手順を追加', () => this._addInstruction())
+    this._ingList = this._listSection(tr('recipeDialog.listSection'), tr('recipeDialog.listSection2'), () => this._addIngredient())
+    this._insList = this._listSection(tr('recipeDialog.listSection3'), tr('recipeDialog.listSection4'), () => this._addInstruction())
 
     // ── エラー表示 + フッター ───────────────────────────────────────────
     this._errors = createElement('ul', { className: 'kuro-recipe-dialog__errors' })
@@ -6018,11 +6022,11 @@ export class RecipeDialog {
 
     const footer = createElement('div', { className: 'kuro-recipe-dialog__footer' })
     this._cancelBtn = createElement('button', {
-      className: 'kuro-recipe-dialog__btn', html: 'キャンセル', attrs: { type: 'button' },
+      className: 'kuro-recipe-dialog__btn', html: tr('recipeDialog.html3'), attrs: { type: 'button' },
     })
     this._saveBtn = createElement('button', {
       className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--primary',
-      html: '保存', attrs: { type: 'button' },
+      html: tr('recipeDialog.html4'), attrs: { type: 'button' },
     })
     this._cancelBtn.addEventListener('click', () => this.hide())
     this._saveBtn.addEventListener('click', () => this._submit())
@@ -6064,7 +6068,7 @@ export class RecipeDialog {
     const list = createElement('div', { className: 'kuro-recipe-dialog__list' })
     sec.appendChild(list)
     const add = createElement('button', {
-      className: 'kuro-recipe-dialog__add', html: `＋ ${addLabel}`, attrs: { type: 'button' },
+      className: 'kuro-recipe-dialog__add', html: tr('recipeDialog.html5', { addLabel }), attrs: { type: 'button' },
     })
     add.addEventListener('click', onAdd)
     sec.appendChild(add)
@@ -6076,7 +6080,7 @@ export class RecipeDialog {
   _rowDelete(row) {
     const btn = createElement('button', {
       className: 'kuro-recipe-dialog__row-del', html: ICON.trash,
-      attrs: { type: 'button', title: 'この行を削除', 'aria-label': 'この行を削除' },
+      attrs: { type: 'button', title: tr('recipeDialog.title3'), 'aria-label': tr('recipeDialog.title3') },
     })
     btn.addEventListener('click', () => row.remove())
     return btn
@@ -6086,11 +6090,11 @@ export class RecipeDialog {
     const row = createElement('div', { className: 'kuro-recipe-dialog__item' })
     const n = createElement('input', {
       className: 'kuro-recipe-dialog__input',
-      attrs: { type: 'text', placeholder: '材料名', 'aria-label': '材料名', spellcheck: 'false' },
+      attrs: { type: 'text', placeholder: tr('recipeDialog.placeholder2'), 'aria-label': tr('recipeDialog.placeholder2'), spellcheck: 'false' },
     })
     const a = createElement('input', {
       className: 'kuro-recipe-dialog__input kuro-recipe-dialog__input--amount',
-      attrs: { type: 'text', placeholder: '分量', 'aria-label': '分量', spellcheck: 'false' },
+      attrs: { type: 'text', placeholder: tr('recipeDialog.placeholder3'), 'aria-label': tr('recipeDialog.placeholder3'), spellcheck: 'false' },
     })
     n.value = name; a.value = amount
     row.appendChild(n); row.appendChild(a); row.appendChild(this._rowDelete(row))
@@ -6102,7 +6106,7 @@ export class RecipeDialog {
     const row = createElement('div', { className: 'kuro-recipe-dialog__item' })
     const t = createElement('input', {
       className: 'kuro-recipe-dialog__input',
-      attrs: { type: 'text', placeholder: '手順', 'aria-label': '手順', spellcheck: 'false' },
+      attrs: { type: 'text', placeholder: tr('recipeDialog.listSection3'), 'aria-label': tr('recipeDialog.listSection3'), spellcheck: 'false' },
     })
     t.value = text
     row.appendChild(t); row.appendChild(this._rowDelete(row))
@@ -6147,7 +6151,7 @@ export class RecipeDialog {
 
   _submit() {
     const recipe = normalizeRecipe(this._read())
-    const errors = validateRecipe(recipe)
+    const errors = validateRecipe(recipe, (key, vars) => tr(`recipeErr.${key}`, vars))
     this._showErrors(errors)
     if (errors.length) return          // 閉じない（入力を失わせない）
     this.onSave(recipe, normalizeRecipeLayout({
@@ -6206,36 +6210,19 @@ function localIsoDate(d = new Date()) {
  * 「エディタの求人カードも英語に対応してください」)。
  */
 const JOB_UI = {
-  ja: {
-    dialog: '求人カードの編集', title: '求人カード', del: '削除', delTitle: 'この求人カードを削除',
-    note: '職種名は記事のタイトル、仕事の説明は本文を使います。募集を止めるときは「募集中」を切ります(記事は消さずに、また人が足りなくなったら入れ直せます)。',
-    open: '募集中', openedAt: '募集を始めた日', types: '雇用形態(1 つ以上)',
-    salary: '給与(任意)', unit: '単位', min: '下限', max: '上限(任意)', currency: '通貨',
-    salaryNote: '給与の補足(任意・夜勤の手当や予想月収など)',
-    location: '勤務地', postal: '郵便番号(任意)', postalPh: '277-0825', region: '都道府県', regionPh: '千葉県',
-    locality: '市区町村', localityPh: '柏市', street: '番地・建物(任意)', country: '国',
-    more: 'そのほか(任意)', hours: '勤務時間・勤務日数', requirements: '応募資格・歓迎する経験',
-    benefits: '待遇(賞与・保険・通勤費・休暇など)', openings: '募集人数', openingsPh: '数名・3名 など',
-    contact: '問い合わせ先(電話番号と補足)', validThrough: '掲載期限(決まっている求人だけ)',
-    cancel: 'キャンセル', save: '保存',
-    btn: '求人カード(雇用形態・給与・勤務地・募集中の入切)', btnShort: '求人カード',
-    btnLocked: '1 記事につき求人カードは 1 つまでです。編集するにはカードをクリックしてください',
-  },
-  en: {
-    dialog: 'Edit job card', title: 'Job card', del: 'Delete', delTitle: 'Delete this job card',
-    note: 'The job title is the article title and the job description is the body. To stop hiring, turn off “Hiring” (keep the article and turn it on again when you need people).',
-    open: 'Hiring', openedAt: 'Posting date', types: 'Employment type (one or more)',
-    salary: 'Salary (optional)', unit: 'Unit', min: 'Minimum', max: 'Maximum (optional)', currency: 'Currency',
-    salaryNote: 'Salary note (optional, such as night-shift allowances or expected monthly pay)',
-    location: 'Location', postal: 'Postal code (optional)', postalPh: '94105', region: 'State / prefecture', regionPh: 'CA',
-    locality: 'City', localityPh: 'San Francisco', street: 'Street and building (optional)', country: 'Country',
-    more: 'Other (optional)', hours: 'Working hours and days', requirements: 'Requirements and welcome experience',
-    benefits: 'Benefits (bonus, insurance, commuting, leave and so on)', openings: 'Openings', openingsPh: 'e.g. 3, a few',
-    contact: 'Contact (phone number and notes)', validThrough: 'Closing date (only if fixed)',
-    cancel: 'Cancel', save: 'Save',
-    btn: 'Job card (employment type, salary, location, hiring on/off)', btnShort: 'Job card',
-    btnLocked: 'An article can have only one job card. Click the card to edit it',
-  },
+    dialog: lz('job.dialog'), title: lz('job.title'), del: lz('job.del'), delTitle: lz('job.delTitle'),
+    note: lz('job.note'),
+    open: lz('job.open'), openedAt: lz('job.openedAt'), types: lz('job.types'),
+    salary: lz('job.salary'), unit: lz('job.unit'), min: lz('job.min'), max: lz('job.max'), currency: lz('job.currency'),
+    salaryNote: lz('job.salaryNote'),
+    location: lz('job.location'), postal: lz('job.postal'), postalPh: '277-0825', region: lz('job.region'), regionPh: lz('job.regionPh'),
+    locality: lz('job.locality'), localityPh: lz('job.localityPh'), street: lz('job.street'), country: lz('job.country'),
+    more: lz('job.more'), hours: lz('job.hours'), requirements: lz('job.requirements'),
+    benefits: lz('job.benefits'), openings: lz('job.openings'), openingsPh: lz('job.openingsPh'),
+    contact: lz('job.contact'), validThrough: lz('job.validThrough'),
+    cancel: lz('job.cancel'), save: lz('job.save'),
+    btn: lz('job.btn'), btnShort: lz('job.title'),
+    btnLocked: lz('job.btnLocked'),
 }
 
 /**
@@ -6250,7 +6237,7 @@ export class JobDialog {
     this.onDelete = onDelete
     this._before = null
     this.lang = jobLang(lang)
-    const U = JOB_UI[this.lang]
+    const U = JOB_UI
     this.el = createElement('div', {
       className: 'kuro-recipe-dialog kuro-job-dialog',
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': U.dialog, lang: this.lang },
@@ -6427,7 +6414,7 @@ export class JobDialog {
 
   _submit() {
     const job = stampOpenedAt(this._before, normalizeJob(this._read()), localIsoDate())
-    const errors = validateJob(job, this.lang)
+    const errors = validateJob(job, (key, n) => tr(`jobErr.${key}`, { n }))
     this._showErrors(errors)
     if (errors.length) return
     this.onSave(job)
@@ -6489,16 +6476,16 @@ export class ContactDialog {
     this._recipients = (Array.isArray(recipients) ? recipients : []).filter((r) => r && RECIPIENT_NAME_RE.test(r.name))
     this.el = createElement('div', {
       className: 'kuro-recipe-dialog kuro-contact-dialog',
-      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': '問い合わせフォームの編集' },
+      attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': tr('contactDialog.ariaLabel') },
     })
     this._box = createElement('div', { className: 'kuro-recipe-dialog__box' })
     const head = createElement('div', { className: 'kuro-recipe-dialog__head' })
-    head.appendChild(createElement('div', { className: 'kuro-recipe-dialog__title', html: '問い合わせフォーム' }))
+    head.appendChild(createElement('div', { className: 'kuro-recipe-dialog__title', html: tr('contactDialog.html') }))
     const tools = createElement('div', { className: 'kuro-recipe-dialog__tools' })
     this._deleteBtn = createElement('button', {
       className: 'kuro-recipe-dialog__tool kuro-recipe-dialog__tool--danger kuro-del-btn',
-      html: `${ICON.trash}<span>削除</span>`,
-      attrs: { type: 'button', title: 'このフォームを削除', 'aria-label': 'このフォームを削除' },
+      html: `${ICON.trash}<span>${tr('contactDialog.text')}</span>`,
+      attrs: { type: 'button', title: tr('contactDialog.title'), 'aria-label': tr('contactDialog.title') },
     })
     this._deleteBtn.addEventListener('click', () => { this.onDelete(); this.hide() })
     tools.appendChild(this._deleteBtn)
@@ -6506,40 +6493,40 @@ export class ContactDialog {
     this._box.appendChild(head)
     this._box.appendChild(createElement('p', {
       className: 'kuro-recipe-dialog__note',
-      html: '送られた内容は、下で選んだ送り先へメールで届きます。アドレスはサイトの側で登録します(ここには書きません)。',
+      html: tr('contactDialog.html2'),
     }))
     const toSec = createElement('div', { className: 'kuro-recipe-dialog__section' })
-    toSec.appendChild(createElement('h4', { className: 'kuro-recipe-dialog__h', html: `送り先(${CONTACT_LIMITS.toMax} か所まで)` }))
+    toSec.appendChild(createElement('h4', { className: 'kuro-recipe-dialog__h', html: tr('contactDialog.html3', { toMax: CONTACT_LIMITS.toMax }) }))
     this._toList = createElement('div', { className: 'kuro-contact-dialog__to' })
     toSec.appendChild(this._toList)
     this._box.appendChild(toSec)
     const top = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._subjectInput = JobDialog.prototype._field.call(this, top, '件名(届くメールの件名)', { maxlength: String(CONTACT_LIMITS.subjectMax) })
+    this._subjectInput = JobDialog.prototype._field.call(this, top, tr('contactDialog.call'), { maxlength: String(CONTACT_LIMITS.subjectMax) })
     this._box.appendChild(top)
     const noteSec = createElement('div', { className: 'kuro-recipe-dialog__section' })
-    this._noteInput = JobDialog.prototype._area.call(this, noteSec, 'フォームの上の案内(任意)', CONTACT_LIMITS.noteMax)
+    this._noteInput = JobDialog.prototype._area.call(this, noteSec, tr('contactDialog.call2'), CONTACT_LIMITS.noteMax)
     this._box.appendChild(noteSec)
 
     const sec = createElement('div', { className: 'kuro-recipe-dialog__section' })
-    sec.appendChild(createElement('h4', { className: 'kuro-recipe-dialog__h', html: '項目' }))
+    sec.appendChild(createElement('h4', { className: 'kuro-recipe-dialog__h', html: tr('contactDialog.html4') }))
     this._list = createElement('div', { className: 'kuro-recipe-dialog__list' })
     sec.appendChild(this._list)
-    const add = createElement('button', { className: 'kuro-recipe-dialog__add', html: '＋ 項目を追加', attrs: { type: 'button' } })
+    const add = createElement('button', { className: 'kuro-recipe-dialog__add', html: tr('contactDialog.html5'), attrs: { type: 'button' } })
     add.addEventListener('click', () => this._addField({ kind: 'text', label: '', required: false }))
     sec.appendChild(add)
     this._box.appendChild(sec)
 
     const tail = createElement('div', { className: 'kuro-recipe-dialog__row' })
-    this._submitInput = JobDialog.prototype._field.call(this, tail, 'ボタンの文(任意)', { placeholder: CONTACT_DEFAULTS.submitLabel, maxlength: String(CONTACT_LIMITS.submitMax) })
-    this._doneInput = JobDialog.prototype._field.call(this, tail, '送信後の文(任意)', { placeholder: CONTACT_DEFAULTS.doneMessage, maxlength: String(CONTACT_LIMITS.doneMax) })
+    this._submitInput = JobDialog.prototype._field.call(this, tail, tr('contactDialog.call3'), { placeholder: CONTACT_DEFAULTS.submitLabel, maxlength: String(CONTACT_LIMITS.submitMax) })
+    this._doneInput = JobDialog.prototype._field.call(this, tail, tr('contactDialog.call4'), { placeholder: CONTACT_DEFAULTS.doneMessage, maxlength: String(CONTACT_LIMITS.doneMax) })
     this._box.appendChild(tail)
 
     this._errors = createElement('ul', { className: 'kuro-recipe-dialog__errors' })
     this._errors.hidden = true
     this._box.appendChild(this._errors)
     const footer = createElement('div', { className: 'kuro-recipe-dialog__footer' })
-    const cancel = createElement('button', { className: 'kuro-recipe-dialog__btn', html: 'キャンセル', attrs: { type: 'button' } })
-    const save = createElement('button', { className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--primary', html: '保存', attrs: { type: 'button' } })
+    const cancel = createElement('button', { className: 'kuro-recipe-dialog__btn', html: tr('contactDialog.html6'), attrs: { type: 'button' } })
+    const save = createElement('button', { className: 'kuro-recipe-dialog__btn kuro-recipe-dialog__btn--primary', html: tr('contactDialog.html7'), attrs: { type: 'button' } })
     cancel.addEventListener('click', () => this.hide())
     save.addEventListener('click', () => this._submit())
     footer.appendChild(cancel)
@@ -6557,21 +6544,22 @@ export class ContactDialog {
 
   _addField(f) {
     const row = createElement('div', { className: 'kuro-recipe-dialog__item kuro-contact-dialog__item' })
-    const kind = createElement('select', { className: 'kuro-recipe-dialog__input kuro-contact-dialog__kind', attrs: { 'aria-label': '種類' } })
-    for (const [k, t] of FIELD_KINDS) {
+    const kind = createElement('select', { className: 'kuro-recipe-dialog__input kuro-contact-dialog__kind', attrs: { 'aria-label': tr('contactDialog.ariaLabel2') } })
+    // 種類の名前は画面の言語。既定の項目名(FIELD_KINDS の名前)は本文に入るので別に持つ
+    for (const [k] of FIELD_KINDS) {
       const o = document.createElement('option')
-      o.value = k; o.textContent = t
+      o.value = k; o.textContent = tr(`contactKind.${k}`)
       kind.appendChild(o)
     }
     kind.value = f.kind
-    const label = createElement('input', { className: 'kuro-recipe-dialog__input', attrs: { type: 'text', placeholder: '項目の名前', 'aria-label': '項目の名前', maxlength: String(CONTACT_LIMITS.labelMax) } })
+    const label = createElement('input', { className: 'kuro-recipe-dialog__input', attrs: { type: 'text', placeholder: tr('contactDialog.placeholder'), 'aria-label': tr('contactDialog.placeholder'), maxlength: String(CONTACT_LIMITS.labelMax) } })
     label.value = f.label ?? ''
     const reqWrap = createElement('label', { className: 'kuro-contact-dialog__req' })
     const req = createElement('input', { attrs: { type: 'checkbox' } })
     req.checked = f.required === true
     reqWrap.appendChild(req)
-    reqWrap.appendChild(document.createTextNode('必須'))
-    const opts = createElement('textarea', { className: 'kuro-recipe-dialog__input kuro-contact-dialog__options', attrs: { rows: '3', placeholder: '選択肢(1 行に 1 つ)', 'aria-label': '選択肢' } })
+    reqWrap.appendChild(document.createTextNode(tr('contactDialog.createTextNode')))
+    const opts = createElement('textarea', { className: 'kuro-recipe-dialog__input kuro-contact-dialog__options', attrs: { rows: '3', placeholder: tr('contactDialog.placeholder2'), 'aria-label': tr('contactDialog.ariaLabel3') } })
     opts.value = (f.options ?? []).join('\n')
     const syncKind = () => {
       opts.hidden = kind.value !== 'select'
@@ -6580,7 +6568,7 @@ export class ContactDialog {
     }
     kind.addEventListener('change', syncKind)
     syncKind()
-    const del = createElement('button', { className: 'kuro-recipe-dialog__row-del', html: ICON.trash, attrs: { type: 'button', title: 'この項目を削除', 'aria-label': 'この項目を削除' } })
+    const del = createElement('button', { className: 'kuro-recipe-dialog__row-del', html: ICON.trash, attrs: { type: 'button', title: tr('contactDialog.title2'), 'aria-label': tr('contactDialog.title2') } })
     del.addEventListener('click', () => row.remove())
     row.append(kind, label, reqWrap, del, opts)
     this._list.appendChild(row)
@@ -6592,12 +6580,12 @@ export class ContactDialog {
     const known = new Set(this._recipients.map((r) => r.name))
     const rows = [
       ...this._recipients.map((r) => ({ name: r.name, label: r.label || r.name, missing: false })),
-      ...selected.filter((n) => !known.has(n)).map((n) => ({ name: n, label: `${n}(登録がありません)`, missing: true })),
+      ...selected.filter((n) => !known.has(n)).map((n) => ({ name: n, label: tr('contactDialog.label', { n }), missing: true })),
     ]
     if (!rows.length) {
       this._toList.appendChild(createElement('p', {
         className: 'kuro-recipe-dialog__note',
-        html: '選べる送り先がありません。サイトの側で送り先を登録してください。',
+        html: tr('contactDialog.html8'),
       }))
       return
     }
@@ -6635,7 +6623,7 @@ export class ContactDialog {
 
   _submit() {
     const form = normalizeContactForm(this._read())
-    const errors = validateContactForm(form)
+    const errors = validateContactForm(form, (key, vars) => tr(`contactErr.${key}`, vars))
     this._showErrors(errors)
     if (errors.length) return
     this.onSave(form)
@@ -6692,7 +6680,7 @@ export class MediaDialog {
     this._editor       = editor
     this.el = createElement('div', {
       className: 'kuro-media-dialog',
-      attrs: { role: 'dialog', 'aria-label': 'メディア挿入' },
+      attrs: { role: 'dialog', 'aria-label': tr('mediaDialog.ariaLabel') },
     })
     this._urlInput  = null
     this._fileInput = null
@@ -6707,7 +6695,7 @@ export class MediaDialog {
       className: 'kuro-media-dialog__url',
       attrs: {
         type: 'text',
-        placeholder: '画像・動画の URL を入力...',
+        placeholder: tr('mediaDialog.placeholder'),
         autocomplete: 'off',
         spellcheck: 'false',
       },
@@ -6719,7 +6707,7 @@ export class MediaDialog {
     // File select label (wraps hidden <input type="file">)
     this._fileLabel = createElement('label', {
       className: 'kuro-media-dialog__file-btn',
-      html: '📁 ファイル選択',
+      html: tr('mediaDialog.html'),
     })
     this._fileInput = createElement('input', {
       attrs: { type: 'file', accept: this.accept },
@@ -6733,7 +6721,7 @@ export class MediaDialog {
     // URL link button (right side)
     const linkBtn = createElement('button', {
       className: 'kuro-media-dialog__link-btn',
-      html: '上記URLでリンク',
+      html: tr('mediaDialog.html2'),
       attrs: { type: 'button' },
     })
 
@@ -6846,7 +6834,7 @@ export class ImageMenu {
 
     this.el = createElement('div', {
       className: 'kuro-image-menu',
-      attrs: { role: 'toolbar', 'aria-label': 'メディア操作' },
+      attrs: { role: 'toolbar', 'aria-label': tr('imageMenu.ariaLabel') },
     })
     this._sizeBtns  = {}   // size  → button element
     this._alignBtns = {}   // align → button element
@@ -6860,12 +6848,12 @@ export class ImageMenu {
     this._sizeRow = createElement('div', { className: 'kuro-image-menu__row' })
     this._sizeRow.appendChild(bindFloaterDrag(this.el, makeDragGrip(), () => { this._dragged = true }))
     this._sizeRow.appendChild(bindFloaterDrag(
-      this.el, makeMenuIcon('🖼', 'メディア（ドラッグで移動）'), () => { this._dragged = true }))
+      this.el, makeMenuIcon('🖼', tr('imageMenu.makeMenuIcon')), () => { this._dragged = true }))
     for (const size of IMAGE_SIZE_OPTIONS) {
       const btn = createElement('button', {
         className: 'kuro-image-menu__btn',
         html: size,
-        attrs: { type: 'button', title: `幅 ${size}`, 'data-img-size': size },
+        attrs: { type: 'button', title: tr('imageMenu.title', { size }), 'data-img-size': size },
       })
       btn.addEventListener('mousedown', (e) => { e.preventDefault(); this._applySize(size) })
       this._sizeBtns[size] = btn
@@ -6876,9 +6864,9 @@ export class ImageMenu {
     // ── Align row ───────────────────────────────────────────────────────────
     const alignRow = createElement('div', { className: 'kuro-image-menu__row' })
     const aligns = [
-      { label: '← 左',   value: 'left',   title: '左寄せ（テキスト回り込み）' },
-      { label: '⇔ 中央', value: 'center', title: '中央揃え' },
-      { label: '右 →',   value: 'right',  title: '右寄せ（テキスト回り込み）' },
+      { label: tr('imageMenu.label'),   value: 'left',   title: tr('imageMenu.title2') },
+      { label: tr('imageMenu.label2'), value: 'center', title: tr('imageMenu.title3') },
+      { label: tr('imageMenu.label3'),   value: 'right',  title: tr('imageMenu.title4') },
     ]
     for (const { label, value, title } of aligns) {
       const btn = createElement('button', {
@@ -6900,8 +6888,8 @@ export class ImageMenu {
     // Delete button
     const delBtn = createElement('button', {
       className: 'kuro-image-menu__btn kuro-image-menu__btn--delete kuro-del-btn',
-      html: `${ICON.trash}<span>削除</span>`,
-      attrs: { type: 'button', title: 'メディアを削除' },
+      html: `${ICON.trash}<span>${tr('imageMenu.text')}</span>`,
+      attrs: { type: 'button', title: tr('imageMenu.title5') },
     })
     delBtn.addEventListener('mousedown', (e) => { e.preventDefault(); this._deleteMedia() })
     bottomRow.appendChild(delBtn)
@@ -6909,8 +6897,8 @@ export class ImageMenu {
     // Link toggle button (not shown for iframes)
     this._linkToggleBtn = createElement('button', {
       className: 'kuro-image-menu__btn kuro-image-menu__btn--link',
-      html: '🔗 リンク',
-      attrs: { type: 'button', title: 'URLリンクを設定（クリックで新規タブ）' },
+      html: tr('imageMenu.html'),
+      attrs: { type: 'button', title: tr('imageMenu.title6') },
     })
     this._linkToggleBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -6934,7 +6922,7 @@ export class ImageMenu {
 
     const linkSetBtn = createElement('button', {
       className: 'kuro-image-menu__btn',
-      html: '設定',
+      html: tr('imageMenu.html2'),
       attrs: { type: 'button' },
     })
     linkSetBtn.addEventListener('mousedown', (e) => {
@@ -6947,8 +6935,8 @@ export class ImageMenu {
     //    ブロック削除と紛らわしいので語を変える（赤にもしない）
     const linkClearBtn = createElement('button', {
       className: 'kuro-image-menu__btn',
-      html: 'リンクを解除',
-      attrs: { type: 'button', title: '画像からリンクを外す' },
+      html: tr('imageMenu.html3'),
+      attrs: { type: 'button', title: tr('imageMenu.title7') },
     })
     linkClearBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -7018,7 +7006,7 @@ export class ImageMenu {
       this.activeEl.setAttribute('data-kuro-href', linkUrl)
       const a = createElement('a', {
         className: 'kuro-media-open-link',
-        html: '↗ URLを新規タブで開く',
+        html: tr('imageMenu.html4'),
         attrs: { href: linkUrl, target: '_blank', rel: 'noopener', contenteditable: 'false' },
       })
       this.activeEl.appendChild(a)
@@ -7338,6 +7326,8 @@ export class KuroEditor {
       uploadErrorText: null,
       ...options,
     }
+    // 画面の言語(#spec-i18n)。部品を作る前に決める。辞書が読まれていない言語は en
+    this.uiLang = setUiLocale(this.options.uiLang)
     // 対応メディア種別を Set 化（null = 全対応）。renderSpecialLinks に渡す。
     this._supportedKinds = normalizeMediaKinds(this.options.mediaKinds)
     this._mode          = 'wysiwyg'
@@ -7408,7 +7398,7 @@ export class KuroEditor {
     this._mmenuUndoBtn = createElement('button', {
       className: 'kuro-mmenu__btn',
       html: ICON.undo,
-      attrs: { type: 'button', 'data-mmenu': 'undo', title: '元に戻す (Ctrl/⌘+Z)' },
+      attrs: { type: 'button', 'data-mmenu': 'undo', title: tr('kuroEditor.title') },
     })
     this._mmenuUndoBtn.addEventListener('click', () => this._undo())
     this.mmenuActions.appendChild(this._mmenuUndoBtn)
@@ -7416,27 +7406,27 @@ export class KuroEditor {
     this._mmenuRedoBtn = createElement('button', {
       className: 'kuro-mmenu__btn',
       html: ICON.redo,
-      attrs: { type: 'button', 'data-mmenu': 'redo', title: 'やり直す (Ctrl/⌘+Shift+Z)' },
+      attrs: { type: 'button', 'data-mmenu': 'redo', title: tr('kuroEditor.title2') },
     })
     this._mmenuRedoBtn.addEventListener('click', () => this._redo())
     this.mmenuActions.appendChild(this._mmenuRedoBtn)
 
     // ── 既存アクション ────────────────────────────────────────────────
     const defs = [
-      { label: '😊',          id: 'emoji', title: '絵文字' },
-      { label: ICON.table,    id: 'table', title: 'テーブル' },
-      { label: '🖼',          id: 'media', title: 'メディア' },
-      { label: ICON.code,     id: 'code',  title: 'コード' },
-      { label: ICON.hr,       id: 'hr',       title: '水平線' },
-      { label: ICON.roundbox, id: 'roundbox', title: '角丸ボックス' },
-      { label: ICON.link,     id: 'link',     title: 'リンク' },
+      { label: '😊',          id: 'emoji', title: tr('kuroEditor.title3') },
+      { label: ICON.table,    id: 'table', title: tr('kuroEditor.title4') },
+      { label: '🖼',          id: 'media', title: tr('kuroEditor.title5') },
+      { label: ICON.code,     id: 'code',  title: tr('kuroEditor.title6') },
+      { label: ICON.hr,       id: 'hr',       title: tr('kuroEditor.title7') },
+      { label: ICON.roundbox, id: 'roundbox', title: tr('kuroEditor.title8') },
+      { label: ICON.link,     id: 'link',     title: tr('kuroEditor.title9') },
       // recipeUi: true のときだけ 🔗 の右に鍋を足す（タブバー下段と同じ並び）
       ...(this.options.recipeUi
-        ? [{ label: ICON.pot, id: 'recipe', title: 'レシピカード' }] : []),
+        ? [{ label: ICON.pot, id: 'recipe', title: tr('kuroEditor.title10') }] : []),
       ...(this.options.jobUi
-        ? [{ label: ICON.job, id: 'job', title: JOB_UI[jobLang(this.options.uiLang)].btnShort }] : []),
+        ? [{ label: ICON.job, id: 'job', title: JOB_UI.btnShort }] : []),
       ...(this.options.contactUi
-        ? [{ label: ICON.form, id: 'contact', title: '問い合わせフォーム' }] : []),
+        ? [{ label: ICON.form, id: 'contact', title: tr('kuroEditor.title11') }] : []),
     ]
 
     this._mmenuBtns = {}
@@ -7452,7 +7442,7 @@ export class KuroEditor {
 
     this.saveBtn = createElement('button', {
       className: 'kuro-mmenu__save',
-      html: '保存',
+      html: tr('kuroEditor.html'),
       attrs: { type: 'button' },
     })
 
@@ -7492,24 +7482,24 @@ export class KuroEditor {
     const versionBadge = createElement('span', {
       className: 'kuro-tabs__version',
       html: `v${VERSION}`,
-      attrs: { title: `KuroEditor v${VERSION}`, 'aria-label': `バージョン ${VERSION}` },
+      attrs: { title: `KuroEditor v${VERSION}`, 'aria-label': tr('kuroEditor.ariaLabel', { VERSION }) },
     })
 
     // 3 タブ: ✏️ 編集 / 👁 閲覧(編集不可) / </> HTML
     this.tabWysiwyg = createElement('button', {
       className: 'kuro-tab kuro-tab--active',
       html: ICON.pencil,
-      attrs: { type: 'button', 'data-tab': 'wysiwyg', title: '編集', 'aria-label': '編集' },
+      attrs: { type: 'button', 'data-tab': 'wysiwyg', title: tr('kuroEditor.title12'), 'aria-label': tr('kuroEditor.title12') },
     })
     this.tabView = createElement('button', {
       className: 'kuro-tab',
       html: ICON.eye,
-      attrs: { type: 'button', 'data-tab': 'view', title: '閲覧（編集不可）', 'aria-label': '閲覧（編集不可）' },
+      attrs: { type: 'button', 'data-tab': 'view', title: tr('kuroEditor.title13'), 'aria-label': tr('kuroEditor.title13') },
     })
     this.tabSource = createElement('button', {
       className: 'kuro-tab',
       html: ICON.source,
-      attrs: { type: 'button', 'data-tab': 'source', title: 'HTML 表示', 'aria-label': 'HTML 表示' },
+      attrs: { type: 'button', 'data-tab': 'source', title: tr('kuroEditor.title14'), 'aria-label': tr('kuroEditor.title14') },
     })
 
     // ── Inline action buttons — mirrors mmenu so host's modalToolbar is optional ──
@@ -7519,7 +7509,7 @@ export class KuroEditor {
     this._tabUndoBtn = createElement('button', {
       className: 'kuro-tabs__action',
       html: ICON.undo,
-      attrs: { type: 'button', title: '元に戻す (Ctrl/⌘+Z)' },
+      attrs: { type: 'button', title: tr('kuroEditor.title') },
     })
     this._tabUndoBtn.addEventListener('click', () => this._undo())
     tabActions.appendChild(this._tabUndoBtn)
@@ -7527,25 +7517,25 @@ export class KuroEditor {
     this._tabRedoBtn = createElement('button', {
       className: 'kuro-tabs__action',
       html: ICON.redo,
-      attrs: { type: 'button', title: 'やり直す (Ctrl/⌘+Shift+Z)' },
+      attrs: { type: 'button', title: tr('kuroEditor.title2') },
     })
     this._tabRedoBtn.addEventListener('click', () => this._redo())
     tabActions.appendChild(this._tabRedoBtn)
 
     const tabActionDefs = [
-      { label: '😊',       id: 'emoji', title: '絵文字' },
-      { label: ICON.table, id: 'table', title: 'テーブル' },
-      { label: '🖼',        id: 'media', title: 'メディア' },
-      { label: ICON.code,  id: 'code',  title: 'コード' },
-      { label: ICON.hr,       id: 'hr',       title: '水平線' },
-      { label: ICON.roundbox, id: 'roundbox', title: '角丸ボックス' },
-      { label: ICON.link,     id: 'link',     title: 'リンク（カーソル位置に挿入）' },
+      { label: '😊',       id: 'emoji', title: tr('kuroEditor.title3') },
+      { label: ICON.table, id: 'table', title: tr('kuroEditor.title4') },
+      { label: '🖼',        id: 'media', title: tr('kuroEditor.title5') },
+      { label: ICON.code,  id: 'code',  title: tr('kuroEditor.title6') },
+      { label: ICON.hr,       id: 'hr',       title: tr('kuroEditor.title7') },
+      { label: ICON.roundbox, id: 'roundbox', title: tr('kuroEditor.title8') },
+      { label: ICON.link,     id: 'link',     title: tr('kuroEditor.title15') },
       // recipeUi: true のときだけ 🔗 の右に鍋を足す。レシピ記事を扱うホスト専用の
       // ボタンなので、既定では要素ごと作らない（disabled ではなく非表示）。
       ...(this.options.recipeUi
-        ? [{ label: ICON.pot, id: 'recipe', title: 'レシピカード（材料・時間・手順）' }] : []),
+        ? [{ label: ICON.pot, id: 'recipe', title: tr('kuroEditor.title16') }] : []),
       ...(this.options.jobUi
-        ? [{ label: ICON.job, id: 'job', title: JOB_UI[jobLang(this.options.uiLang)].btn }] : []),
+        ? [{ label: ICON.job, id: 'job', title: JOB_UI.btn }] : []),
       ...(this.options.contactUi
         ? [{ label: ICON.form, id: 'contact', title: KuroEditor.CONTACT_BTN_TITLE }] : []),
     ]
@@ -7564,13 +7554,13 @@ export class KuroEditor {
     const tabAutoId = `kuro-tab-autosave-${Math.random().toString(36).slice(2, 7)}`
     this.tabAutoSaveCheck = createElement('input', {
       className: 'kuro-mmenu__autosave-check',
-      attrs: { type: 'checkbox', id: tabAutoId, 'aria-label': '自動保存' },
+      attrs: { type: 'checkbox', id: tabAutoId, 'aria-label': tr('kuroEditor.ariaLabel2') },
     })
     // Restore the persisted preference; defaults to ON when never set before.
     this.tabAutoSaveCheck.checked = this._readAutoSavePref()
     const tabAutoLabel = createElement('label', {
       className: 'kuro-mmenu__autosave-label',
-      html: '自動保存',
+      html: tr('kuroEditor.ariaLabel2'),
       attrs: { for: tabAutoId },
     })
     const tabAutoWrap = createElement('div', { className: 'kuro-tabs__autosave' })
@@ -7581,7 +7571,7 @@ export class KuroEditor {
     const tabThemeId = `kuro-tab-canvas-dark-${Math.random().toString(36).slice(2, 7)}`
     this.tabCanvasDarkCheck = createElement('input', {
       className: 'kuro-mmenu__autosave-check',
-      attrs: { type: 'checkbox', id: tabThemeId, 'aria-label': '編集エリアをダーク表示' },
+      attrs: { type: 'checkbox', id: tabThemeId, 'aria-label': tr('kuroEditor.ariaLabel3') },
     })
     // _build() で決定済みの初期状態（options.canvasDark 優先）を反映する
     this.tabCanvasDarkCheck.checked = this.isCanvasDark()
@@ -7590,8 +7580,8 @@ export class KuroEditor {
     })
     const tabThemeLabel = createElement('label', {
       className: 'kuro-mmenu__autosave-label',
-      html: 'ダーク',
-      attrs: { for: tabThemeId, title: '編集エリアの配色: OFF=公開ページ相当(通常) / ON=ダーク' },
+      html: tr('kuroEditor.html2'),
+      attrs: { for: tabThemeId, title: tr('kuroEditor.title17') },
     })
     const tabThemeWrap = createElement('div', { className: 'kuro-tabs__autosave kuro-tabs__canvas-theme' })
     tabThemeWrap.appendChild(this.tabCanvasDarkCheck)
@@ -7600,7 +7590,7 @@ export class KuroEditor {
     // Save button
     this.tabSaveBtn = createElement('button', {
       className: 'kuro-tabs__save',
-      html: '保存',
+      html: tr('kuroEditor.html'),
       attrs: { type: 'button' },
     })
 
@@ -7613,8 +7603,8 @@ export class KuroEditor {
       html: ICON.help,
       attrs: {
         type: 'button',
-        title: 'エディッター操作ガイド',
-        'aria-label': 'エディッター操作ガイド（別タブで開く）',
+        title: tr('kuroEditor.title18'),
+        'aria-label': tr('kuroEditor.ariaLabel4'),
       },
     })
     this.tabHelpBtn.addEventListener('click', () => {
@@ -7630,7 +7620,7 @@ export class KuroEditor {
         <rect x="0" y="0" width="10" height="12" rx="1.5" opacity="0.4"/>
         <rect x="11.5" y="0" width="4.5" height="12" rx="1.5"/>
       </svg>`,
-      attrs: { type: 'button', title: '目次パネル (Alt+T)', 'aria-label': '目次パネルの表示切り替え' },
+      attrs: { type: 'button', title: tr('kuroEditor.title19'), 'aria-label': tr('kuroEditor.ariaLabel5') },
     })
 
     // ── 2 段構造 ──────────────────────────────────────────────────────────
@@ -7688,8 +7678,8 @@ export class KuroEditor {
       className: 'kuro-charcount',
       attrs: {
         dir: 'ltr',
-        title: '本文の文字数',
-        'aria-label': '本文の文字数',
+        title: tr('kuroEditor.title20'),
+        'aria-label': tr('kuroEditor.title20'),
       },
     })
     this._charCountValue = null   // 前回描画した値(同値スキップ用)
@@ -7767,15 +7757,15 @@ export class KuroEditor {
         contenteditable: 'true',
         role: 'textbox',
         'aria-multiline': 'true',
-        'aria-label': 'エディター入力エリア',
+        'aria-label': tr('kuroEditor.ariaLabel6'),
         spellcheck: 'false',
-        'data-placeholder': 'ここに文章を入力してください…',
+        'data-placeholder': tr('kuroEditor.dataPlaceholder'),
       },
     })
 
     this.sourceArea = createElement('textarea', {
       className: 'kuro-pane__source',
-      attrs: { spellcheck: 'false', 'aria-label': 'ソースエディター' },
+      attrs: { spellcheck: 'false', 'aria-label': tr('kuroEditor.ariaLabel7') },
     })
 
     this.pane.appendChild(this.wysiwyg)
@@ -7789,7 +7779,7 @@ export class KuroEditor {
     // 目次を一度閉じて再表示しても同じ幅で復元される。
     this.tocResizer = createElement('div', {
       className: 'kuro-toc-resizer',
-      attrs: { 'aria-hidden': 'true', title: '目次の幅を変更' },
+      attrs: { 'aria-hidden': 'true', title: tr('kuroEditor.title21') },
     })
     this._tocWidth = null   // px — set on first drag
 
@@ -8267,7 +8257,7 @@ export class KuroEditor {
         let text = ''
         try { text = this.options.uploadErrorText?.(file, err) ?? '' } catch { text = '' }
         ph.querySelector('.kuro-media-error__msg').textContent =
-          text || `アップロード失敗: ${file.name}`
+          text || tr('kuroEditor.text', { name: file.name })
       }
       console.error('[KuroEditor] onMediaUpload error:', err)
     }
@@ -11621,8 +11611,8 @@ export class KuroEditor {
       `<div class="kuro-code-wrap" contenteditable="false">` +
         `<div class="kuro-code__gutter" aria-hidden="true">1</div>` +
         `<textarea class="kuro-code__area" spellcheck="false" cols="1" rows="1" wrap="off">${escaped}</textarea>` +
-        `<button class="kuro-code__del" type="button" title="コードブロックを削除" aria-label="コードブロックを削除"><svg width="11" height="12" viewBox="0 0 11 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="0.5,2.5 10.5,2.5"/><path d="M3.5,2.5v-1h4v1"/><path d="M1.5,2.5l.7,8h6.6l.7-8"/><line x1="4" y1="5" x2="4" y2="8.5"/><line x1="7" y1="5" x2="7" y2="8.5"/></svg></button>` +
-        `<button class="kuro-code__copy" type="button" title="コードをコピー" aria-label="コードをコピー">📋</button>` +
+        `<button class="kuro-code__del" type="button" title="${tr('kuroEditor.text2')}" aria-label="${tr('kuroEditor.text2')}"><svg width="11" height="12" viewBox="0 0 11 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="0.5,2.5 10.5,2.5"/><path d="M3.5,2.5v-1h4v1"/><path d="M1.5,2.5l.7,8h6.6l.7-8"/><line x1="4" y1="5" x2="4" y2="8.5"/><line x1="7" y1="5" x2="7" y2="8.5"/></svg></button>` +
+        `<button class="kuro-code__copy" type="button" title="${tr('kuroEditor.text3')}" aria-label="${tr('kuroEditor.text3')}">📋</button>` +
       `</div>`
     )
   }
@@ -12263,8 +12253,16 @@ export class KuroEditor {
   // 編集はモーダルだけ・プレビューは保存のたびに正本から作り直す)。違いは数の上限だけ:
   // 求人は 1 本文に 1 個(1 記事 = 1 求人)、フォームは CONTACT_LIMITS.perBody 個まで。
 
-  static get JOB_BTN_TITLE() { return JOB_UI.ja.btn }
-  static get JOB_BTN_LOCKED_TITLE() { return JOB_UI.ja.btnLocked }
+  /**
+   * 画面の言語の辞書を読む(ja・en は本体にある)。ホストはエディタを作る前に await する。#spec-i18n
+   * @returns {Promise<string>} 使える言語(読めなければ 'en')
+   */
+  static loadLocale(lang, url) { return loadLocale(lang, url) }
+  /** 辞書のファイルを置いた場所(末尾の / 付き)。loadLocale で url を省いたときに使う。 */
+  static setLocaleBase(base) { setLocaleBase(base) }
+
+  static get JOB_BTN_TITLE() { return String(JOB_UI.btn) }
+  static get JOB_BTN_LOCKED_TITLE() { return String(JOB_UI.btnLocked) }
 
   /**
    * 本文の言語を変える(ホストが言語のタブを切り替えたとき)。本文の求人カードの表示を作り直す。
@@ -12277,11 +12275,11 @@ export class KuroEditor {
       if (!data) continue
       this._suspendDirty(() => {
         card.innerHTML = renderJobPreview(normalizeJob(data), { lang: this.options.contentLang })
-        card.setAttribute('aria-label', jobLang(this.options.contentLang) === 'ja' ? '求人カード' : 'Job card')
+        card.setAttribute('aria-label', jobCardLabel(this.options.contentLang))
       })
     }
   }
-  static get CONTACT_BTN_TITLE() { return '問い合わせフォーム' }
+  static get CONTACT_BTN_TITLE() { return tr('kuroEditor.title11') }
 
   _atomicSpec(kind) {
     return kind === 'job'
@@ -12293,7 +12291,7 @@ export class KuroEditor {
   _syncJobBtn() {
     if (!this.options.jobUi) return
     const locked = !!this.wysiwyg.querySelector(JOB_CARD_SEL)
-    const U = JOB_UI[jobLang(this.options.uiLang)]
+    const U = JOB_UI
     const title = locked ? U.btnLocked : U.btn
     for (const btn of [this._tabActionBtns?.job, this._mmenuBtns?.job]) {
       if (!btn) continue
@@ -12377,10 +12375,10 @@ export class KuroEditor {
   }
 
   /** 鍋ボタンのラベル（状態で変わるのは tooltip だけ。位置も見た目の大きさも動かさない）。 */
-  static get RECIPE_BTN_TITLE() { return 'レシピカード（材料・時間・手順）' }
+  static get RECIPE_BTN_TITLE() { return tr('kuroEditor.title16') }
   static get RECIPE_BTN_LOCKED_TITLE() {
     // 押せない理由を必ず書く。黙って無反応にしない（何が起きたか分からなくなる）
-    return '1 記事につきレシピカードは 1 つまでです。編集するにはカードをクリックしてください'
+    return tr('kuroEditor.text4')
   }
 
   /**
@@ -13551,7 +13549,7 @@ export class KuroEditor {
     for (const btn of [this.saveBtn, this.tabSaveBtn]) {
       if (!btn) continue
       btn.disabled = clean
-      btn.title = clean ? '変更はありません' : ''
+      btn.title = clean ? tr('kuroEditor.text5') : ''
     }
   }
 

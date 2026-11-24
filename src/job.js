@@ -243,15 +243,17 @@ export function normalizeJob(raw) {
 
 /**
  * 保存してよい形か。**正規化済み**の値を渡す。
- * @param {string} [lang] 誤りの文の言語(jobLang・既定は日本語)
+ * @param {string|((key: string, n?: number) => string)} [lang] 誤りの文の言語(jobLang・既定は日本語)、または文を作る関数
  * @returns {string[]} 人が読める誤りの文(空なら OK)
  */
 export function validateJob(j, lang) {
   const errors = []
   const L = JOB_LIMITS
-  const M = JOB_ERRORS[jobLang(lang)]
-  const e = (key, n) => errors.push(n === undefined ? M[key] : M[key].replace('{n}', String(n)))
-  if (!j || typeof j !== 'object') return [M.unreadable]
+  // lang に関数を渡すと、文はその関数が作る((鍵, 上限の数) => 文。エディタは画面の辞書で引く)
+  const M = JOB_ERRORS[jobLang(typeof lang === 'function' ? '' : lang)]
+  const msg = (key, n) => typeof lang === 'function' ? lang(key, n) : n === undefined ? M[key] : M[key].replace('{n}', String(n))
+  const e = (key, n) => errors.push(msg(key, n))
+  if (!j || typeof j !== 'object') return [msg('unreadable')]
   if (typeof j.open !== 'boolean') e('open')
   if (j.openedAt !== undefined && !isIsoDate(j.openedAt)) e('openedAt')
   const types = Array.isArray(j.employmentType) ? j.employmentType : []
@@ -406,6 +408,11 @@ export function renderJobPreview(j, opt = {}) {
       `<span class="kuro-job__state kuro-job__state--${open ? 'open' : 'closed'}">${open ? T.open : T.closed}</span>` +
     `</div>` +
     `<table class="kuro-job__table"><tbody>${rows.join('')}</tbody></table>`
+}
+
+/** カードの aria-label(本文の言語)。 */
+export function jobCardLabel(lang) {
+  return JOB_TEXT[jobLang(lang)].card
 }
 
 /** JobCard ブロック 1 個ぶんの HTML(保存形式)。 */

@@ -95,36 +95,59 @@ export function normalizeContactForm(raw) {
   return out
 }
 
-/** 保存してよい形か。正規化済みを渡す。 */
-export function validateContactForm(c) {
+/** 誤りの文(日本語)。エディタは画面の辞書の contactErr.<鍵> で引き直す(#spec-i18n)。 */
+const CONTACT_FORM_ERRORS = {
+  unreadable: 'フォームの内容が読み取れません。',
+  subject: '件名を入力してください。',
+  subjectMax: '件名は {max} 文字以内で入力してください。',
+  fieldsMin: '項目を 1 つ以上置いてください。',
+  fieldsMax: '項目は {max} 個までです。',
+  fieldKind: '{n} 番目の項目の種類が読み取れません。',
+  fieldLabel: '{n} 番目の項目の名前を入力してください。',
+  fieldLabelMax: '{n} 番目の項目の名前は {max} 文字以内で入力してください。',
+  optionsCount: '{n} 番目の項目の選択肢は 1〜{max} 個で入力してください。',
+  optionMax: '{n} 番目の項目の選択肢は 1 つ {max} 文字以内で入力してください。',
+  reply: '返事ができるよう、メールアドレスか電話番号の項目を 1 つ以上置いてください。',
+  submitMax: 'ボタンの文は {max} 文字以内で入力してください。',
+  doneMax: '送信後の文は {max} 文字以内で入力してください。',
+  noteMax: '案内の文は {max} 文字以内で入力してください。',
+  toMax: '送り先は {max} か所までです。',
+  toName: '送り先の名前が読み取れません。',
+}
+
+/**
+ * 保存してよい形か。正規化済みを渡す。
+ * @param {(key: string, vars?: object) => string} [tr] 文を作る関数(省くと日本語)
+ */
+export function validateContactForm(c, tr) {
   const errors = []
   const L = CONTACT_LIMITS
-  if (!c || typeof c !== 'object') return ['フォームの内容が読み取れません。']
-  if (!c.subject) errors.push('件名を入力してください。')
-  else if (c.subject.length > L.subjectMax) errors.push(`件名は ${L.subjectMax} 文字以内で入力してください。`)
+  const msg = (key, vars) => tr ? tr(key, vars) : CONTACT_FORM_ERRORS[key].replace(/\{(\w+)\}/g, (m, k) => String(vars?.[k] ?? m))
+  const e = (key, vars) => errors.push(msg(key, vars))
+  if (!c || typeof c !== 'object') return [msg('unreadable')]
+  if (!c.subject) e('subject')
+  else if (c.subject.length > L.subjectMax) e('subjectMax', { max: L.subjectMax })
   const fields = Array.isArray(c.fields) ? c.fields : []
-  if (fields.length < 1) errors.push('項目を 1 つ以上置いてください。')
-  if (fields.length > L.fieldsMax) errors.push(`項目は ${L.fieldsMax} 個までです。`)
+  if (fields.length < 1) e('fieldsMin')
+  if (fields.length > L.fieldsMax) e('fieldsMax', { max: L.fieldsMax })
   fields.forEach((f, i) => {
     const n = i + 1
-    if (!KIND_KEYS.has(f.kind)) errors.push(`${n} 番目の項目の種類が読み取れません。`)
-    if (!f.label) errors.push(`${n} 番目の項目の名前を入力してください。`)
-    else if (f.label.length > L.labelMax) errors.push(`${n} 番目の項目の名前は ${L.labelMax} 文字以内で入力してください。`)
+    if (!KIND_KEYS.has(f.kind)) e('fieldKind', { n })
+    if (!f.label) e('fieldLabel', { n })
+    else if (f.label.length > L.labelMax) e('fieldLabelMax', { n, max: L.labelMax })
     if (f.kind === 'select') {
       const o = f.options ?? []
-      if (o.length < 1 || o.length > L.optionsMax) errors.push(`${n} 番目の項目の選択肢は 1〜${L.optionsMax} 個で入力してください。`)
-      if (o.some((x) => x.length > L.optionMax)) errors.push(`${n} 番目の項目の選択肢は 1 つ ${L.optionMax} 文字以内で入力してください。`)
+      if (o.length < 1 || o.length > L.optionsMax) e('optionsCount', { n, max: L.optionsMax })
+      if (o.some((x) => x.length > L.optionMax)) e('optionMax', { n, max: L.optionMax })
     }
   })
-  if (!fields.some((f) => f.kind === 'email' || f.kind === 'tel')) {
-    errors.push('返事ができるよう、メールアドレスか電話番号の項目を 1 つ以上置いてください。')
-  }
-  if ((c.submitLabel ?? '').length > L.submitMax) errors.push(`ボタンの文は ${L.submitMax} 文字以内で入力してください。`)
-  if ((c.doneMessage ?? '').length > L.doneMax) errors.push(`送信後の文は ${L.doneMax} 文字以内で入力してください。`)
-  if ((c.note ?? '').length > L.noteMax) errors.push(`案内の文は ${L.noteMax} 文字以内で入力してください。`)
+  if (!fields.some((f) => f.kind === 'email' || f.kind === 'tel')) e('reply')
+  if ((c.submitLabel ?? '').length > L.submitMax) e('submitMax', { max: L.submitMax })
+  if ((c.doneMessage ?? '').length > L.doneMax) e('doneMax', { max: L.doneMax })
+  if ((c.note ?? '').length > L.noteMax) e('noteMax', { max: L.noteMax })
   const to = Array.isArray(c.to) ? c.to : []
-  if (to.length > L.toMax) errors.push(`送り先は ${L.toMax} か所までです。`)
-  if (to.some((n) => !RECIPIENT_NAME_RE.test(n))) errors.push('送り先の名前が読み取れません。')
+  if (to.length > L.toMax) e('toMax', { max: L.toMax })
+  if (to.some((x) => !RECIPIENT_NAME_RE.test(x))) e('toName')
   return errors
 }
 

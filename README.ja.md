@@ -63,6 +63,7 @@ v2 で表示崩れ等が起きた場合の戻し方：
 - 💾 **自動保存** — 任意の間隔で `onSave` コールバック
 - 📝 **3 モード** — ✏️ 編集 / 👁 閲覧（読み取り専用） / `</>` HTML ソースをタブで切り替え
 - 🪄 **目次自動生成** — 見出しからアウトラインを自動で構築
+- 🌐 **画面の言語** — ボタンの説明・メニュー・モーダル・誤りの文は、ブラウザの言語か `uiLang` オプションに従います。日本語と英語は本体に入っています。Entamy の 11 言語のうち残り(fr / it / es / zh / ko / uk / de / pt / ar)は、言語ごとの小さなファイル(1 言語 gzip で約 5KB・`dist/locales/`)として順に足し、`KuroEditor.loadLocale()` で読みます。エディタ本体は 1 つのままです。辞書の無い言語は英語で動きます
 
 ---
 
@@ -240,6 +241,8 @@ KuroEditor が出力する HTML は、クラスベースのブロック（角丸
 | `onClipPaste()` | `function` | 貼り付けボタンのタップ時に呼ばれる。`string`（または `string` を resolve する `Promise`）を返すと選択位置にプレーンテキストとして挿入。何も返さなければ挿入はホスト側に委ねる。未指定時は `navigator.clipboard.readText()` にフォールバック |
 | `onFetchUrlMeta(slug)` | `async function` | 任意。URL カード（`[[slug\|]]`）の豪華表示用メタ取得。`{ title?, description?, favicon?, image? }`（または `null`）を返す。**2 段階表示**：カードはまず URL 由来の簡易表示で即描画され（画面はブロックしない）、この関数が解決したらそのカードだけをタイトル/説明/favicon/サムネイルに差し替える。未指定・`null`・失敗時は簡易表示のまま |
 | `mediaAccept` | `string` | 既定 `'image/*,video/*,audio/*'`。メディアダイアログ「ファイル選択」の `<input type="file">` の accept。ホストが受け付ける種別に合わせて絞れます(例 `'image/*'`)。**iOS(WKWebView/Safari)は、写真ライブラリが提供できない種別(audio 等)が accept に混ざると Files ピッカーだけに落ちる**ため、画像のみのホストは `'image/*'` に絞ると「フォトライブラリ / 写真を撮る」の標準シートが出ます |
+| `uiLang` | `string` | 既定はブラウザの言語。エディタの画面(ボタンの説明・メニュー・モーダル・誤りの文)の言語。`ja` `en` `fr` `it` `es` `zh` `ko` `uk` `de` `pt` `ar` のどれか(`ja-JP` などは前半で読みます)。日本語・英語は本体に入っています。ほかは先に `await KuroEditor.loadLocale(lang)` で辞書を読みます。それ以外の言語や、辞書を読んでいない言語は英語。1 ページの画面の言語は 1 つで、変えるときはエディタを作り直します |
+| `contentLang` | `string \| null` | 既定 `null`(日本語)。**本文**の言語。求人カードなど、公開ページにも出るカードの見出しの言葉が従います。ホストが記事の言語を切り替えたら `setContentLang()` を呼びます |
 | `blockIds` | `boolean` | 既定 `false`。`true` で各トップレベルブロックに安定した `data-bid`（UUID）を付与・維持。外部同期レイヤーでのブロック単位 3-way マージ（named export の `mergeBlocks()`）の土台。保存には id 入りの `getContent()`、公開 HTML には id を除去した `getBuildImage()` を使います |
 
 ### onSave の例
@@ -295,6 +298,9 @@ editor.setCanvasColors({...})  // ライトのキャンバス配色を実行時�
 editor.isDirty()          // 未保存の変更があるか（onDirty コールバックと対）
 editor.clearDirty()       // ホスト側の保存が完了したことをエディタへ通知
 editor.destroy()          // 後片付け（イベント解除＋元の要素に戻す）
+editor.setContentLang('en')    // 本文の言語。カードの見出しを作り直す(画面の言語は変わらない)
+KuroEditor.loadLocale('fr')    // 画面の言語の辞書(dist/locales/kuro-editor.fr.js)を、エディタを作る前に読む。使える言語を返す
+KuroEditor.setLocaleBase('/ke/locales/') // 辞書のファイルの置き場所(loadLocale に URL を渡さないとき)
 ```
 
 ### モード
