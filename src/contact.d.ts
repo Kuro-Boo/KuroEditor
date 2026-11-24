@@ -41,9 +41,15 @@ export function normalizeContactForm(raw: unknown): ContactForm;
 export function validateContactForm(c: unknown, tr?: (key: string, vars?: Record<string, unknown>) => string): string[];
 export function encodeContactForm(c: ContactForm): string;
 export function decodeContactForm(attr: unknown): Record<string, unknown> | null;
-export function renderContactPreview(c: ContactForm): string;
-export function buildContactCardHtml(c: ContactForm): string;
-export function renderContactFormHtml(c: ContactForm, host: { form: string; sig: string; endpoint: string }): string;
+/** 本文の言語(11 言語・空は日本語・ほかは英語)。 */
+export function contactLang(lang: unknown): string;
+/** 文の表(頁の言語)。closed は受け付けていない旨、client はブラウザの案内。 */
+export function contactText(lang?: string): { card: string; closed: string; client: Record<string, string>; [k: string]: unknown };
+export function fieldKindLabel(kind: string, lang?: string): string;
+export function contactDefaults(lang?: string): { submitLabel: string; doneMessage: string };
+export function renderContactPreview(c: ContactForm, opt?: { lang?: string }): string;
+export function buildContactCardHtml(c: ContactForm, opt?: { lang?: string }): string;
+export function renderContactFormHtml(c: ContactForm, host: { form: string; sig: string; endpoint: string; lang?: string }): string;
 export function isEmail(v: unknown): boolean;
-export function validateSubmission(c: ContactForm, values: Record<string, unknown>): SubmissionResult;
-export function emptyContactForm(): ContactForm;
+export function validateSubmission(c: ContactForm, values: Record<string, unknown>, lang?: string): SubmissionResult;
+export function emptyContactForm(lang?: string): ContactForm;

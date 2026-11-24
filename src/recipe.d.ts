@@ -54,10 +54,13 @@ export function encodeRecipe(r: Recipe): string;
 /** `data-recipe` を読み戻す。壊れていれば null。 */
 export function decodeRecipe(attr: unknown): Record<string, unknown> | null;
 /** 「10 分」「1 時間 5 分」。0 以下は空文字。 */
-export function formatMinutes(m: number): string;
+/** 本文の言語(11 言語・空は日本語・ほかは英語)。 */
+export function recipeLang(lang: unknown): string;
+export function recipeCardLabel(lang?: string): string;
+export function formatMinutes(m: number, lang?: string): string;
 /** 編集画面用プレビューの内側 HTML（JSON からのみ組み立てる）。 */
-export function renderRecipePreview(r: Recipe): string;
+export function renderRecipePreview(r: Recipe, opt?: { lang?: string }): string;
 /** RecipeCard ブロック 1 個ぶんの HTML。 */
-export function buildRecipeCardHtml(r: Recipe, layout?: RecipeLayout): string;
+export function buildRecipeCardHtml(r: Recipe, layout?: RecipeLayout, opt?: { lang?: string }): string;
 /** 空のフォーム初期値。 */
 export function emptyRecipe(): Recipe;

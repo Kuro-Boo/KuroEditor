@@ -179,6 +179,43 @@ export function _urlCardInner(slug, url, meta = null) {
 }
 
 /**
+ * 表示の文(仕様 #spec-i18n・Entamy の 11 言語)。読込みエラー・壊れたメディア・埋め込みの title・リンクを開く。
+ * エディタは画面の言語(setLinksLang)、公開ページは頁の言語(<html lang>)で出す。
+ */
+const LINKS_TEXT = {
+  ja: { loadError: '読込みエラー', broken: 'メディアを読込できません', openUrl: '↗ URLを新規タブで開く', map: '埋め込み地図', video: '埋め込み動画' },
+  en: { loadError: 'Could not load', broken: 'The media cannot be loaded', openUrl: '↗ Open URL in new tab', map: 'Embedded map', video: 'Embedded video' },
+  fr: { loadError: 'Échec du chargement', broken: 'Impossible de charger le média', openUrl: '↗ Ouvrir l’URL dans un nouvel onglet', map: 'Carte intégrée', video: 'Vidéo intégrée' },
+  it: { loadError: 'Caricamento non riuscito', broken: 'Impossibile caricare il contenuto multimediale', openUrl: '↗ Apri l’URL in una nuova scheda', map: 'Mappa incorporata', video: 'Video incorporato' },
+  es: { loadError: 'Error al cargar', broken: 'No se puede cargar el elemento multimedia', openUrl: '↗ Abrir la URL en una pestaña nueva', map: 'Mapa insertado', video: 'Vídeo insertado' },
+  zh: { loadError: '加载失败', broken: '无法加载媒体', openUrl: '↗ 在新标签页中打开 URL', map: '嵌入的地图', video: '嵌入的视频' },
+  ko: { loadError: '불러오기 오류', broken: '미디어를 불러올 수 없습니다', openUrl: '↗ 새 탭에서 URL 열기', map: '삽입된 지도', video: '삽입된 동영상' },
+  uk: { loadError: 'Помилка завантаження', broken: 'Не вдається завантажити медіа', openUrl: '↗ Відкрити URL у новій вкладці', map: 'Вбудована мапа', video: 'Вбудоване відео' },
+  de: { loadError: 'Laden fehlgeschlagen', broken: 'Das Medium kann nicht geladen werden', openUrl: '↗ URL in neuem Tab öffnen', map: 'Eingebettete Karte', video: 'Eingebettetes Video' },
+  pt: { loadError: 'Erro ao carregar', broken: 'Não é possível carregar a mídia', openUrl: '↗ Abrir a URL em nova aba', map: 'Mapa incorporado', video: 'Vídeo incorporado' },
+  ar: { loadError: 'تعذّر التحميل', broken: 'تعذّر تحميل الوسائط', openUrl: '↗ فتح الرابط في علامة تبويب جديدة', map: 'خريطة مضمّنة', video: 'فيديو مضمّن' },
+}
+
+let linksLang = null
+
+/** 表示の言語を決める(エディタは画面の言語を渡す)。null なら頁の <html lang>。 */
+export function setLinksLang(lang) {
+  linksLang = typeof lang === 'string' && lang ? lang : null
+}
+
+/**
+ * 言語の文の表。lang を省くと setLinksLang の言語、それも無ければ頁の <html lang>、それも無ければ日本語。
+ * 11 言語に無いものは英語。
+ */
+export function linksText(lang) {
+  let v = lang ?? linksLang
+  if (v == null && typeof document !== 'undefined') v = document.documentElement?.getAttribute('lang') || ''
+  v = typeof v === 'string' ? v.trim().toLowerCase() : ''
+  if (!v) return LINKS_TEXT.ja
+  return LINKS_TEXT[v.split(/[-_]/)[0]] ?? LINKS_TEXT.en
+}
+
+/**
  * URL カードの「読込みエラー」内側マークアップ。対象ページが 404/到達不可と
  * 確定したとき、カード内側をこれに差し替える（呼び手は `kuro-url-card--error`
  * クラスを付与）。エディタ側の 2 段階表示（onFetchUrlMeta が {error:'target'} を
@@ -190,7 +227,7 @@ export function _urlCardErrorInner(slug, url) {
   const sub = isHttp ? slug : url
   return `<span class="kuro-url-card__icon">${URL_CARD_ICON}</span>` +
     `<span class="kuro-url-card__body">` +
-      `<span class="kuro-url-card__title">読込みエラー</span>` +
+      `<span class="kuro-url-card__title">${_escapeHtml(linksText().loadError)}</span>` +
       `<span class="kuro-url-card__url">${_escapeHtml(sub)}</span>` +
     `</span>` +
     `<span class="kuro-url-card__arrow">↗</span>`
@@ -205,7 +242,7 @@ export function _urlCardErrorInner(slug, url) {
 export function buildBrokenMedia(src) {
   return `<div class="kuro-media-broken" contenteditable="false">` +
     `<span class="kuro-media-broken__icon">🔗</span>` +
-    `<span class="kuro-media-broken__label">メディアを読込できません</span>` +
+    `<span class="kuro-media-broken__label">${_escapeHtml(linksText().broken)}</span>` +
     `<span class="kuro-media-broken__url">${_escapeHtml(src)}</span>` +
     `</div>`
 }
@@ -315,7 +352,7 @@ export function renderSpecialLinks(text, resolver = defaultResolver, supportedKi
         const alignClass = d.align ? ` kuro-media-wrap--${d.align}` : ''
         const link = d.link ? _attrUrl(d.link) : ''
         const hrefAttr = link ? ` data-kuro-href="${link}"` : ''
-        const linkBtn = link ? `<a class="kuro-media-open-link" href="${link}" target="_blank" rel="noopener" contenteditable="false">↗ URLを新規タブで開く</a>` : ''
+        const linkBtn = link ? `<a class="kuro-media-open-link" href="${link}" target="_blank" rel="noopener" contenteditable="false">${_escapeHtml(linksText().openUrl)}</a>` : ''
         if (d.unsupported) {
           // このホストが対応しない種別（例: 画像のみのアプリに動画/音声）。壊れた
           // プレーヤーではなく【リンクカード】へ落とす。data-kuro-media を保持するので
@@ -390,7 +427,8 @@ export function _buildIframeFigure(embedUrl, enc, size, align) {
   // title と、必要なら見た目を分けられるようクラスだけ足す。
   const map = isMapEmbed(embedUrl)
   const kindClass = map ? ' kuro-media-wrap--map' : ''
-  const title = map ? '埋め込み地図' : '埋め込み動画'
+  const T = linksText()
+  const title = _escapeHtml(map ? T.map : T.video)
   return `<figure class="kuro-media-wrap kuro-media-wrap--iframe${kindClass}${alignClass}"${sizeStyle} data-kuro-media="${enc}"><div class="kuro-iframe-wrap"><iframe src="${_attrUrl(embedUrl, 'src')}" class="kuro-media kuro-media--iframe" allowfullscreen frameborder="0" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" title="${title}"></iframe></div></figure>`
 }
 

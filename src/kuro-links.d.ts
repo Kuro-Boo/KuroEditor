@@ -153,3 +153,7 @@ export const MEDIA_EXT_RE: RegExp;
 export const VIDEO_EXT_RE: RegExp;
 export const AUDIO_EXT_RE: RegExp;
 export const URL_CARD_ICON: string;
+/** 表示の言語(エディタは画面の言語・null なら頁の <html lang>)。 */
+export function setLinksLang(lang: string | null): void;
+/** 表示の文(読込みエラー・壊れたメディア・埋め込みの title・リンクを開く)。 */
+export function linksText(lang?: string): { loadError: string; broken: string; openUrl: string; map: string; video: string };

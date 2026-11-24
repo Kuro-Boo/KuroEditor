@@ -42,6 +42,7 @@ import {
   VIDEO_EXT_RE,
   AUDIO_EXT_RE,
   isSafeUrl,
+  setLinksLang,
 } from './kuro-links.js'
 // 保存/取込み HTML の正規化（editor の paste・host の API・メンテナンス掃除で共通）。
 import { normalizeContentHtml, inspectContentHtml, sanitizeContentHtml, conformContentHtml, cssColor } from './normalize.js'
@@ -55,6 +56,7 @@ import {
   RECIPE_ALIGNS,
   RECIPE_WIDTHS,
   buildRecipeCardHtml,
+  recipeCardLabel,
   decodeRecipe,
   emptyRecipe,
   normalizeRecipe,
@@ -84,6 +86,9 @@ import {
 import {
   CONTACT_CARD_SEL,
   CONTACT_DEFAULTS,
+  contactDefaults,
+  contactText,
+  fieldKindLabel,
   CONTACT_LIMITS,
   CONTACT_VERSION,
   FIELD_KINDS,
@@ -155,7 +160,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.49.2'
+export const VERSION = '2.49.3'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -6467,12 +6472,14 @@ export class JobDialog {
  */
 export class ContactDialog {
   /**
-   * @param {{ onSave, onDelete, recipients?: { name: string, label: string }[] }} opts
+   * @param {{ onSave, onDelete, recipients?: { name: string, label: string }[], contentLang?: () => string|null }} opts
    *   recipients はホストが登録した送り先の候補(名前と表示名だけ。アドレスは受け取らない)。
+   *   contentLang は本文の言語を返す関数(新しいフォームの既定の件名・項目名・ボタンの文の言葉)。
    */
-  constructor({ onSave, onDelete, recipients = [] }) {
+  constructor({ onSave, onDelete, recipients = [], contentLang = () => null }) {
     this.onSave = onSave
     this.onDelete = onDelete
+    this._contentLang = contentLang
     this._recipients = (Array.isArray(recipients) ? recipients : []).filter((r) => r && RECIPIENT_NAME_RE.test(r.name))
     this.el = createElement('div', {
       className: 'kuro-recipe-dialog kuro-contact-dialog',
@@ -6564,7 +6571,7 @@ export class ContactDialog {
     const syncKind = () => {
       opts.hidden = kind.value !== 'select'
       // 名前が空なら種類の既定の名前を入れる(書き手が名前を打つ手間を省く)
-      if (!label.value.trim()) label.value = new Map(FIELD_KINDS).get(kind.value) ?? ''
+      if (!label.value.trim()) label.value = fieldKindLabel(kind.value, this._contentLang())
     }
     kind.addEventListener('change', syncKind)
     syncKind()
@@ -6631,7 +6638,12 @@ export class ContactDialog {
   }
 
   open(form = null) {
-    const c = normalizeContactForm(form ?? emptyContactForm())
+    const lang = this._contentLang()
+    const c = normalizeContactForm(form ?? emptyContactForm(lang))
+    // 空のときに公開ページで使う文(本文の言語)を見本として出す
+    const d = contactDefaults(lang)
+    this._submitInput.placeholder = d.submitLabel
+    this._doneInput.placeholder = d.doneMessage
     this._subjectInput.value = c.subject
     this._noteInput.value = c.note ?? ''
     this._submitInput.value = c.submitLabel ?? ''
@@ -7328,6 +7340,8 @@ export class KuroEditor {
     }
     // 画面の言語(#spec-i18n)。部品を作る前に決める。辞書が読まれていない言語は en
     this.uiLang = setUiLocale(this.options.uiLang)
+    // 読込みエラー・埋め込みの説明などリンクの部品の文も、編集画面では画面の言語で出す
+    setLinksLang(this.uiLang)
     // 対応メディア種別を Set 化（null = 全対応）。renderSpecialLinks に渡す。
     this._supportedKinds = normalizeMediaKinds(this.options.mediaKinds)
     this._mode          = 'wysiwyg'
@@ -7809,7 +7823,7 @@ export class KuroEditor {
       ? new JobDialog({ lang: this.options.uiLang, onSave: (job) => this._applyAtomicCard('job', job), onDelete: () => this._deleteAtomicCard('job') })
       : null
     this.contactDialog = this.options.contactUi
-      ? new ContactDialog({ onSave: (form) => this._applyAtomicCard('contact', form), onDelete: () => this._deleteAtomicCard('contact'), recipients: this.options.contactRecipients })
+      ? new ContactDialog({ onSave: (form) => this._applyAtomicCard('contact', form), onDelete: () => this._deleteAtomicCard('contact'), recipients: this.options.contactRecipients, contentLang: () => this.options.contentLang })
       : null
     this.tableManager  = new TableManager(this)
     this.tableInserter = new TableInserter(this.wysiwyg, {
@@ -12269,21 +12283,22 @@ export class KuroEditor {
    */
   setContentLang(lang) {
     this.options.contentLang = lang ?? null
-    for (const card of this.wysiwyg.querySelectorAll(JOB_CARD_SEL)) {
-      const data = decodeJob(card.getAttribute('data-job'))
-      if (!data) continue
-      this._suspendDirty(() => {
-        card.innerHTML = renderJobPreview(normalizeJob(data), { lang: this.options.contentLang })
-        card.setAttribute('aria-label', jobCardLabel(this.options.contentLang))
-      })
-    }
+    const l = this.options.contentLang
+    this._suspendDirty(() => {
+      // カードの内側を正本から作り直す(保存のときと同じ処理)。aria-label も本文の言語へ
+      this._serializeRecipeCards(this.wysiwyg)
+      this._serializeAtomicCards(this.wysiwyg)
+      for (const c of this.wysiwyg.querySelectorAll(JOB_CARD_SEL)) c.setAttribute('aria-label', jobCardLabel(l))
+      for (const c of this.wysiwyg.querySelectorAll(RECIPE_CARD_SEL)) c.setAttribute('aria-label', recipeCardLabel(l))
+      for (const c of this.wysiwyg.querySelectorAll(CONTACT_CARD_SEL)) c.setAttribute('aria-label', contactText(l).card)
+    })
   }
   static get CONTACT_BTN_TITLE() { return tr('kuroEditor.title11') }
 
   _atomicSpec(kind) {
     return kind === 'job'
       ? { dialog: this.jobDialog, sel: JOB_CARD_SEL, attr: 'data-job', decode: decodeJob, build: (j) => buildJobCardHtml(j, { lang: this.options.contentLang }) }
-      : { dialog: this.contactDialog, sel: CONTACT_CARD_SEL, attr: 'data-contact', decode: decodeContactForm, build: buildContactCardHtml }
+      : { dialog: this.contactDialog, sel: CONTACT_CARD_SEL, attr: 'data-contact', decode: decodeContactForm, build: (c) => buildContactCardHtml(c, { lang: this.options.contentLang }) }
   }
 
   /** 求人ボタンは挿入専用。本文にカードがあれば淡くして押せなくする(レシピと同じ・disabled は使わない)。 */
@@ -12308,7 +12323,7 @@ export class KuroEditor {
     }
     for (const card of root.querySelectorAll(CONTACT_CARD_SEL)) {
       const data = decodeContactForm(card.getAttribute('data-contact'))
-      if (data) card.innerHTML = renderContactPreview(normalizeContactForm(data))
+      if (data) card.innerHTML = renderContactPreview(normalizeContactForm(data), { lang: this.options.contentLang })
     }
   }
 
@@ -12419,7 +12434,7 @@ export class KuroEditor {
     for (const card of root.querySelectorAll(RECIPE_CARD_SEL)) {
       const data = decodeRecipe(card.getAttribute('data-recipe'))
       if (!data) continue
-      card.innerHTML = renderRecipePreview(normalizeRecipe(data))
+      card.innerHTML = renderRecipePreview(normalizeRecipe(data), { lang: this.options.contentLang })
     }
   }
 
@@ -12467,7 +12482,7 @@ export class KuroEditor {
    */
   _applyRecipe(recipe, layout = RECIPE_LAYOUT_DEFAULT) {
     const current = this._editingRecipeCard
-    const html = buildRecipeCardHtml(recipe, normalizeRecipeLayout(layout))
+    const html = buildRecipeCardHtml(recipe, normalizeRecipeLayout(layout), { lang: this.options.contentLang })
     const holder = document.createElement('div')
     holder.innerHTML = html
     const card = holder.firstElementChild

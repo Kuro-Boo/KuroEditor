@@ -220,14 +220,48 @@ export function decodeRecipe(attr) {
   }
 }
 
-/** 「10 分」「1 時間 5 分」。0 分は「0 分」ではなく空（呼び手が行ごと出さない）。 */
-export function formatMinutes(m) {
+/**
+ * 本文の言語(仕様 #spec-i18n): Entamy の 11 言語。カードの見出し(公開ページにも出る)は本文の言語で選ぶ。
+ * 空は日本語(今までの本文)、11 言語に無いものは英語。
+ */
+export function recipeLang(lang) {
+  const v = typeof lang === 'string' ? lang.trim().toLowerCase() : ''
+  if (!v) return 'ja'
+  const base = v.split(/[-_]/)[0]
+  return base in RECIPE_TEXT ? base : 'en'
+}
+
+/** カードの見出しと時間の書き方。{t} は時間、{h}・{m} は時・分。 */
+const RECIPE_TEXT = {
+  ja: { card: 'レシピカード', badge: 'レシピ', yield: '人数', ingredients: '材料', steps: '手順', prep: '下準備 {t}', cook: '調理 {t}', total: '合計 {t}', hm: '{h} 時間 {m} 分', h: '{h} 時間', m: '{m} 分' },
+  en: { card: 'Recipe card', badge: 'Recipe', yield: 'Servings', ingredients: 'Ingredients', steps: 'Steps', prep: 'Prep {t}', cook: 'Cook {t}', total: 'Total {t}', hm: '{h} hr {m} min', h: '{h} hr', m: '{m} min' },
+  fr: { card: 'Fiche recette', badge: 'Recette', yield: 'Portions', ingredients: 'Ingrédients', steps: 'Étapes', prep: 'Préparation {t}', cook: 'Cuisson {t}', total: 'Total {t}', hm: '{h} h {m} min', h: '{h} h', m: '{m} min' },
+  it: { card: 'Scheda ricetta', badge: 'Ricetta', yield: 'Porzioni', ingredients: 'Ingredienti', steps: 'Passaggi', prep: 'Preparazione {t}', cook: 'Cottura {t}', total: 'Totale {t}', hm: '{h} h {m} min', h: '{h} h', m: '{m} min' },
+  es: { card: 'Tarjeta de receta', badge: 'Receta', yield: 'Raciones', ingredients: 'Ingredientes', steps: 'Pasos', prep: 'Preparación {t}', cook: 'Cocción {t}', total: 'Total {t}', hm: '{h} h {m} min', h: '{h} h', m: '{m} min' },
+  zh: { card: '食谱卡片', badge: '食谱', yield: '份量', ingredients: '食材', steps: '步骤', prep: '准备 {t}', cook: '烹饪 {t}', total: '合计 {t}', hm: '{h} 小时 {m} 分钟', h: '{h} 小时', m: '{m} 分钟' },
+  ko: { card: '레시피 카드', badge: '레시피', yield: '인분', ingredients: '재료', steps: '순서', prep: '밑준비 {t}', cook: '조리 {t}', total: '합계 {t}', hm: '{h}시간 {m}분', h: '{h}시간', m: '{m}분' },
+  uk: { card: 'Картка рецепта', badge: 'Рецепт', yield: 'Порції', ingredients: 'Інгредієнти', steps: 'Кроки', prep: 'Підготовка {t}', cook: 'Приготування {t}', total: 'Разом {t}', hm: '{h} год {m} хв', h: '{h} год', m: '{m} хв' },
+  de: { card: 'Rezeptkarte', badge: 'Rezept', yield: 'Portionen', ingredients: 'Zutaten', steps: 'Schritte', prep: 'Vorbereitung {t}', cook: 'Garzeit {t}', total: 'Gesamt {t}', hm: '{h} Std. {m} Min.', h: '{h} Std.', m: '{m} Min.' },
+  pt: { card: 'Cartão de receita', badge: 'Receita', yield: 'Porções', ingredients: 'Ingredientes', steps: 'Passos', prep: 'Preparo {t}', cook: 'Cozimento {t}', total: 'Total {t}', hm: '{h} h {m} min', h: '{h} h', m: '{m} min' },
+  ar: { card: 'بطاقة وصفة', badge: 'وصفة', yield: 'عدد الحصص', ingredients: 'المكوّنات', steps: 'الخطوات', prep: 'التحضير {t}', cook: 'الطهي {t}', total: 'المجموع {t}', hm: '{h} س {m} د', h: '{h} س', m: '{m} د' },
+}
+
+const fill = (s, v) => s.replace(/\{(\w+)\}/g, (m, k) => (v[k] === undefined ? m : String(v[k])))
+
+/** カードの aria-label(本文の言語)。 */
+export function recipeCardLabel(lang) {
+  return RECIPE_TEXT[recipeLang(lang)].card
+}
+
+/** 「10 分」「1 時間 5 分」(lang = 本文の言語)。0 分は「0 分」ではなく空（呼び手が行ごと出さない）。 */
+export function formatMinutes(m, lang) {
   if (!Number.isFinite(m) || m <= 0) return ''
+  const T = RECIPE_TEXT[recipeLang(lang)]
   const h = Math.floor(m / 60)
   const r = m % 60
-  if (h && r) return `${h} 時間 ${r} 分`
-  if (h) return `${h} 時間`
-  return `${r} 分`
+  if (h && r) return fill(T.hm, { h, m: r })
+  if (h) return fill(T.h, { h })
+  return fill(T.m, { m: r })
 }
 
 /**
@@ -235,18 +269,20 @@ export function formatMinutes(m) {
  * 公開ページ側の整形はテンプレートの仕事（仕様 §8）なので、ここは
  * 「入力内容がそのまま読める」ことだけを目的にした素直な表にする。
  */
-export function renderRecipePreview(r) {
+export function renderRecipePreview(r, opt = {}) {
+  const lang = recipeLang(opt.lang)
+  const T = RECIPE_TEXT[lang]
   const time = []
-  if (r.prepTimeMinutes) time.push(`下準備 ${formatMinutes(r.prepTimeMinutes)}`)
-  if (r.cookTimeMinutes) time.push(`調理 ${formatMinutes(r.cookTimeMinutes)}`)
+  if (r.prepTimeMinutes) time.push(fill(T.prep, { t: formatMinutes(r.prepTimeMinutes, lang) }))
+  if (r.cookTimeMinutes) time.push(fill(T.cook, { t: formatMinutes(r.cookTimeMinutes, lang) }))
   const total = totalMinutes(r)
-  if (total && time.length === 2) time.push(`合計 ${formatMinutes(total)}`)
+  if (total && time.length === 2) time.push(fill(T.total, { t: formatMinutes(total, lang) }))
 
   // 「2」とだけ書かれても何の数字か分かるようにラベルを添える
   // （時間側が「下準備 10 分」と読めるのと同じ扱い）
   const meta = [
     `<span class="kuro-recipe__yield">` +
-      `<span class="kuro-recipe__k">人数</span>${_escapeHtml(r.yield)}` +
+      `<span class="kuro-recipe__k">${_escapeHtml(T.yield)}</span>${_escapeHtml(r.yield)}` +
     `</span>`,
   ]
   if (time.length) {
@@ -260,15 +296,15 @@ export function renderRecipePreview(r) {
   const ins = r.instructions.map((s) => `<li>${_escapeHtml(s.text)}</li>`).join('')
 
   return `<div class="kuro-recipe__head">` +
-      `<span class="kuro-recipe__label">レシピ</span>` +
+      `<span class="kuro-recipe__label">${_escapeHtml(T.badge)}</span>` +
       `<span class="kuro-recipe__meta">${meta.join('')}</span>` +
     `</div>` +
     `<div class="kuro-recipe__body">` +
       `<div class="kuro-recipe__col">` +
-        `<h4 class="kuro-recipe__h">材料</h4><ul class="kuro-recipe__ings">${ing}</ul>` +
+        `<h4 class="kuro-recipe__h">${_escapeHtml(T.ingredients)}</h4><ul class="kuro-recipe__ings">${ing}</ul>` +
       `</div>` +
       `<div class="kuro-recipe__col">` +
-        `<h4 class="kuro-recipe__h">手順</h4><ol class="kuro-recipe__steps">${ins}</ol>` +
+        `<h4 class="kuro-recipe__h">${_escapeHtml(T.steps)}</h4><ol class="kuro-recipe__steps">${ins}</ol>` +
       `</div>` +
     `</div>`
 }
@@ -277,16 +313,17 @@ export function renderRecipePreview(r) {
  * RecipeCard ブロック 1 個ぶんの HTML（仕様 §4 の保存形式）。
  * @param {object} r 正規化済みレシピ
  * @param {{width?:string, align?:string}} [layout] 表示レイアウト（既定 100% / center）
+ * @param {{lang?: string}} [opt] lang = 本文の言語(見出しの言葉)
  */
-export function buildRecipeCardHtml(r, layout = RECIPE_LAYOUT_DEFAULT) {
+export function buildRecipeCardHtml(r, layout = RECIPE_LAYOUT_DEFAULT, opt = {}) {
   const l = normalizeRecipeLayout(layout)
   return `<div data-kuro-block="${RECIPE_BLOCK}"` +
     ` data-recipe-version="${RECIPE_VERSION}"` +
     ` data-recipe="${encodeRecipe(r)}"` +
     ` data-width="${l.width}" data-align="${l.align}"` +
     ` style="${recipeLayoutStyle(l)}"` +
-    ` contenteditable="false" role="group" aria-label="レシピカード">` +
-    renderRecipePreview(r) +
+    ` contenteditable="false" role="group" aria-label="${RECIPE_TEXT[recipeLang(opt.lang)].card}">` +
+    renderRecipePreview(r, opt) +
     `</div>`
 }
 

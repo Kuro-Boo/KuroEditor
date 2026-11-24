@@ -249,14 +249,16 @@ describe('エディタの組み込み', () => {
   })
 })
 
-describe('求人カードの言語(日本語なら日本語・それ以外は英語)', () => {
+describe('求人カードの言語(11 言語・それ以外は英語)', () => {
   const mount = () => { const el = document.createElement('div'); document.body.appendChild(el); return el }
-  it('jobLang は ja・ja-JP・空を日本語、ほかを英語にする', () => {
+  it('jobLang は ja・ja-JP・空を日本語、11 言語はそのまま、ほかを英語にする', () => {
     expect(jobLang('ja')).toBe('ja')
     expect(jobLang('ja-JP')).toBe('ja')
     expect(jobLang('')).toBe('ja')
     expect(jobLang('en')).toBe('en')
-    expect(jobLang('fr')).toBe('en')
+    expect(jobLang('fr')).toBe('fr')
+    expect(jobLang('pt-BR')).toBe('pt')
+    expect(jobLang('nl')).toBe('en')
   })
   it('英語の本文では、カードの見出し・雇用形態・給与・勤務地を英語で出す', () => {
     const j = normalizeJob({ ...JOB, hours: '9:00-17:00', location: { country: 'JP', postalCode: '277-0825', region: 'Chiba', locality: 'Kashiwa', street: '138-5 Fuse' } })
@@ -293,5 +295,25 @@ describe('求人カードの言語(日本語なら日本語・それ以外は英
   it('uiLang が日本語なら入力画面は日本語', () => {
     const ed = new KuroEditor(mount(), { jobUi: true, uiLang: 'ja' })
     expect(ed.jobDialog.el.getAttribute('aria-label')).toBe('求人カードの編集')
+  })
+})
+
+describe('求人カードの本文の言語(11 言語)', () => {
+  const J = normalizeJob({ ...JOB, salary: { currency: 'JPY', unit: 'MONTH', min: 200000, max: 250000 }, hours: '9-17', location: { country: 'JP', postalCode: '100-0001', region: 'Tokyo', locality: 'Chiyoda', street: '1-1' } })
+  for (const lang of ['fr', 'it', 'es', 'zh', 'ko', 'uk', 'de', 'pt', 'ar']) {
+    it(`${lang}: 見出し・雇用形態・単位がその言語で、日本語が残らない`, () => {
+      const html = renderJobPreview(J, { lang })
+      expect(html).not.toMatch(/[ぁ-んァ-ン]/)
+      expect(html).not.toMatch('Employment type')
+      expect(formatSalary(J, lang)).toMatch(/200/)
+    })
+  }
+  it('ドイツ語・フランス語の金額は、その言語の通貨の書き方', () => {
+    expect(formatSalary(J, 'de')).toMatch(/^Monatlich 200\.000\s?¥/)
+    expect(formatSalary(J, 'fr')).toMatch(/^Mensuel 200[\s\u202f]000/u)
+  })
+  it('中国語・韓国語の勤務地は大きい単位から', () => {
+    expect(formatLocation(J, 'zh')).toBe('TokyoChiyoda1-1 (100-0001)')
+    expect(formatLocation(J, 'ko')).toBe('Tokyo Chiyoda 1-1 (100-0001)')
   })
 })

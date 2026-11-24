@@ -52,41 +52,63 @@ export const SALARY_UNITS = [
 export const SALARY_CURRENCIES = ['JPY', 'USD', 'EUR']
 
 /**
- * 言語(仕様 editor-editor-spec-job・#spec-i18n): **日本語なら日本語・それ以外はすべて英語**の 2 言語。
- * 入力画面と誤りの文は書き手の画面の言語、カードの表示(公開ページにも出る)は本文の言語で選ぶ。
- * @param {unknown} lang 'ja'・'ja-JP'・'en'・'fr' など。空なら日本語
- * @returns {'ja'|'en'}
+ * 本文の言語(仕様 editor-editor-spec-job・#spec-i18n): Entamy の 11 言語。カードの表示(公開ページにも出る)は
+ * 本文の言語で選ぶ。空は日本語(今までの本文)、11 言語に無いものは英語。入力画面の文はエディタの画面の辞書が持つ。
+ * @param {unknown} lang 'ja'・'ja-JP'・'pt-BR' など
+ * @returns {'ja'|'en'|'fr'|'it'|'es'|'zh'|'ko'|'uk'|'de'|'pt'|'ar'}
  */
 export function jobLang(lang) {
   const v = typeof lang === 'string' ? lang.trim().toLowerCase() : ''
-  return !v || v === 'ja' || v.startsWith('ja-') ? 'ja' : 'en'
+  if (!v) return 'ja'
+  const base = v.split(/[-_]/)[0]
+  return JOB_LANGS.includes(base) ? base : 'en'
 }
 
-/** 英語の名前(EMPLOYMENT_TYPES・SALARY_UNITS の並びと同じ鍵)。 */
-export const EMPLOYMENT_TYPES_EN = [
-  ['FULL_TIME', 'Full-time'],
-  ['PART_TIME', 'Part-time'],
-  ['CONTRACTOR', 'Contractor'],
-  ['TEMPORARY', 'Temporary'],
-  ['INTERN', 'Internship'],
-  ['VOLUNTEER', 'Volunteer'],
-  ['PER_DIEM', 'Per diem'],
-  ['OTHER', 'Other'],
-]
-export const SALARY_UNITS_EN = [
-  ['HOUR', 'Hourly'],
-  ['DAY', 'Daily'],
-  ['WEEK', 'Weekly'],
-  ['MONTH', 'Monthly'],
-  ['YEAR', 'Yearly'],
-]
+const JOB_LANGS = ['ja', 'en', 'fr', 'it', 'es', 'zh', 'ko', 'uk', 'de', 'pt', 'ar']
+
+/** 数・金額の書き方に使う地域(ar は数字を算用数字に揃える)。 */
+const JOB_LOCALE = { ja: 'ja-JP', en: 'en-US', fr: 'fr-FR', it: 'it-IT', es: 'es-ES', zh: 'zh-CN', ko: 'ko-KR', uk: 'uk-UA', de: 'de-DE', pt: 'pt-BR', ar: 'ar-u-nu-latn' }
+
+/** 雇用形態の名前(言語ごと。鍵の並びは EMPLOYMENT_TYPES と同じ)。 */
+const EMPLOYMENT_NAMES = {
+  en: ['Full-time', 'Part-time', 'Contractor', 'Temporary', 'Internship', 'Volunteer', 'Per diem', 'Other'],
+  fr: ['Temps plein', 'Temps partiel', 'Indépendant', 'CDD / temporaire', 'Stage', 'Bénévolat', 'À la journée', 'Autre'],
+  it: ['Tempo pieno', 'Part-time', 'Collaborazione', 'Tempo determinato', 'Tirocinio', 'Volontariato', 'A giornata', 'Altro'],
+  es: ['Jornada completa', 'Media jornada', 'Autónomo', 'Temporal', 'Prácticas', 'Voluntariado', 'Por día', 'Otro'],
+  zh: ['全职', '兼职', '业务外包', '合同制 / 定期', '实习', '志愿者', '日结', '其他'],
+  ko: ['정규직', '파트타임·아르바이트', '업무 위탁', '계약직', '인턴', '자원봉사', '일용직', '기타'],
+  uk: ['Повна зайнятість', 'Часткова зайнятість', 'Договір підряду', 'Тимчасова робота', 'Стажування', 'Волонтерство', 'Поденна робота', 'Інше'],
+  de: ['Vollzeit', 'Teilzeit', 'Freiberuflich', 'Befristet', 'Praktikum', 'Ehrenamt', 'Tageweise', 'Sonstiges'],
+  pt: ['Tempo integral', 'Meio período', 'Prestação de serviços', 'Temporário', 'Estágio', 'Voluntariado', 'Diária', 'Outro'],
+  ar: ['دوام كامل', 'دوام جزئي', 'عمل تعاقدي', 'عمل مؤقت', 'تدريب', 'تطوّع', 'باليومية', 'أخرى'],
+}
+
+/** 給与の単位の名前(言語ごと。鍵の並びは SALARY_UNITS と同じ)。 */
+const UNIT_NAMES = {
+  en: ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly'],
+  fr: ['Horaire', 'Journalier', 'Hebdomadaire', 'Mensuel', 'Annuel'],
+  it: ['Orario', 'Giornaliero', 'Settimanale', 'Mensile', 'Annuale'],
+  es: ['Por hora', 'Por día', 'Por semana', 'Mensual', 'Anual'],
+  zh: ['时薪', '日薪', '周薪', '月薪', '年薪'],
+  ko: ['시급', '일급', '주급', '월급', '연봉'],
+  uk: ['Погодинно', 'Поденно', 'Щотижня', 'Щомісяця', 'Щороку'],
+  de: ['Stündlich', 'Täglich', 'Wöchentlich', 'Monatlich', 'Jährlich'],
+  pt: ['Por hora', 'Por dia', 'Por semana', 'Mensal', 'Anual'],
+  ar: ['بالساعة', 'باليوم', 'بالأسبوع', 'شهريًا', 'سنويًا'],
+}
+
+/** 英語の名前(互換のため残す。EMPLOYMENT_TYPES・SALARY_UNITS の並びと同じ鍵)。 */
+export const EMPLOYMENT_TYPES_EN = EMPLOYMENT_TYPES.map(([k], i) => [k, EMPLOYMENT_NAMES.en[i]])
+export const SALARY_UNITS_EN = SALARY_UNITS.map(([k], i) => [k, UNIT_NAMES.en[i]])
 
 /** 言語ごとの雇用形態・給与の単位の [鍵, 名前] の並び。 */
 export function employmentTypes(lang) {
-  return jobLang(lang) === 'ja' ? EMPLOYMENT_TYPES : EMPLOYMENT_TYPES_EN
+  const l = jobLang(lang)
+  return l === 'ja' ? EMPLOYMENT_TYPES : EMPLOYMENT_TYPES.map(([k], i) => [k, EMPLOYMENT_NAMES[l][i]])
 }
 export function salaryUnits(lang) {
-  return jobLang(lang) === 'ja' ? SALARY_UNITS : SALARY_UNITS_EN
+  const l = jobLang(lang)
+  return l === 'ja' ? SALARY_UNITS : SALARY_UNITS.map(([k], i) => [k, UNIT_NAMES[l][i]])
 }
 
 /** 誤りの文(validateJob)。{n} は上限の数。 */
@@ -143,18 +165,19 @@ const JOB_ERRORS = {
   },
 }
 
-/** カードの表示の文(renderJobPreview)。 */
+/** カードの表示の文(renderJobPreview)。本文の言語ごと。 */
 const JOB_TEXT = {
-  ja: {
-    card: '求人カード', badge: '求人', open: '募集中', closed: '現在は募集していません',
-    types: '雇用形態', salary: '給与', location: '勤務地', hours: '勤務時間', requirements: '応募資格',
-    benefits: '待遇', openings: '募集人数', contact: '問い合わせ', validThrough: '掲載期限', sep: '・',
-  },
-  en: {
-    card: 'Job card', badge: 'Job', open: 'Hiring', closed: 'Not currently hiring',
-    types: 'Employment type', salary: 'Salary', location: 'Location', hours: 'Working hours', requirements: 'Requirements',
-    benefits: 'Benefits', openings: 'Openings', contact: 'Contact', validThrough: 'Closing date', sep: ', ',
-  },
+  ja: { card: '求人カード', badge: '求人', open: '募集中', closed: '現在は募集していません', types: '雇用形態', salary: '給与', location: '勤務地', hours: '勤務時間', requirements: '応募資格', benefits: '待遇', openings: '募集人数', contact: '問い合わせ', validThrough: '掲載期限', sep: '・' },
+  en: { card: 'Job card', badge: 'Job', open: 'Hiring', closed: 'Not currently hiring', types: 'Employment type', salary: 'Salary', location: 'Location', hours: 'Working hours', requirements: 'Requirements', benefits: 'Benefits', openings: 'Openings', contact: 'Contact', validThrough: 'Closing date', sep: ', ' },
+  fr: { card: 'Fiche emploi', badge: 'Emploi', open: 'Recrutement en cours', closed: 'Pas de recrutement actuellement', types: 'Type de contrat', salary: 'Salaire', location: 'Lieu', hours: 'Horaires', requirements: 'Profil recherché', benefits: 'Avantages', openings: 'Postes', contact: 'Contact', validThrough: 'Date limite', sep: ', ' },
+  it: { card: 'Scheda offerta di lavoro', badge: 'Lavoro', open: 'Assunzioni aperte', closed: 'Al momento non assumiamo', types: 'Tipo di contratto', salary: 'Retribuzione', location: 'Sede', hours: 'Orari', requirements: 'Requisiti', benefits: 'Benefit', openings: 'Posti', contact: 'Contatto', validThrough: 'Scadenza', sep: ', ' },
+  es: { card: 'Tarjeta de empleo', badge: 'Empleo', open: 'Contratando', closed: 'No hay contratación por ahora', types: 'Tipo de empleo', salary: 'Salario', location: 'Ubicación', hours: 'Horario', requirements: 'Requisitos', benefits: 'Beneficios', openings: 'Vacantes', contact: 'Contacto', validThrough: 'Fecha de cierre', sep: ', ' },
+  zh: { card: '招聘卡片', badge: '招聘', open: '招聘中', closed: '目前暂不招聘', types: '雇佣类型', salary: '薪资', location: '工作地点', hours: '工作时间', requirements: '应聘条件', benefits: '待遇', openings: '招聘人数', contact: '咨询', validThrough: '截止日期', sep: '、' },
+  ko: { card: '채용 카드', badge: '채용', open: '모집 중', closed: '현재 모집하지 않습니다', types: '고용 형태', salary: '급여', location: '근무지', hours: '근무 시간', requirements: '지원 자격', benefits: '복리후생', openings: '모집 인원', contact: '문의', validThrough: '게시 기한', sep: '·' },
+  uk: { card: 'Картка вакансії', badge: 'Вакансія', open: 'Набір відкрито', closed: 'Наразі набору немає', types: 'Тип зайнятості', salary: 'Зарплата', location: 'Місце роботи', hours: 'Години роботи', requirements: 'Вимоги', benefits: 'Пільги', openings: 'Кількість місць', contact: 'Контакт', validThrough: 'Кінцевий термін', sep: ', ' },
+  de: { card: 'Stellenkarte', badge: 'Stelle', open: 'Wir stellen ein', closed: 'Derzeit keine Einstellung', types: 'Beschäftigungsart', salary: 'Gehalt', location: 'Arbeitsort', hours: 'Arbeitszeiten', requirements: 'Anforderungen', benefits: 'Leistungen', openings: 'Stellen', contact: 'Kontakt', validThrough: 'Bewerbungsschluss', sep: ', ' },
+  pt: { card: 'Cartão de vaga', badge: 'Vaga', open: 'Contratando', closed: 'Sem contratações no momento', types: 'Tipo de contratação', salary: 'Salário', location: 'Local', hours: 'Horário', requirements: 'Requisitos', benefits: 'Benefícios', openings: 'Vagas', contact: 'Contato', validThrough: 'Encerramento', sep: ', ' },
+  ar: { card: 'بطاقة وظيفة', badge: 'وظيفة', open: 'نوظّف الآن', closed: 'لا يوجد توظيف حاليًا', types: 'نوع التوظيف', salary: 'الراتب', location: 'مكان العمل', hours: 'ساعات العمل', requirements: 'المتطلبات', benefits: 'المزايا', openings: 'الشواغر', contact: 'التواصل', validThrough: 'آخر موعد', sep: '، ' },
 }
 
 export const JOB_LIMITS = {
@@ -320,26 +343,31 @@ export function employmentLabels(j, lang) {
 }
 
 function money(n, currency, lang) {
-  if (lang === 'en') {
-    const sign = { JPY: '¥', USD: '$', EUR: '€' }[currency]
-    return sign ? `${sign}${n.toLocaleString('en-US')}` : `${n.toLocaleString('en-US')} ${currency}`
-  }
-  if (currency === 'JPY') {
+  if (lang === 'ja' && currency === 'JPY') {
     if (n >= 10000 && n % 10000 === 0) return `${(n / 10000).toLocaleString('ja-JP')}万円`
     if (n >= 10000 && n % 1000 === 0) return `${(n / 10000).toLocaleString('ja-JP', { maximumFractionDigits: 1 })}万円`
     return `${n.toLocaleString('ja-JP')}円`
   }
-  return `${n.toLocaleString('en-US')} ${currency}`
+  if (lang === 'ja') return `${n.toLocaleString('ja-JP')} ${currency}`
+  try {
+    return new Intl.NumberFormat(JOB_LOCALE[lang] ?? 'en-US', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n)
+  } catch {
+    return `${n.toLocaleString('en-US')} ${currency}`
+  }
 }
 
-/** 「時給 1,500円〜」「月給 20万円〜25万円」(英語は「Hourly ¥1,500+」「Monthly ¥200,000–¥250,000」)。給与が無ければ空。 */
+/** 下限だけのときの「〜から」の書き方。 */
+const FROM_SUFFIX = { ja: '〜', zh: '起', ko: ' 이상' }
+
+/** 「時給 1,500円〜」「月給 20万円〜25万円」(英語は「Hourly ¥1,500+」「Monthly ¥200,000–¥250,000」・金額は各言語の通貨の書き方)。給与が無ければ空。 */
 export function formatSalary(j, lang) {
   const s = j?.salary
   if (!s || typeof s.min !== 'number') return ''
   const lg = jobLang(lang)
   const unit = new Map(salaryUnits(lg)).get(s.unit) ?? ''
   const m = (n) => money(n, s.currency, lg)
-  const [dash, plus] = lg === 'ja' ? ['〜', '〜'] : ['–', '+']
+  const dash = lg === 'ja' ? '〜' : lg === 'ko' ? '~' : '–'
+  const plus = FROM_SUFFIX[lg] ?? '+'
   const range = typeof s.max === 'number' && s.max !== s.min
     ? `${m(s.min)}${dash}${m(s.max)}`
     : typeof s.max === 'number' ? m(s.min) : `${m(s.min)}${plus}`
@@ -364,15 +392,22 @@ export function contactTelephone(j) {
 /** 「〒277-0825 千葉県柏市布施138-5」(英語は「138-5 Fuse, Kashiwa, Chiba 277-0825」の順)。 */
 export function formatLocation(j, lang) {
   const l = j?.location ?? {}
-  if (jobLang(lang) === 'en') {
-    const tail = [l.region, l.postalCode].filter(Boolean).join(' ')
-    const parts = [l.street, l.locality, tail].filter(Boolean)
-    if (l.country && l.country !== 'JP') parts.push(l.country)
-    return parts.join(', ')
+  const lg = jobLang(lang)
+  const country = l.country && l.country !== 'JP' ? l.country : ''
+  if (lg === 'ja') {
+    const pc = l.postalCode ? `〒${l.postalCode} ` : ''
+    return `${pc}${l.region ?? ''}${l.locality ?? ''}${l.street ?? ''}${country ? ` (${country})` : ''}`.trim()
   }
-  const pc = l.postalCode ? `〒${l.postalCode} ` : ''
-  const country = l.country && l.country !== 'JP' ? ` (${l.country})` : ''
-  return `${pc}${l.region ?? ''}${l.locality ?? ''}${l.street ?? ''}${country}`.trim()
+  if (lg === 'zh' || lg === 'ko') {
+    // 大きい単位から(中国語は詰めて、韓国語は空けて書く)
+    const sp = lg === 'ko' ? ' ' : ''
+    const body = [l.region, l.locality, l.street].filter(Boolean).join(sp)
+    return [body, l.postalCode ? `(${l.postalCode})` : '', country].filter(Boolean).join(' ')
+  }
+  const tail = [l.region, l.postalCode].filter(Boolean).join(' ')
+  const parts = [l.street, l.locality, tail].filter(Boolean)
+  if (country) parts.push(country)
+  return parts.join(lg === 'ar' ? '، ' : ', ')
 }
 
 function multiline(s) {
@@ -402,7 +437,7 @@ export function renderJobPreview(j, opt = {}) {
   if (j.benefits) row(T.benefits, multiline(j.benefits))
   if (j.openings) row(T.openings, multiline(j.openings))
   if (j.contact) row(T.contact, multiline(j.contact))
-  if (j.validThrough) row(T.validThrough, _escapeHtml(lang === 'ja' ? j.validThrough.replace(/-/g, '/') : j.validThrough))
+  if (j.validThrough) row(T.validThrough, _escapeHtml(lang === 'ja' || lang === 'zh' ? j.validThrough.replace(/-/g, '/') : j.validThrough))
   return `<div class="kuro-job__head">` +
       `<span class="kuro-job__label">${T.badge}</span>` +
       `<span class="kuro-job__state kuro-job__state--${open ? 'open' : 'closed'}">${open ? T.open : T.closed}</span>` +
