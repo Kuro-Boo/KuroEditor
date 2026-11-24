@@ -384,9 +384,10 @@ export function sanitizeContentHtml(html) {
 //
 // ## 形の一覧（要素 → 残す属性・クラス・スタイル）
 //
-//   p, h1–h6   text-align / line-height / 字下げ padding-left（2em 刻み）
-//   ul         kuro-ul-*、margin-left（2em 刻み）
-//   ol         kuro-list-*、start、--kuro-marker-color、margin-left
+//   p, h1–h6   text-align / line-height / 字下げ padding-inline-start（2em 刻み。行頭側＝右から左では右）
+//   ul         kuro-ul-*、margin-inline-start（2em 刻み）
+//   ol         kuro-list-*、start、--kuro-marker-color、margin-inline-start
+//              （字下げは行頭側で持つ。padding-left / margin-left で来たものも行頭側へ写す・v2.49.5〜）
 //   li         data-checked、value、text-align / line-height
 //   table      class="kuro-table"、<colgroup><col style="width:N%">（列数が合うときだけ）、
 //              <tbody> 1 つ、行は長方形に揃える
@@ -844,8 +845,8 @@ function lineDecls(sm, { indent = true } = {}) {
   const lh = lineHeightValue(sm.get('line-height'))
   if (lh) out.push(['line-height', lh])
   if (indent) {
-    const ind = indentValue(sm.get('padding-left') ?? sm.get('margin-left') ?? sm.get('padding-inline-start') ?? sm.get('margin-inline-start'))
-    if (ind) out.push(['padding-left', ind])
+    const ind = indentValue(sm.get('padding-inline-start') ?? sm.get('padding-left') ?? sm.get('margin-inline-start') ?? sm.get('margin-left'))
+    if (ind) out.push(['padding-inline-start', ind])
   }
   return out
 }
@@ -1273,8 +1274,8 @@ function convertList(nd, ctx) {
     } else if (['disc', 'circle', 'square', 'none'].includes(lst)) kind = lst
   }
   const decls = []
-  const ml = indentValue(sm.get('margin-left'))
-  if (ml) decls.push(['margin-left', ml])
+  const ml = indentValue(sm.get('margin-inline-start') ?? sm.get('margin-left'))
+  if (ml) decls.push(['margin-inline-start', ml])
   if (isOl) {
     const mc = cssColor(sm.get('--kuro-marker-color'))
     if (mc) decls.push(['--kuro-marker-color', mc])
@@ -1467,7 +1468,7 @@ function convertNode(nd, ctx) {
     case 'dd': {
       const kids = convertKids(nd.kids, ctx)
       if (kids.some(isBlockNode)) return carryIdentity(nd, settleFlow(kids, 'box'))
-      return kids.every(isEmptyInline) ? [] : [el('p', buildAttrs(nd, { style: 'padding-left: 2em' }), kids)]
+      return kids.every(isEmptyInline) ? [] : [el('p', buildAttrs(nd, { style: 'padding-inline-start: 2em' }), kids)]
     }
     case 'address': case 'article': case 'aside': case 'body': case 'center': case 'details':
     case 'dialog': case 'fieldset': case 'footer': case 'form': case 'header': case 'hgroup':

@@ -70,7 +70,13 @@ describe('約束 2: 選べない値は近いものへ、無ければ書かない
 
   it('行間は 6 段、字下げは 2em 刻み', () => {
     expect(N('<p style="line-height: 1.5; padding-left: 30px">a</p>'))
-      .toBe('<p style="line-height: 1.4; padding-left: 2em">a</p>')
+      .toBe('<p style="line-height: 1.4; padding-inline-start: 2em">a</p>')
+  })
+
+  it('字下げは行頭側で持つ（左の余白で来たものも写す・2 回目は変えない）', () => {
+    const once = N('<p style="padding-left: 2em">a</p><ul style="margin-left: 4em"><li>b</li></ul><ol style="margin-inline-start: 2em"><li>c</li></ol><p style="padding-inline-start: 4em">d</p>')
+    expect(once).toBe('<p style="padding-inline-start: 2em">a</p><ul style="margin-inline-start: 4em"><li>b</li></ul><ol style="margin-inline-start: 2em"><li>c</li></ol><p style="padding-inline-start: 4em">d</p>')
+    expect(N(once)).toBe(once)
   })
 
   it('無い種類の callout は近い種類へ', () => {

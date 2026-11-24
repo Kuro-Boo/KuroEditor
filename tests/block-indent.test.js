@@ -45,7 +45,8 @@ const tab = (ed, shift = false) =>
     key: 'Tab', shiftKey: shift, bubbles: true, cancelable: true,
   }))
 
-const pad = (el) => el.style.paddingLeft
+// 字下げは行頭側の余白（右から左の本文では右に付く・v2.49.5〜）
+const pad = (el) => el.style.getPropertyValue('padding-inline-start')
 
 describe('Tab の字下げ', () => {
   beforeEach(() => { document.body.innerHTML = '' })
@@ -155,7 +156,7 @@ describe('Tab の字下げ', () => {
     expect(pad(p)).toBe('2em')
   })
 
-  it('リスト項目には padding-left を付けない', () => {
+  it('リスト項目には字下げの余白を付けない', () => {
     const ed = makeEditor('<ul><li>one</li><li>two</li></ul>')
     const [, li2] = ed.wysiwyg.querySelectorAll('li')
     caretIn(li2)
@@ -169,7 +170,9 @@ describe('Tab の字下げ', () => {
       '<div class="kuro-callout kuro-callout--tip" style="padding-left: 2em;">' +
       '<p style="padding-left: 2em;">hello</p></div>')
     expect(pad(ed.wysiwyg.querySelector('.kuro-callout'))).toBe('')
-    expect(pad(ed.wysiwyg.querySelector('p'))).toBe('2em')  // 行の字下げは残す
+    expect(ed.wysiwyg.querySelector('.kuro-callout').style.paddingLeft).toBe('')
+    expect(pad(ed.wysiwyg.querySelector('p'))).toBe('2em')  // 行の字下げは残す（行頭側へ写る）
+    expect(ed.wysiwyg.querySelector('p').style.paddingLeft).toBe('')
     expect(ed.isDirty()).toBe(false)  // 開いただけで保存ボタンを点けない
   })
 
@@ -192,5 +195,18 @@ describe('Tab の字下げ', () => {
       key: 'Backspace', bubbles: true, cancelable: true,
     }))
     expect(pad(p)).toBe('2em')
+  })
+
+  // ── 6. 右から左 ───────────────────────────────────────────────────────────
+  it('保存する字下げは行頭側（padding-inline-start）。左の余白は書かない', () => {
+    const ed = makeEditor('<p>hello</p>')
+    const p = ed.wysiwyg.querySelector('p')
+    caretIn(p)
+    tab(ed)
+    const html = ed.getContent()
+    expect(html).toContain('padding-inline-start: 2em')
+    expect(html).not.toContain('padding-left')
+    tab(ed, true)
+    expect(p.hasAttribute('style')).toBe(false)  // 0 に戻したら空の style を残さない
   })
 })

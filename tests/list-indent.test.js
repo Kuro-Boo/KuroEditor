@@ -9,7 +9,7 @@
  * 見張っているのはこの 4 点:
  *   1. 入れ子にできる項目では【リストは動かない】（構造の変更が優先）
  *   2. 先頭の項目では押した分だけ累積し、Shift+Tab / 行頭 Backspace で戻る
- *   3. 動かすのは margin-left（padding-left はマーカーの居場所なので触らない）
+ *   3. 動かすのは行頭側の margin（margin-inline-start）。行頭側の padding はマーカーの居場所なので触らない
  *   4. 0 に戻したら style 属性ごと消す（保存 HTML を汚さない）
  */
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -51,9 +51,9 @@ describe('リストごとの字下げ', () => {
     const ul = ed.wysiwyg.querySelector('ul')
     caret(ed, ed.wysiwyg.querySelector('#a'))
     tab(ed)
-    expect(ul.style.marginLeft).toBe('2em')
+    expect(ul.style.getPropertyValue('margin-inline-start')).toBe('2em')
     tab(ed)
-    expect(ul.style.marginLeft).toBe('4em')
+    expect(ul.style.getPropertyValue('margin-inline-start')).toBe('4em')
     // 構造は一切変わらない（入れ子にはならない）
     expect([...ul.children].filter((n) => n.tagName === 'LI').length).toBe(2)
     expect(ul.querySelector('ul')).toBeNull()
@@ -64,7 +64,7 @@ describe('リストごとの字下げ', () => {
     const ul = ed.wysiwyg.querySelector('ul')
     caret(ed, ed.wysiwyg.querySelector('#b'))
     tab(ed)
-    expect(ul.style.marginLeft).toBe('')          // リストは据え置き
+    expect(ul.style.getPropertyValue('margin-inline-start')).toBe('')          // リストは据え置き
     expect(ul.querySelector('li ul li')).toBeTruthy()  // 入れ子になった
   })
 
@@ -74,7 +74,7 @@ describe('リストごとの字下げ', () => {
     caret(ed, ed.wysiwyg.querySelector('#a'))
     tab(ed); tab(ed)
     tab(ed, true)
-    expect(ul.style.marginLeft).toBe('2em')
+    expect(ul.style.getPropertyValue('margin-inline-start')).toBe('2em')
     tab(ed, true)
     expect(ul.hasAttribute('style')).toBe(false)
     tab(ed, true)                                  // 0 からさらに押しても壊れない
@@ -89,7 +89,7 @@ describe('リストごとの字下げ', () => {
     tab(ed); tab(ed)
     caret(ed, a, 'start')
     backspace(ed)
-    expect(ul.style.marginLeft).toBe('2em')
+    expect(ul.style.getPropertyValue('margin-inline-start')).toBe('2em')
   })
 
   it('2 番目の行頭 Backspace は、その項目だけをリストから外す', () => {
@@ -104,12 +104,14 @@ describe('リストごとの字下げ', () => {
     expect(ed.wysiwyg.querySelector('p').textContent).toBe('卵')
   })
 
-  it('動かすのは margin-left（padding-left はマーカーの居場所なので触らない）', () => {
+  it('動かすのは行頭側の margin（行頭側の padding はマーカーの居場所なので触らない）', () => {
     const ed = makeEditor(LIST)
     const ul = ed.wysiwyg.querySelector('ul')
     caret(ed, ed.wysiwyg.querySelector('#a'))
     tab(ed)
     expect(ul.style.paddingLeft).toBe('')
-    expect(ed.getContent()).toContain('margin-left: 2em')
+    expect(ul.style.getPropertyValue('padding-inline-start')).toBe('')
+    expect(ed.getContent()).toContain('margin-inline-start: 2em')
+    expect(ed.getContent()).not.toContain('margin-left')
   })
 })

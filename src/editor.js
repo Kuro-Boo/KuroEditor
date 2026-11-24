@@ -160,7 +160,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.49.4'
+export const VERSION = '2.49.5'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -9534,7 +9534,7 @@ export class KuroEditor {
           // 段落へ戻す。前後の項目は別リストに分けて保ち、巻き込まない。
           if (line?.tagName === 'LI' && !line.previousElementSibling) {
             const list = line.parentElement
-            if ((parseFloat(list?.style.marginLeft) || 0) > 0) {
+            if ((parseFloat(list?.style.getPropertyValue('margin-inline-start')) || 0) > 0) {
               e.preventDefault()
               this._shiftListIndent([line], -1)
               return
@@ -9546,7 +9546,7 @@ export class KuroEditor {
             return
           }
           if (line && line.tagName !== 'LI') {
-            const cur = parseFloat(line.style.paddingLeft) || 0
+            const cur = parseFloat(line.style.getPropertyValue('padding-inline-start')) || 0
             if (cur > 0) {
               e.preventDefault()
               this._shiftBlockIndent(-1, [line])
@@ -10585,12 +10585,15 @@ export class KuroEditor {
    */
   _dropStaleFrameIndent(root) {
     for (const el of root.querySelectorAll(FRAME_SELECTOR)) {
-      if (el.style.paddingLeft) el.style.removeProperty('padding-left')
+      el.style.removeProperty('padding-left')
+      el.style.removeProperty('padding-inline-start')
+      if (!el.getAttribute('style')) el.removeAttribute('style')
     }
   }
 
   /**
-   * 選択中の【行】の字下げを 1 段（2em の padding-left）動かす。最小 0。
+   * 選択中の【行】の字下げを 1 段（2em の padding-inline-start）動かす。最小 0。
+   * 行頭側の余白なので、右から左の本文では右に付く（#spec-i18n・v2.49.5〜）。
    *
    * ⚠ 枠（引用・コールアウト・角丸ボックス…）とリスト項目は対象外。枠は行では
    *   ないので `_linesInSelection()` が最初から返さず、リスト項目は字下げでなく
@@ -10607,9 +10610,11 @@ export class KuroEditor {
     const targets = (lines ?? this._linesInSelection()).filter((el) => el.tagName !== 'LI')
 
     for (const b of targets) {
-      const cur  = parseFloat(b.style.paddingLeft) || 0
+      const cur  = parseFloat(b.style.getPropertyValue('padding-inline-start')) || 0
       const next = Math.max(0, cur + dir * STEP)
-      b.style.paddingLeft = next > 0 ? `${next}em` : ''
+      if (next > 0) b.style.setProperty('padding-inline-start', `${next}em`)
+      else b.style.removeProperty('padding-inline-start')
+      if (!b.getAttribute('style')) b.removeAttribute('style')
     }
 
     // Restore caret / selection
@@ -11018,7 +11023,7 @@ export class KuroEditor {
    * 【何度でも押して位置を調整できる】ようにする（リスト全体が動くので、項目の
    * 相対関係＝入れ子の構造は一切変わらない）。
    *
-   * ⚠ padding-left ではなく margin-left を動かす。リストの padding-left は
+   * ⚠ 行頭側の padding ではなく margin（margin-inline-start）を動かす。リストの行頭側の padding は
    *   【マーカーの居場所】（content.css で 1.5rem）なので、そこを上書きすると
    *   記号や番号がずれる・0 にすると枠外へ消える。外側の余白は margin の担当。
    *
@@ -11035,9 +11040,10 @@ export class KuroEditor {
       }
     }
     for (const list of lists) {
-      const cur  = parseFloat(list.style.marginLeft) || 0
+      const cur  = parseFloat(list.style.getPropertyValue('margin-inline-start')) || 0
       const next = Math.max(0, cur + dir * STEP)
-      list.style.marginLeft = next > 0 ? `${next}em` : ''
+      if (next > 0) list.style.setProperty('margin-inline-start', `${next}em`)
+      else list.style.removeProperty('margin-inline-start')
       // 空の style="" を本文に残さない（保存 HTML が無意味に汚れる）
       if (!list.getAttribute('style')) list.removeAttribute('style')
     }
@@ -11084,6 +11090,8 @@ export class KuroEditor {
     this._subListFor(prev, list).appendChild(li)
     // 旧仕様（padding-left による字下げ）の名残があれば、階層に置き換わるので落とす
     li.style.removeProperty('padding-left')
+    li.style.removeProperty('padding-inline-start')
+    if (!li.getAttribute('style')) li.removeAttribute('style')
     return true
   }
 
