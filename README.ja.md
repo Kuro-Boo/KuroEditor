@@ -241,7 +241,7 @@ KuroEditor が出力する HTML は、クラスベースのブロック（角丸
 | `onClipPaste()` | `function` | 貼り付けボタンのタップ時に呼ばれる。`string`（または `string` を resolve する `Promise`）を返すと選択位置にプレーンテキストとして挿入。何も返さなければ挿入はホスト側に委ねる。未指定時は `navigator.clipboard.readText()` にフォールバック |
 | `onFetchUrlMeta(slug)` | `async function` | 任意。URL カード（`[[slug\|]]`）の豪華表示用メタ取得。`{ title?, description?, favicon?, image? }`（または `null`）を返す。**2 段階表示**：カードはまず URL 由来の簡易表示で即描画され（画面はブロックしない）、この関数が解決したらそのカードだけをタイトル/説明/favicon/サムネイルに差し替える。未指定・`null`・失敗時は簡易表示のまま |
 | `mediaAccept` | `string` | 既定 `'image/*,video/*,audio/*'`。メディアダイアログ「ファイル選択」の `<input type="file">` の accept。ホストが受け付ける種別に合わせて絞れます(例 `'image/*'`)。**iOS(WKWebView/Safari)は、写真ライブラリが提供できない種別(audio 等)が accept に混ざると Files ピッカーだけに落ちる**ため、画像のみのホストは `'image/*'` に絞ると「フォトライブラリ / 写真を撮る」の標準シートが出ます |
-| `uiLang` | `string` | 既定はブラウザの言語。エディタの画面(ボタンの説明・メニュー・モーダル・誤りの文)の言語。`ja` `en` `fr` `it` `es` `zh` `ko` `uk` `de` `pt` `ar` のどれか(`ja-JP` などは前半で読みます)。日本語・英語は本体に入っています。ほかは先に `await KuroEditor.loadLocale(lang)` で辞書を読みます。それ以外の言語や、辞書を読んでいない言語は英語。1 ページの画面の言語は 1 つで、変えるときはエディタを作り直します |
+| `uiLang` | `string` | 既定はブラウザの言語。エディタの画面(ボタンの説明・メニュー・モーダル・誤りの文)の言語。`ja` `en` `fr` `it` `es` `zh` `ko` `uk` `de` `pt` `ar` のどれか(`ja-JP` などは前半で読みます)。日本語・英語は本体に入っています。ほかは先に `await KuroEditor.loadLocale(lang, url)` で辞書を読みます(`url` は `dist/locales/kuro-editor.<lang>.js` を置いた場所)。それ以外の言語や、辞書を読んでいない言語は英語。1 ページの画面の言語は 1 つで、変えるときはエディタを作り直します |
 | `contentLang` | `string \| null` | 既定 `null`(日本語)。**本文**の言語。求人カードなど、公開ページにも出るカードの見出しの言葉が従います。ホストが記事の言語を切り替えたら `setContentLang()` を呼びます |
 | `blockIds` | `boolean` | 既定 `false`。`true` で各トップレベルブロックに安定した `data-bid`（UUID）を付与・維持。外部同期レイヤーでのブロック単位 3-way マージ（named export の `mergeBlocks()`）の土台。保存には id 入りの `getContent()`、公開 HTML には id を除去した `getBuildImage()` を使います |
 
@@ -299,8 +299,7 @@ editor.isDirty()          // 未保存の変更があるか（onDirty コール�
 editor.clearDirty()       // ホスト側の保存が完了したことをエディタへ通知
 editor.destroy()          // 後片付け（イベント解除＋元の要素に戻す）
 editor.setContentLang('en')    // 本文の言語。カードの見出しを作り直す(画面の言語は変わらない)
-KuroEditor.loadLocale('fr')    // 画面の言語の辞書(dist/locales/kuro-editor.fr.js)を、エディタを作る前に読む。使える言語を返す
-KuroEditor.setLocaleBase('/ke/locales/') // 辞書のファイルの置き場所(loadLocale に URL を渡さないとき)
+await KuroEditor.loadLocale('fr', '/path/to/locales/kuro-editor.fr.js') // 画面の言語の辞書を、エディタを作る前に読む。使える言語を返す(読めなければ 'en')
 ```
 
 ### モード

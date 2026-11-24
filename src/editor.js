@@ -145,8 +145,8 @@ export {
   validateRecipe,
 } from './recipe.js'
 // エディタ UI の言語(辞書)。仕様 #spec-i18n
-import { t as tr, lz, setUiLocale, getUiLocale, loadLocale, setLocaleBase, normalizeUiLang, UI_LANGS } from './i18n.js'
-export { tr as kuroT, getUiLocale, loadLocale, setLocaleBase, normalizeUiLang, UI_LANGS }
+import { t as tr, lz, setUiLocale, getUiLocale, loadLocale, normalizeUiLang, UI_LANGS } from './i18n.js'
+export { tr as kuroT, getUiLocale, loadLocale, normalizeUiLang, UI_LANGS }
 // JobCard・ContactForm の純関数(ホストのサーバー側検証・公開ページ生成が同じ実装を使う)
 export * from './job.js'
 export * from './contact.js'
@@ -155,7 +155,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.49.0'
+export const VERSION = '2.49.1'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -12254,12 +12254,11 @@ export class KuroEditor {
   // 求人は 1 本文に 1 個(1 記事 = 1 求人)、フォームは CONTACT_LIMITS.perBody 個まで。
 
   /**
-   * 画面の言語の辞書を読む(ja・en は本体にある)。ホストはエディタを作る前に await する。#spec-i18n
+   * 画面の言語の辞書を読む(ja・en は本体にある)。url は dist/locales/kuro-editor.<lang>.js の置き場所。
+   * ホストはエディタを作る前に await する。#spec-i18n
    * @returns {Promise<string>} 使える言語(読めなければ 'en')
    */
   static loadLocale(lang, url) { return loadLocale(lang, url) }
-  /** 辞書のファイルを置いた場所(末尾の / 付き)。loadLocale で url を省いたときに使う。 */
-  static setLocaleBase(base) { setLocaleBase(base) }
 
   static get JOB_BTN_TITLE() { return String(JOB_UI.btn) }
   static get JOB_BTN_LOCKED_TITLE() { return String(JOB_UI.btnLocked) }

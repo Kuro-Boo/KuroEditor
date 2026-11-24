@@ -75,15 +75,15 @@ export function lz(key) {
 /**
  * 言語の辞書を読む。ja・en は本体に入っているので何もしない。
  * @param {string} lang
- * @param {string} [url] 辞書のファイルの URL。省くと localeBase(setLocaleBase)+ kuro-editor.<lang>.js。
- *   ⚠ import.meta は使わない(本体は <script> でも読まれ、そこでは構文の誤りになる)
+ * @param {string} [url] 辞書のファイル(dist/locales/kuro-editor.<lang>.js)の URL。ja・en 以外では要る。
+ *   ⚠ 置き場所を本体から割り出さない(import.meta は <script> で読まれた本体では構文の誤りになる)
  * @returns {Promise<string>} 使える言語(読めなければ 'en')
  */
 export function loadLocale(lang, url) {
   const l = normalizeUiLang(lang)
   if (dictOf(l)) return Promise.resolve(l)
   if (typeof document === 'undefined') return Promise.resolve('en')
-  const src = url || defaultLocaleUrl(l)
+  const src = typeof url === 'string' ? url : ''
   if (!src) return Promise.resolve('en')
   return new Promise((resolve) => {
     const s = document.createElement('script')
@@ -93,15 +93,4 @@ export function loadLocale(lang, url) {
     s.onerror = () => resolve('en')
     document.head.appendChild(s)
   })
-}
-
-let localeBase = ''
-
-/** 辞書のファイルを置いた場所(末尾の / 付き。例 '/ke/locales/')。 */
-export function setLocaleBase(base) {
-  localeBase = typeof base === 'string' ? base : ''
-}
-
-function defaultLocaleUrl(lang) {
-  return localeBase ? `${localeBase}kuro-editor.${lang}.js` : ''
 }

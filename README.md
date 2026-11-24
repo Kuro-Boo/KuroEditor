@@ -259,7 +259,7 @@ Main options you can pass to `new KuroEditor(mountEl, options)`:
 | `onClipPaste()` | `function` | Called when the paste button is tapped. Return a `string` (or a `Promise<string>`) to have it inserted as plain text at the selection; return nothing to handle insertion on the host side. Falls back to `navigator.clipboard.readText()` when omitted |
 | `onFetchUrlMeta(slug)` | `async function` | Optional. Fetches rich metadata for URL cards (`[[slug\|]]`). Return `{ title?, description?, favicon?, image? }` (or `null`). **Two-step display**: the card renders immediately from the URL alone (never blocks the screen), then, once this resolves, that one card is upgraded in place with the title/description/favicon/thumbnail. Omitted / `null` / failure keeps the simple display |
 | `mediaAccept` | `string` | Default `'image/*,video/*,audio/*'`. The `accept` of the media dialog's file `<input>`. Narrow it to what your host actually accepts (e.g. `'image/*'`). **On iOS (WKWebView/Safari), mixing in types the photo library cannot provide (such as audio) drops the picker to Files only** — image-only hosts should pass `'image/*'` to get the native "Photo Library / Take Photo" sheet |
-| `uiLang` | `string` | Default: the browser language. Language of the editor UI (button tooltips, menus, dialogs, error messages): one of `ja` `en` `fr` `it` `es` `zh` `ko` `uk` `de` `pt` `ar` (`ja-JP` etc. are read by their first part). Japanese and English are built in; for the others, load the locale first with `await KuroEditor.loadLocale(lang)`. Anything else, or a locale that is not loaded, falls back to English. One UI language per page — recreate the editor to switch |
+| `uiLang` | `string` | Default: the browser language. Language of the editor UI (button tooltips, menus, dialogs, error messages): one of `ja` `en` `fr` `it` `es` `zh` `ko` `uk` `de` `pt` `ar` (`ja-JP` etc. are read by their first part). Japanese and English are built in; for the others, load the locale first with `await KuroEditor.loadLocale(lang, url)` (`url` = where you serve `dist/locales/kuro-editor.<lang>.js`). Anything else, or a locale that is not loaded, falls back to English. One UI language per page — recreate the editor to switch |
 | `contentLang` | `string \| null` | Default `null` (Japanese). Language of the **content**. Cards that also appear on public pages (such as the job card) use it for their labels. Call `setContentLang()` when the host switches the article language |
 | `blockIds` | `boolean` | Default `false`. Set `true` to assign and maintain a stable `data-bid` (UUID) on every top-level block — the foundation for block-level 3-way merge in an external sync layer (see the `mergeBlocks()` named export). Persist with `getContent()` (keeps ids); publish with `getBuildImage()` (strips them) |
 
@@ -317,8 +317,7 @@ editor.isDirty()          // Any unsaved changes? (pairs with the onDirty callba
 editor.clearDirty()       // Tell the editor the host finished saving
 editor.destroy()          // Clean up (remove listeners + restore the original element)
 editor.setContentLang('en')    // Content language: re-renders the cards' labels (the UI language does not change)
-KuroEditor.loadLocale('fr')    // Load a UI locale (dist/locales/kuro-editor.fr.js) before creating the editor; resolves to the usable language
-KuroEditor.setLocaleBase('/ke/locales/') // Where the locale files live (used when loadLocale() gets no URL)
+await KuroEditor.loadLocale('fr', '/path/to/locales/kuro-editor.fr.js') // Load a UI locale before creating the editor; resolves to the usable language ('en' if it cannot be loaded)
 ```
 
 ### Modes
