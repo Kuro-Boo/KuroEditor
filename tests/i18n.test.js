@@ -103,3 +103,18 @@ describe('英語の画面', () => {
     expect(ed.root.querySelector('[title^="元に戻す"]')).not.toBeNull()
   })
 })
+
+describe('言語パック', () => {
+  const mount = () => { const el = document.createElement('div'); document.body.appendChild(el); return el }
+  for (const f of localeFiles.filter((x) => !['ja.js', 'en.js'].includes(x))) {
+    const lang = f.replace(/\.js$/, '')
+    it(`${lang}: 辞書を登録すれば、その言語の画面になる`, async () => {
+      const dict = (await import(path.join(LOCALES_DIR, f))).default
+      globalThis.__kuroEditorLocales = { [lang]: dict }
+      expect(await loadLocale(lang)).toBe(lang)
+      const ed = new KuroEditor(mount(), { uiLang: lang })
+      expect(ed.uiLang).toBe(lang)
+      expect(ed.root.querySelector(`[title="${dict['kuroEditor.title']}"]`)).not.toBeNull()
+    })
+  }
+})

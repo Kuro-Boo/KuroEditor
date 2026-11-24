@@ -80,7 +80,7 @@ recover it from tag v1.0.8 / git history if ever needed. The current
 - 💾 **Auto-save** — `onSave` callback at any interval
 - 📝 **3 modes** — ✏️ edit / 👁 read-only view / `</>` HTML source, switched via tabs
 - 🪄 **Auto table of contents** — Builds an outline automatically from headings
-- 🌐 **UI language** — The editor's buttons, menus, dialogs and error messages follow the browser language or the `uiLang` option. Japanese and English are built in. The other languages of Entamy's 11 (fr / it / es / zh / ko / uk / de / pt / ar) are being added as small per-language files (about 5 KB gzip each, `dist/locales/`) loaded with `KuroEditor.loadLocale()`, so the editor itself stays one bundle. Languages without a locale fall back to English
+- 🌐 **UI language** — The editor's buttons, menus, dialogs and error messages follow the browser language or the `uiLang` option. Japanese and English are built in. The other 9 of Entamy's 11 languages (fr / it / es / zh / ko / uk / de / pt / ar) ship as small per-language files (about 5 KB gzip each, `dist/locales/kuro-editor.<lang>.js`) loaded with `KuroEditor.loadLocale()`, so the editor itself stays one bundle. Other languages fall back to English. Arabic text is translated; right-to-left layout is still to come
 
 ---
 
