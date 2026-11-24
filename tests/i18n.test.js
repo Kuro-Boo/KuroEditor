@@ -118,3 +118,30 @@ describe('言語パック', () => {
     })
   }
 })
+
+describe('右から左(ar)', () => {
+  const mount = () => { const el = document.createElement('div'); document.body.appendChild(el); return el }
+  it('既定では dir を付けない(ホストの頁の向きを継ぐ)', () => {
+    const ed = new KuroEditor(mount(), { jobUi: true })
+    expect(ed.root.hasAttribute('dir')).toBe(false)
+    expect(ed.wysiwyg.hasAttribute('dir')).toBe(false)
+  })
+  it('画面がアラビア語なら、部品とモーダルは rtl・本文(日本語)は ltr・HTML タブは ltr', async () => {
+    const dict = (await import(path.join(LOCALES_DIR, 'ar.js'))).default
+    globalThis.__kuroEditorLocales = { ar: dict }
+    const ed = new KuroEditor(mount(), { uiLang: 'ar', jobUi: true })
+    expect(ed.root.getAttribute('dir')).toBe('rtl')
+    expect(ed.jobDialog.el.getAttribute('dir')).toBe('rtl')
+    expect(ed.wysiwyg.getAttribute('dir')).toBe('ltr')
+    expect(ed.sourceArea.getAttribute('dir')).toBe('ltr')
+  })
+  it('本文がアラビア語なら本文は rtl。setContentLang で向きも変わり、保存する HTML には dir が入らない', () => {
+    const ed = new KuroEditor(mount(), { contentLang: 'ar' })
+    expect(ed.wysiwyg.getAttribute('dir')).toBe('rtl')
+    ed.setContent('<p>مرحبا</p>')
+    expect(ed.getContent()).not.toMatch('dir=')
+    ed.setContentLang('ja')
+    expect(ed.wysiwyg.hasAttribute('dir')).toBe(false)
+    expect(ed.isDirty()).toBe(false)
+  })
+})

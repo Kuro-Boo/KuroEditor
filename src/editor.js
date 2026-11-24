@@ -150,8 +150,8 @@ export {
   validateRecipe,
 } from './recipe.js'
 // エディタ UI の言語(辞書)。仕様 #spec-i18n
-import { t as tr, lz, setUiLocale, getUiLocale, loadLocale, normalizeUiLang, UI_LANGS } from './i18n.js'
-export { tr as kuroT, getUiLocale, loadLocale, normalizeUiLang, UI_LANGS }
+import { t as tr, lz, setUiLocale, getUiLocale, loadLocale, normalizeUiLang, isRtlLang, UI_LANGS } from './i18n.js'
+export { tr as kuroT, getUiLocale, loadLocale, normalizeUiLang, isRtlLang, UI_LANGS }
 // JobCard・ContactForm の純関数(ホストのサーバー側検証・公開ページ生成が同じ実装を使う)
 export * from './job.js'
 export * from './contact.js'
@@ -160,7 +160,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.49.3'
+export const VERSION = '2.49.4'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -7352,7 +7352,11 @@ export class KuroEditor {
     this._urlMetaCache    = new Map()   // slug → resolved meta|null (session-only; never persisted)
     this._urlMetaInflight = new Map()   // slug → in-flight Promise (dedupes concurrent fetches)
 
+    // このエディタが body に置く浮遊部品(メニュー・モーダル)を見分けるため、作る前の body の子を控える
+    const bodyBefore = new Set(document.body.children)
     this._build()
+    this._floaterEls = [...document.body.children].filter((el) => !bodyBefore.has(el))
+    this._applyDirection()
     this._pinExecCommandDefaults()
     this._bindEvents()
     // Honour the restored auto-save preference (the checkbox 'change' event does
@@ -12281,8 +12285,24 @@ export class KuroEditor {
    * 本文の言語を変える(ホストが言語のタブを切り替えたとき)。本文の求人カードの表示を作り直す。
    * ⚠ カードの表示は本文の言語で作る(公開ページにも出る)。書き手の画面の言語(uiLang)ではない。
    */
+  /**
+   * 書字方向(#spec-i18n の ③)。画面(ボタン・メニュー・モーダル)は uiLang、本文は contentLang で決める。
+   * 右から左の言語(ar)のときだけ dir を付け、ほかは付けない(ホストの頁の向きを継ぐ。今までどおり)。
+   * ただし画面が右から左で本文がそうでないときは、本文に ltr を明示する。HTML タブは常に左から右。
+   */
+  _applyDirection() {
+    const uiRtl = isRtlLang(this.uiLang)
+    const contentRtl = isRtlLang(this.options.contentLang)
+    const set = (el, dir) => { if (!el) return; if (dir) el.setAttribute('dir', dir); else el.removeAttribute('dir') }
+    set(this.root, uiRtl ? 'rtl' : null)
+    for (const el of this._floaterEls ?? []) set(el, uiRtl ? 'rtl' : null)
+    this._suspendDirty(() => set(this.wysiwyg, contentRtl ? 'rtl' : uiRtl ? 'ltr' : null))
+    set(this.sourceArea, uiRtl || contentRtl ? 'ltr' : null)
+  }
+
   setContentLang(lang) {
     this.options.contentLang = lang ?? null
+    this._applyDirection()
     const l = this.options.contentLang
     this._suspendDirty(() => {
       // カードの内側を正本から作り直す(保存のときと同じ処理)。aria-label も本文の言語へ

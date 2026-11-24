@@ -343,7 +343,7 @@ h5[id^='kuro-h-'] {
 .kuro-content .kuro-recipe__yield { font-weight: 600; }
 /* 「人数」「下準備」等の見出し語。値より一段弱く見せる */
 .kuro-content .kuro-recipe__k {
-  margin-right: 0.35em;
+  margin-inline-end: 0.35em;
   font-weight: 400;
   font-size: 0.85em;
   opacity: 0.7;
@@ -365,8 +365,8 @@ h5[id^='kuro-h-'] {
   opacity: 0.7;
 }
 .kuro-content .kuro-recipe__ings,
-.kuro-content .kuro-recipe__steps { margin: 0; padding-left: 1.2em; }
-.kuro-content .kuro-recipe__ings { list-style: none; padding-left: 0; }
+.kuro-content .kuro-recipe__steps { margin: 0; padding-inline-start: 1.2em; }
+.kuro-content .kuro-recipe__ings { list-style: none; padding-inline-start: 0; }
 .kuro-content .kuro-recipe__ings li {
   display: flex;
   justify-content: space-between;
@@ -434,7 +434,7 @@ h5[id^='kuro-h-'] {
   padding: 0.3rem 0.4rem;
   border: 0;
   border-bottom: 1px dotted var(--kuro-box-border);
-  text-align: left;
+  text-align: start;
   vertical-align: top;
   background: none;
 }
@@ -443,7 +443,7 @@ h5[id^='kuro-h-'] {
 .kuro-content .kuro-contact__row { display: flex; flex-direction: column; gap: 0.2rem; margin: 0 0 0.6rem; }
 .kuro-content .kuro-contact__label { font-weight: 600; }
 .kuro-content .kuro-contact__req {
-  margin-left: 0.5em;
+  margin-inline-start: 0.5em;
   font-size: 0.75em;
   font-weight: 700;
   color: #b91c1c;
@@ -485,11 +485,11 @@ h5[id^='kuro-h-'] {
   overflow: hidden;
 }
 
-/* Blockquote — left vertical accent bar */
+/* Blockquote — vertical accent bar on the line-start side (right in RTL) */
 .kuro-content blockquote {
   margin: 1rem 0;
   padding: 0.5rem 1rem;
-  border-left: 4px solid var(--kuro-quote-border);
+  border-inline-start: 4px solid var(--kuro-quote-border);
   color: var(--kuro-quote-text);
   font-style: italic;
   /* コールアウトと同じ理由。浮いている画像の下へ潜らせない。 */
@@ -504,13 +504,14 @@ h5[id^='kuro-h-'] {
 .kuro-content ul {
   list-style-type: disc;
   margin: 0.5rem 0;
-  padding-left: 1.5rem;
+  /* 記号の居場所は行頭側(右から左の本文では右)。 */
+  padding-inline-start: 1.5rem;
   color: var(--kuro-list-color);
 }
 .kuro-content ol {
   list-style-type: decimal;
   margin: 0.5rem 0;
-  padding-left: 1.5rem;
+  padding-inline-start: 1.5rem;
   color: var(--kuro-list-color);
 }
 .kuro-content li {
@@ -602,12 +603,13 @@ h5[id^='kuro-h-'] {
   margin-bottom: 0;
 }
 
-/* Callout / admonition blocks — icon column on the left + left accent bar */
+/* Callout / admonition blocks — icon column + accent bar on the line-start side (right in RTL) */
 .kuro-content .kuro-callout {
   margin: 1rem 0;
-  padding: 0.75rem 1rem 0.75rem 3rem;
+  padding-block: 0.75rem;
+  padding-inline: 3rem 1rem;
   border-radius: 0.5rem;
-  border-left: 4px solid;
+  border-inline-start: 4px solid;
   position: relative;
   /* ⚠ **浮いている画像の下へ潜らせない**（v2.39.3）。
      ふつうのブロックは float の**下**に敷かれ、縮むのは行だけなので、
@@ -620,7 +622,7 @@ h5[id^='kuro-h-'] {
 }
 .kuro-content .kuro-callout::before {
   position: absolute;
-  left: 0.875rem;
+  inset-inline-start: 0.875rem;
   /* 記号は【左上・1 行目の隣】。囲みが大きいと中央では紹介している文章から遠く
      離れて浮くため（v2.33.5 で中央を試し、v2.33.7 で戻した）。Notion / GitHub の
      アラート / Obsidian / Docusaurus も同じく上寄せ。
@@ -829,6 +831,10 @@ h5[id^='kuro-h-'] {
    editor's code block look (dark box, green monospace) so the published output
    is WYSIWYG. */
 .kuro-content pre {
+  /* コードは右から左の本文の中でも左から右(記号・行番号・字下げの向きを保つ) */
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
   margin: 1rem 0;
   padding: 0.5rem 1rem;
   background: var(--kuro-code-bg);
@@ -1067,20 +1073,20 @@ ul.kuro-ul-tri-open {
      ボタンにしない。 */
 ul.kuro-ul-check {
   list-style: none;
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 ul.kuro-ul-check > li {
   position: relative;
   /* 箱はこのパディングの中に描く。タップ判定（_checklistMarkerHit）も
      「パディングの幅の内側」で行うので、両者は必ず一致する。 */
-  padding-left: 2em;
+  padding-inline-start: 2em;
   min-height: 1.5em;
 }
 /* 箱 */
 ul.kuro-ul-check > li::before {
   content: '';
   position: absolute;
-  left: 0.15em;
+  inset-inline-start: 0.15em;
   /* 1 行目の行送り(1.625em)の中で縦センター */
   top: calc((1.625em - 1.3em) / 2);
   width: 1.3em;
@@ -1107,7 +1113,7 @@ ul.kuro-ul-check > li::after {
   position: absolute;
   /* 箱の中央に置く: 箱は left .15em / 幅 1.3em なので中心は .8em。
      鉤は幅 .36em / 高さ .7em なので left .62em・top は箱の中心 -.35em。 */
-  left: 0.62em;
+  inset-inline-start: 0.62em;
   top: calc((1.625em - 1.3em) / 2 + 0.3em);
   width: 0.36em;
   height: 0.7em;

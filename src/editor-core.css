@@ -254,8 +254,8 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
     /* Subtle right separator */
-    border-right: 1px solid theme('colors.neutral.700');
-    margin-right: 0.25rem;
+    border-inline-end: 1px solid theme('colors.neutral.700');
+    margin-inline-end: 0.25rem;
   }
 
   .kuro-tab {
@@ -273,7 +273,7 @@
 
   /* Vertical separator between tabs and inline action buttons */
   .kuro-tabs__sep {
-    @apply self-stretch border-l border-neutral-700 mx-2 my-1;
+    @apply self-stretch border-s border-neutral-700 mx-2 my-1;
   }
 
   /* Inline action buttons container — wraps to next row on narrow screens */
@@ -428,7 +428,7 @@
   /* スマホ幅で 2 段目に収まらないとき、1 段目（目次ボタンの左）へ逃がした状態。
      すぐ右に区切り線 (.kuro-tabs__sep) が来るので右マージンだけ詰める。
      移動そのものは JS (_syncCharCountSlot) — 実際に折り返したかを測って決める */
-  .kuro-charcount--in-top { margin-right: 0; }
+  .kuro-charcount--in-top { margin-inline-end: 0; }
 
   .kuro-charcount__col {
     display: inline-block;
@@ -490,7 +490,7 @@
 
   .kuro-toc {
     @apply w-52 flex-shrink-0 overflow-y-auto
-           border-l border-neutral-700 bg-neutral-900 py-3;
+           border-s border-neutral-700 bg-neutral-900 py-3;
   }
 
   .kuro-toc--hidden,
@@ -544,7 +544,7 @@
      id を書き込むのをやめ、飛び先を要素参照で持つようにしたため）。ボタンの
      既定（中央寄せ・下地・枠・独自フォント）を打ち消してリンクの見た目に戻す。 */
   .kuro-toc__item {
-    @apply block py-1 pr-3 text-xs text-left text-neutral-400
+    @apply block py-1 pe-3 text-xs text-start text-neutral-400
            hover:text-indigo-400 hover:bg-neutral-800
            transition-colors truncate cursor-pointer no-underline flex-1 min-w-0
            bg-transparent border-0;
@@ -563,7 +563,7 @@
   .kuro-toc__row--hidden { display: none; }
 
   .kuro-toc__toggle {
-    @apply w-4 h-4 mr-1 flex-shrink-0
+    @apply w-4 h-4 me-1 flex-shrink-0
            text-neutral-500 hover:text-indigo-400
            transition-transform cursor-pointer
            bg-transparent border-0 text-xs leading-none;
@@ -574,7 +574,7 @@
   .kuro-toc__toggle--collapsed { transform: rotate(-90deg); }
 
   .kuro-toc__toggle-spacer {
-    @apply w-4 h-4 mr-1 flex-shrink-0;
+    @apply w-4 h-4 me-1 flex-shrink-0;
   }
 
   /* ════════════════════════════════════════════════════════
@@ -691,7 +691,7 @@
   .kuro-web-font-btn {
     @apply px-3 py-1.5 rounded text-sm text-neutral-200
            hover:bg-neutral-700 hover:text-white
-           text-left cursor-pointer transition-colors whitespace-nowrap;
+           text-start cursor-pointer transition-colors whitespace-nowrap;
     border: 0;
     background: transparent;
     overflow: hidden;
@@ -1132,7 +1132,7 @@
     @apply flex items-center gap-2 px-2 py-1.5
            rounded-md text-sm text-neutral-200
            hover:bg-neutral-700 cursor-pointer
-           transition-colors text-left;
+           transition-colors text-start;
   }
 
   .kuro-line-popm__preview {
@@ -1212,7 +1212,7 @@
   .kuro-menu-icon:hover { @apply text-neutral-200; }
 
   .kuro-table-menu__label {
-    @apply text-xs font-semibold text-neutral-400 pl-1 pr-0.5;
+    @apply text-xs font-semibold text-neutral-400 ps-1 pe-0.5;
     white-space: nowrap;
     user-select: none;
   }
@@ -1447,7 +1447,7 @@
            cursor-pointer transition-colors;
   }
   .kuro-recipe-dialog__errors {
-    @apply m-0 list-disc pl-5 rounded-lg p-2 text-xs leading-relaxed;
+    @apply m-0 list-disc ps-5 rounded-lg p-2 text-xs leading-relaxed;
     color: theme('colors.red.200');
     background: rgba(127, 29, 29, .35);
     border: 1px solid rgba(153, 27, 27, .6);
@@ -1622,6 +1622,9 @@
      The <textarea> is the actual editor; the contenteditable wrap protects
      it from wysiwyg-level selection/keyboard behaviour. */
   .kuro-code-wrap {
+    /* コードは右から左の本文の中でも左から右(公開ページの pre と同じ・#spec-i18n ③) */
+    direction: ltr;
+    text-align: left;
     @apply my-4 rounded-xl overflow-hidden
            bg-neutral-950 border border-neutral-700;
     /* grid is strict about column widths. minmax(0, 1fr) bypasses the implicit
@@ -1777,7 +1780,7 @@
     max-width: calc(100vw - 8px);
   }
   .kuro-roundbox-menu__label {
-    @apply text-xs font-semibold text-neutral-400 pr-1;
+    @apply text-xs font-semibold text-neutral-400 pe-1;
     white-space: nowrap;
     user-select: none;
   }
@@ -1798,7 +1801,7 @@
     @apply bg-indigo-700 border-indigo-500 text-white;
   }
   .kuro-roundbox-menu__del {
-    @apply ml-1 text-xs px-2 py-0.5 rounded border border-neutral-600 bg-neutral-700 text-red-400 cursor-pointer;
+    @apply ms-1 text-xs px-2 py-0.5 rounded border border-neutral-600 bg-neutral-700 text-red-400 cursor-pointer;
     transition: background 0.1s, border-color 0.1s;
   }
   .kuro-roundbox-menu__del:hover {

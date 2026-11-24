@@ -24,6 +24,12 @@ function registry() {
   return g.__kuroEditorLocales
 }
 
+/** 右から左に書く言語か(11 言語の中では ar)。ar-EG なども前半で読む。 */
+export function isRtlLang(lang) {
+  const v = typeof lang === 'string' ? lang.trim().toLowerCase().split(/[-_]/)[0] : ''
+  return v === 'ar' || v === 'he' || v === 'fa' || v === 'ur'
+}
+
 /** 'ja-JP'・'pt-BR'・'zh-Hans' などを 11 言語の名前へ。無いものは en。空はブラウザの言語。 */
 export function normalizeUiLang(lang) {
   let v = typeof lang === 'string' ? lang.trim().toLowerCase() : ''
