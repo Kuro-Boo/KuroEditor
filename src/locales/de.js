@@ -151,6 +151,7 @@ export default {
   "linkEditPopup.html": "↗ Link öffnen",
   "linkEditPopup.title2": "Link öffnen (neuer Tab)",
   "linkEditPopup.html2": "Als Karte anzeigen (ohne Titel)",
+  "linkEditPopup.button": "Als Schaltfläche anzeigen",
   "linkOpenDialog.ariaLabel": "Link öffnen",
   "linkOpenDialog.html": "Diesen Link in einem neuen Tab öffnen?",
   "linkOpenDialog.html2": "Abbrechen",

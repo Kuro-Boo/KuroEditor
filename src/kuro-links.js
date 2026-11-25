@@ -257,6 +257,19 @@ export function _buildUrlCard(slug, url) {
   return `<a href="${_attrUrl(url)}"${ext ? ' target="_blank" rel="noopener"' : ''} class="kuro-url-card" contenteditable="false" data-kuro-wiki="${encodeURIComponent('[[' + slug + '|]]')}">${_urlCardInner(slug, url)}</a>`
 }
 
+/** ボタンの頭(予約。slug はコロンを含まないので、今ある slug とは重ならない)。 */
+export const BUTTON_PREFIX = 'button:'
+
+/**
+ * `button:行き先` なら行き先(空文字もありうる)、ボタンでなければ null。
+ * @param {string|undefined} slug
+ * @returns {string|null}
+ */
+export function parseButtonSlug(slug) {
+  if (typeof slug !== 'string' || !slug.startsWith(BUTTON_PREFIX)) return null
+  return slug.slice(BUTTON_PREFIX.length).trim()
+}
+
 /** Shared [[...]] token regex — single-pass, order card > wiki > hyper. */
 // ⚠ `<` `>` を跨がない（v2.44.0〜）。跨ぐと、表の 2 つのセルに分かれた `[[slug\` と `表示]]` が
 //   間のタグごと 1 つのリンクになり、保存でセルの境目が消えていた。
@@ -274,11 +287,19 @@ export const LINK_TOKEN_RE = /\[\[\[([^\]<>]+)\]\]\]|\[\[([^\]|<>]+)\|([^\]<>]*)
  *   (null = all). A media token whose kind is not in the set is returned with
  *   `unsupported: true` so the host can render a placeholder instead of a
  *   broken player. Use normalizeMediaKinds() to build the Set.
- * @returns {{kind:string,[k:string]:any}} descriptor (kind: card|urlcard|iframe|media|wikilink|hyperlink|text)
+ * @returns {{kind:string,[k:string]:any}} descriptor (kind: card|urlcard|iframe|media|wikilink|hyperlink|button|text)
  */
 export function classifyLink(groups, resolver = defaultResolver, supportedKinds = null) {
   const { card, wikiSlug, wikiLabel, hyper } = groups
   const unsupported = (kind) => !!supportedKinds && !supportedKinds.has(kind)
+  // ボタン [[button:行き先|表示テキスト]](仕様 #spec-button・2026-11-25)。行き先の解決は WiKi 型と
+  // 同じ resolver。表示テキストを省いた形・空の形は行き先をそのまま出す(URL カードにはしない)。
+  const btn = parseButtonSlug(wikiSlug ?? hyper)
+  if (btn !== null && card === undefined) {
+    if (!btn) return { kind: 'text' }
+    const label = wikiSlug !== undefined && wikiLabel ? wikiLabel : btn
+    return { kind: 'button', slug: btn, url: resolver(btn), label, isExternal: btn.startsWith('http') }
+  }
   if (card !== undefined) {
     return { kind: 'card', raw: card, url: resolver(card) }
   }
@@ -380,6 +401,9 @@ export function renderSpecialLinks(text, resolver = defaultResolver, supportedKi
         return `<a href="${_attrUrl(d.url)}" data-kuro-wiki="${encodeURIComponent('[[' + d.slug + '|' + d.label + ']]')}">${d.label}</a>`
       case 'hyperlink':
         return `<a href="${_attrUrl(d.url)}"${d.isExternal ? ' target="_blank" rel="noopener"' : ''} data-kuro-link="${encodeURIComponent('[[' + d.slug + ']]')}">${d.slug}</a>`
+      case 'button':
+        // 編集用。書かれたトークンをそのまま data-kuro-wiki に持つ(保存で 1 文字も変えない)。
+        return `<a href="${_attrUrl(d.url)}"${d.isExternal ? ' target="_blank" rel="noopener"' : ''} class="kuro-button" data-kuro-wiki="${encodeURIComponent(match)}">${d.label}</a>`
       default:
         return match
     }

@@ -151,6 +151,7 @@ export default {
   "linkEditPopup.html": "↗ Apri il link",
   "linkEditPopup.title2": "Apri il link (nuova scheda)",
   "linkEditPopup.html2": "Mostra come scheda (senza titolo)",
+  "linkEditPopup.button": "Mostra come pulsante",
   "linkOpenDialog.ariaLabel": "Apri link",
   "linkOpenDialog.html": "Aprire questo link in una nuova scheda?",
   "linkOpenDialog.html2": "Annulla",

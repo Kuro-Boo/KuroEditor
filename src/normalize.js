@@ -921,6 +921,7 @@ function isFigureToken(tok) {
   if (!m) return false
   const [, slug, label] = m
   if (label === '') return false   // [[x|]] は URL カード（段落の中に置ける）
+  if (slug.startsWith('button:')) return false   // ボタン（行の中の部品・kuro-links の classifyLink の写し）
   if (/^(img|vid|aud|mid)-/.test(slug) || /\.(jpe?g|png|gif|webp|svg|avif|mp4|webm|ogg|mov|mp3|wav|aac|flac|m4a)(\?.*)?$/i.test(slug)) return true
   if (/^https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch|shorts\/)|youtu\.be\/|vimeo\.com\/\d|player\.vimeo\.com\/video\/|google\.[a-z.]+\/maps|maps\.google\.)/i.test(slug)) return true
   if (/^https?:/.test(slug) && label !== undefined) {

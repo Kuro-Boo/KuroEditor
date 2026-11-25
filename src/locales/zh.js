@@ -151,6 +151,7 @@ export default {
   "linkEditPopup.html": "↗ 打开链接",
   "linkEditPopup.title2": "打开链接（新标签页）",
   "linkEditPopup.html2": "以卡片显示（无标题）",
+  "linkEditPopup.button": "显示为按钮",
   "linkOpenDialog.ariaLabel": "打开链接",
   "linkOpenDialog.html": "要在新标签页中打开此链接吗？",
   "linkOpenDialog.html2": "取消",

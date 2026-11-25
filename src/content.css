@@ -781,6 +781,26 @@ h5[id^='kuro-h-'] {
   color: var(--kuro-link-hover);
 }
 
+/* ボタン — [[button:行き先|表示]] 記法（#spec-button）。編集側・公開側とも
+   <a class="kuro-button"> を出すので、見た目もここに置く。色はリンクの色（ホストの
+   アクセントで上書きできる --kuro-button-bg / --kuro-button-text）。 */
+.kuro-content .kuro-button {
+  display: inline-block;
+  margin: 0.25rem 0;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  background: var(--kuro-button-bg, var(--kuro-link));
+  color: var(--kuro-button-text, #fff);
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+  transition: background 0.15s, opacity 0.15s;
+}
+.kuro-content .kuro-button:hover {
+  background: var(--kuro-button-bg-hover, var(--kuro-link-hover));
+  color: var(--kuro-button-text, #fff);
+}
+
 /* Media float clearfix — a paragraph after a floated media shouldn't overlap it */
 .kuro-content p {
   clear: none;

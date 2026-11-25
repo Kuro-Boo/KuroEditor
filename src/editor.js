@@ -43,6 +43,8 @@ import {
   AUDIO_EXT_RE,
   isSafeUrl,
   setLinksLang,
+  parseButtonSlug,
+  BUTTON_PREFIX,
 } from './kuro-links.js'
 // 保存/取込み HTML の正規化（editor の paste・host の API・メンテナンス掃除で共通）。
 import { normalizeContentHtml, inspectContentHtml, sanitizeContentHtml, conformContentHtml, cssColor } from './normalize.js'
@@ -160,7 +162,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.49.5'
+export const VERSION = '2.50.0'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -874,11 +876,15 @@ export function unrenderSpecialLinks(html) {
  * For kuro links the url is the RAW slug from the [[...]] notation (what the
  * user typed), not the resolved href.
  * @param {HTMLAnchorElement} a
- * @returns {{ text: string, url: string }}
+ * @returns {{ text: string, url: string, button?: boolean }}
  */
 export function readLinkParts(a) {
   const wiki = a.getAttribute('data-kuro-wiki')
   if (wiki) {
+    // ボタン [[button:行き先|表示]] / [[button:行き先]]。url は頭を外した行き先、button: true
+    const b = decodeURIComponent(wiki).match(/^\[\[([^\]|]+)(?:\|([^\]]*))?\]\]$/)
+    const target = b ? parseButtonSlug(b[1]) : null
+    if (b && target !== null) return { text: b[2] || target, url: target, button: true }
     // Label may be empty — [[slug|]] is the URL card form, read as text: ''
     const m = decodeURIComponent(wiki).match(/^\[\[([^\]|]+)\|([^\]]*)\]\]$/)
     if (m) return { text: m[2], url: m[1] }
@@ -902,9 +908,10 @@ export function readLinkParts(a) {
  * @param {string} text
  * @param {string} url
  * @param {(slug: string) => string} [resolver]
+ * @param {boolean} [button] ボタン [[button:url|text]] にする(既定は今の形を保つ)
  * @returns {boolean} true when applied (false = rejected, link untouched)
  */
-export function writeLinkParts(a, text, url, resolver = defaultResolver) {
+export function writeLinkParts(a, text, url, resolver = defaultResolver, button = a.classList.contains('kuro-button')) {
   if (!url) return false
   // javascript: などの押すと動く URL は書き込まない(2026-10-11・kuro-links の isSafeUrl)。
   if (!isSafeUrl(url) || !isSafeUrl(resolver(url))) return false
@@ -917,6 +924,30 @@ export function writeLinkParts(a, text, url, resolver = defaultResolver) {
   }
   // Notation guard: "]"/"|" in the slug or "]" in the label would break [[...]]
   if (/[\]|]/.test(url) || text.includes(']')) return false
+  if (button) {
+    // ボタン(#spec-button)。表示テキストが空・行き先と同じなら [[button:行き先]]。URL カードにはしない
+    if (a.classList.contains('kuro-url-card')) {
+      a.classList.remove('kuro-url-card', 'kuro-url-card--rich', 'kuro-url-card--error')
+      a.removeAttribute('contenteditable')
+      a.removeAttribute('data-meta-state')
+      a.textContent = ''
+    }
+    const label = text || url
+    a.setAttribute('data-kuro-wiki', encodeURIComponent(label === url ? `[[${BUTTON_PREFIX}${url}]]` : `[[${BUTTON_PREFIX}${url}|${label}]]`))
+    a.removeAttribute('data-kuro-link')
+    a.classList.add('kuro-button')
+    a.setAttribute('href', resolver(url))
+    if (url.startsWith('http')) {
+      a.setAttribute('target', '_blank')
+      a.setAttribute('rel', 'noopener')
+    } else {
+      a.removeAttribute('target')
+      a.removeAttribute('rel')
+    }
+    if (a.textContent !== label) a.textContent = label
+    return true
+  }
+  a.classList.remove('kuro-button')
   if (!text) {
     // 表題を空にする = [[url|]] → URL カード化（Dropbox Paper 方式）
     a.setAttribute('data-kuro-wiki', encodeURIComponent(`[[${url}|]]`))
@@ -5455,6 +5486,8 @@ export class LinkEditPopup {
     // チェックボックス自体が挙動を説明しているので、補足の説明文は置かない。
     // 同じ行の右端に 🗑 (リンク削除) を並べる。
     this._cardToggle = this._makeCardToggle()
+    // ボタンの切り替えはホストが選んだときだけ(buttonUi)。[[button:…]] の描画・保存は常に効く
+    this._buttonToggle = editor.options?.buttonUi ? this._makeButtonToggle() : null
     this._jumpBtn   = this._makeJumpButton()
     document.body.appendChild(this.el)
   }
@@ -5583,6 +5616,7 @@ export class LinkEditPopup {
       // 新規リンク (pending) でもカード指定はできる。URL が入った時点でカードになる
       if (!a?.isConnected && !this._pendingRange) return
       if (cb.checked) {
+        if (this._buttonToggle) this._buttonToggle.checked = false  // カードとボタンは同時に選べない
         this._textInput.value = ''                       // 空 → [[URL|]] カード
         // A card IS kuro [[url|]] notation. A plain <a href> (from paste / AI /
         // older content, e.g. a 出典 list link) carries no data-kuro-* attr, so
@@ -5602,6 +5636,35 @@ export class LinkEditPopup {
       if (!cb.checked) this._textInput.focus()
       // 表示テキスト行の出し入れで高さが変わる → mmenu を避けたまま位置を取り直す
       // (_apply が新規リンクを作った場合は activeLink が入れ替わっている)
+      if (this.activeLink?.isConnected) this._position(this.activeLink)
+    })
+    this.el.appendChild(row)
+    return cb
+  }
+
+  /**
+   * ボタンにする ☐ チェックボックス(#spec-button)。ON → [[button:URL|表示]]、OFF → 通常のリンクへ。
+   * カード表示とは同時に選べない(ボタンは表示テキストを持つ行の中の部品)。
+   */
+  _makeButtonToggle() {
+    const row   = createElement('div', { className: 'kuro-link-edit__card-row' })
+    const label = createElement('label', { className: 'kuro-link-edit__card-toggle' })
+    const cb = createElement('input', { attrs: { type: 'checkbox' } })
+    label.appendChild(cb)
+    label.appendChild(createElement('span', { html: tr('linkEditPopup.button') }))
+    row.appendChild(label)
+    cb.addEventListener('change', () => {
+      const a = this.activeLink
+      if (!a?.isConnected && !this._pendingRange) return
+      if (cb.checked) {
+        if (this._cardToggle?.checked) this._cardToggle.checked = false
+        if (!this._textInput.value.trim()) this._textInput.value = this._urlInput.value.trim()
+        if (a?.isConnected && !a.hasAttribute('data-kuro-wiki') && !a.hasAttribute('data-kuro-link')) {
+          a.setAttribute('data-kuro-wiki', '')   // 素の <a> も記法のリンクへ上げる(カードと同じ)
+        }
+      }
+      this._syncCardUi(false)
+      this._apply()
       if (this.activeLink?.isConnected) this._position(this.activeLink)
     })
     this.el.appendChild(row)
@@ -5654,9 +5717,10 @@ export class LinkEditPopup {
     this._isNew        = false
     // Don't clobber fields while the user is typing in them
     if (changedTarget || !this.el.contains(document.activeElement)) {
-      const { text, url } = readLinkParts(a)
+      const { text, url, button } = readLinkParts(a)
       this._textInput.value = text
       this._urlInput.value  = url
+      if (this._buttonToggle) this._buttonToggle.checked = !!button
       this._syncCardUi(a.classList.contains('kuro-url-card'))
     }
     if (changedTarget || !this.isVisible) this._position(a)
@@ -5676,6 +5740,7 @@ export class LinkEditPopup {
     this._isNew        = true
     this._textInput.value = range.toString().trim()
     this._urlInput.value  = ''
+    if (this._buttonToggle) this._buttonToggle.checked = false
     this._syncCardUi(false)
     this._positionAtRect(this._caretRect(range))
     this.el.classList.add('kuro-link-edit--visible')
@@ -5807,9 +5872,10 @@ export class LinkEditPopup {
     // （まだ題名を打っていないだけなのに）カード化し、カード中は隠れる仕様の
     // 表示テキスト欄が消えて題名を入力できなくなる。新規セッション中は
     // 空欄なら URL 自体を表示テキストとして扱い、カード化はチェックボックスで明示させる。
-    const effText = (this._isNew && !text && !this._cardToggle?.checked) ? url : text
+    const asButton = !!this._buttonToggle?.checked
+    const effText = (asButton || (this._isNew && !this._cardToggle?.checked)) && !text ? url : text
 
-    const ok = writeLinkParts(a, effText, url, this.editor.options.urlResolver)
+    const ok = writeLinkParts(a, effText, url, this.editor.options.urlResolver, asButton)
     if (!ok) return   // 記法を壊す入力 → 本文には触らない（新規なら差し込まない）
 
     if (fresh) {
@@ -7240,6 +7306,8 @@ export class KuroEditor {
    *                                // レシピを扱わないホスト（メモアプリ等）は false を渡して
    *                                // ボタンごと消す。本文に置ける RecipeCard は 1 個で、
    *                                // 2 度目の押下は既存カードの編集になる。
+   *   buttonUi?: boolean,          // リンク編集に「ボタンにする」を出す(既定 false・#spec-button)。
+   *                                // [[button:…]] の描画と保存はこの設定によらず常に効く。
    *   jobUi?: boolean,             // 鍋の右に「求人」ボタンを出し、JobCard(求人の構造化ブロック)を
    *                                // 挿入・編集できるようにする(既定 false)。本文に置けるのは 1 個。
    *   uiLang?: string,             // 書き手の画面の言語(既定はブラウザの言語)。いまは求人カードの
@@ -7309,6 +7377,7 @@ export class KuroEditor {
       // 公式の操作マニュアル（書く人向け）。ホストが独自マニュアルを持つなら差し替える
       helpUrl: 'https://kuro.boo/kuroeditor/guide/',
       recipeUi: true,
+      buttonUi: false,
       jobUi: false,
       uiLang: (typeof navigator !== 'undefined' && navigator.language) || 'ja',
       contentLang: null,

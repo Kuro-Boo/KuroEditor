@@ -151,6 +151,7 @@ export default {
   "linkEditPopup.html": "↗ Ouvrir le lien",
   "linkEditPopup.title2": "Ouvrir le lien (nouvel onglet)",
   "linkEditPopup.html2": "Afficher en carte (sans titre)",
+  "linkEditPopup.button": "Afficher en bouton",
   "linkOpenDialog.ariaLabel": "Ouvrir le lien",
   "linkOpenDialog.html": "Ouvrir ce lien dans un nouvel onglet ?",
   "linkOpenDialog.html2": "Annuler",

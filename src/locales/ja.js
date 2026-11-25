@@ -152,6 +152,7 @@ export default {
   "linkEditPopup.html": "↗ リンク先にジャンプ",
   "linkEditPopup.title2": "リンク先にジャンプ（新規タブ）",
   "linkEditPopup.html2": "カード表示（表題なし）",
+  "linkEditPopup.button": "ボタンにする",
   "linkOpenDialog.ariaLabel": "リンクを開く",
   "linkOpenDialog.html": "このリンクを新しいタブで開きますか？",
   "linkOpenDialog.html2": "キャンセル",

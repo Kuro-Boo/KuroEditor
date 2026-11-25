@@ -151,6 +151,7 @@ export default {
   "linkEditPopup.html": "↗ فتح الرابط",
   "linkEditPopup.title2": "فتح الرابط (علامة تبويب جديدة)",
   "linkEditPopup.html2": "العرض كبطاقة (بلا عنوان)",
+  "linkEditPopup.button": "العرض كزر",
   "linkOpenDialog.ariaLabel": "فتح الرابط",
   "linkOpenDialog.html": "هل تريد فتح هذا الرابط في علامة تبويب جديدة؟",
   "linkOpenDialog.html2": "إلغاء",

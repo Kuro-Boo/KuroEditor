@@ -151,6 +151,7 @@ export default {
   "linkEditPopup.html": "↗ Відкрити посилання",
   "linkEditPopup.title2": "Відкрити посилання (нова вкладка)",
   "linkEditPopup.html2": "Показати як картку (без заголовка)",
+  "linkEditPopup.button": "Показати як кнопку",
   "linkOpenDialog.ariaLabel": "Відкрити посилання",
   "linkOpenDialog.html": "Відкрити це посилання в новій вкладці?",
   "linkOpenDialog.html2": "Скасувати",

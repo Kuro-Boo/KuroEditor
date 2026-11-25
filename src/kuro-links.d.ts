@@ -28,6 +28,8 @@ export type LinkDescriptor =
     }
   | { kind: "wikilink"; slug: string; url: string; label: string; isExternal: boolean }
   | { kind: "hyperlink"; slug: string; url: string; isExternal: boolean }
+  /** [[button:行き先|表示テキスト]]。slug は頭の button: を外した行き先。 */
+  | { kind: "button"; slug: string; url: string; label: string; isExternal: boolean }
   | { kind: "text" };
 
 export interface LinkGroups {
@@ -38,6 +40,12 @@ export interface LinkGroups {
 }
 
 export type SlugResolver = (slug: string) => string;
+
+/** ボタンの頭 `button:`（予約）。 */
+export const BUTTON_PREFIX: string;
+
+/** `button:行き先` なら行き先（空文字もありうる）、ボタンでなければ null。 */
+export function parseButtonSlug(slug: string | undefined): string | null;
 
 /** 共有 [[...]] トークン正規表現（card > wiki > hyper の単一パス）。 */
 export const LINK_TOKEN_RE: RegExp;

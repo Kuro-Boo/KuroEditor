@@ -151,6 +151,7 @@ export default {
   "linkEditPopup.html": "↗ 링크로 이동",
   "linkEditPopup.title2": "링크로 이동 (새 탭)",
   "linkEditPopup.html2": "카드로 표시 (제목 없음)",
+  "linkEditPopup.button": "버튼으로 표시",
   "linkOpenDialog.ariaLabel": "링크 열기",
   "linkOpenDialog.html": "이 링크를 새 탭에서 열까요?",
   "linkOpenDialog.html2": "취소",

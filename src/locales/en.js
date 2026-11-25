@@ -151,6 +151,7 @@ export default {
   "linkEditPopup.html": "↗ Open link",
   "linkEditPopup.title2": "Open the link (new tab)",
   "linkEditPopup.html2": "Show as card (no title)",
+  "linkEditPopup.button": "Show as button",
   "linkOpenDialog.ariaLabel": "Open link",
   "linkOpenDialog.html": "Open this link in a new tab?",
   "linkOpenDialog.html2": "Cancel",
