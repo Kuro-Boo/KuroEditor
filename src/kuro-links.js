@@ -273,6 +273,9 @@ export function parseButtonSlug(slug) {
 /** Shared [[...]] token regex — single-pass, order card > wiki > hyper. */
 // ⚠ `<` `>` を跨がない（v2.44.0〜）。跨ぐと、表の 2 つのセルに分かれた `[[slug\` と `表示]]` が
 //   間のタグごと 1 つのリンクになり、保存でセルの境目が消えていた。
+/** 本文の一覧の予約の頭(仕様 editor-editor-spec-link「[[list:…]]」)。 */
+export const LIST_PREFIX_RE = /^list:/
+
 export const LINK_TOKEN_RE = /\[\[\[([^\]<>]+)\]\]\]|\[\[([^\]|<>]+)\|([^\]<>]*)\]\]|\[\[([^\]<>]+)\]\]/g
 
 /**
@@ -294,6 +297,8 @@ export function classifyLink(groups, resolver = defaultResolver, supportedKinds 
   const unsupported = (kind) => !!supportedKinds && !supportedKinds.has(kind)
   // ボタン [[button:行き先|表示テキスト]](仕様 #spec-button・2026-11-25)。行き先の解決は WiKi 型と
   // 同じ resolver。表示テキストを省いた形・空の形は行き先をそのまま出す(URL カードにはしない)。
+  // 本文の一覧 [[list:種類:名前:件数]](ホストが展開する・2026-11-25)。リンクにせず書いたまま残す。
+  if (card === undefined && LIST_PREFIX_RE.test(wikiSlug ?? hyper ?? '')) return { kind: 'text' }
   const btn = parseButtonSlug(wikiSlug ?? hyper)
   if (btn !== null && card === undefined) {
     if (!btn) return { kind: 'text' }

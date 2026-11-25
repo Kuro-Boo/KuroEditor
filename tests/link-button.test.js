@@ -115,3 +115,16 @@ describe('リンク編集の「ボタンにする」', () => {
     expect(a.classList.contains('kuro-url-card')).toBe(true)
   })
 })
+
+describe('本文の一覧 [[list:…]](予約の頭・ホストが展開)', () => {
+  it('リンクにしない', () => {
+    expect(classifyLink(groupsOf('[[list:category:facility-a]]')).kind).toBe('text')
+    expect(classifyLink(groupsOf('[[list:jobs:a:5]]')).kind).toBe('text')
+  })
+  it('書いたままの文字で見せ、保存も変えない', () => {
+    const html = '<p>[[list:category:facility-a]]</p>'
+    expect(renderSpecialLinks(html)).toBe(html)
+    expect(unrenderSpecialLinks(renderSpecialLinks(html))).toBe(html)
+    expect(normalizeContentHtml(html)).toBe(html)
+  })
+})

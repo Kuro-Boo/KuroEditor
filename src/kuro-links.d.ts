@@ -43,6 +43,7 @@ export type SlugResolver = (slug: string) => string;
 
 /** ボタンの頭 `button:`（予約）。 */
 export const BUTTON_PREFIX: string;
+export const LIST_PREFIX_RE: RegExp;
 
 /** `button:行き先` なら行き先（空文字もありうる）、ボタンでなければ null。 */
 export function parseButtonSlug(slug: string | undefined): string | null;
