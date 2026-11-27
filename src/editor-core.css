@@ -374,6 +374,18 @@
     display: none;
   }
 
+  /* ルビの読み（<rt>）は本文の上では編集できない島にする。読みは popm の読み欄で直す。
+     ⚠ 外すと、ルビの直後で打った文字が読みに入り、ルビの直後からの Backspace が
+       読みを 1 字ずつ消す（ブラウザはルビの直後のキャレットを「直前の行内要素＝読みの
+       末尾」と同じ位置として扱う。2026-11-27 Chromium で実測）。
+     -webkit-user-modify が効かないブラウザは、editor.js の守り（_guardRubyCaret・
+     _handleRubyBeforeInput・_repairRubies）が受ける。 */
+  .kuro-pane__wysiwyg[contenteditable="true"] rt {
+    -webkit-user-modify: read-only;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
   /* Drag-over: dashed indigo border as drop-target indicator */
   .kuro-pane__wysiwyg.kuro-drag-over {
     outline: 2px dashed theme('colors.indigo.500');

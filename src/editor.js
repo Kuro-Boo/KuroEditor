@@ -162,7 +162,7 @@ export * from './contact.js'
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const VERSION = '2.51.0'
+export const VERSION = '2.51.1'
 
 /** 変更の通知（onBlockChange）と、保留中のリモート更新を確定する無操作時間 (ms) */
 const HIST_DEBOUNCE_MS = 400
@@ -359,6 +359,78 @@ const RUBY_SIZE_OPTIONS = [
   { label: lz('rubysizeoptions.label2'), value: '',              title: lz('rubysizeoptions.title2'), base: true },
   { label: lz('rubysizeoptions.label3'),   value: 'kuro-ruby--lg', title: lz('rubysizeoptions.title3') },
 ]
+
+// ── ルビの形を読む小道具（DOM だけを見る。エディタの状態は持たない）──────────
+
+/** node が居る <ruby>（無ければ null）。 */
+function rubyOf(node) {
+  const el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node
+  return el?.closest?.('ruby') ?? null
+}
+
+/** node が <rt> / <rp> の中（または自身）か。 */
+function inRubyText(node) {
+  const el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node
+  return !!el?.closest?.('rt, rp')
+}
+
+/** ルビの【親文字】のテキストノード（<rt>・<rp> の中を除く）。並びは文書順。 */
+function rubyBaseTextNodes(ruby) {
+  const out = []
+  const walk = document.createTreeWalker(ruby, NodeFilter.SHOW_TEXT)
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (!inRubyText(n)) out.push(n)
+  }
+  return out
+}
+
+/** ルビの親文字の文字列。 */
+function rubyBaseText(ruby) {
+  return rubyBaseTextNodes(ruby).map((t) => t.data).join('')
+}
+
+/** 文字列の末尾 / 先頭の 1 文字ぶん（絵文字の合成・サロゲートを割らない）の長さ。 */
+function graphemeLen(s, fromEnd) {
+  if (!s) return 0
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    const segs = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s))
+    return (fromEnd ? segs[segs.length - 1] : segs[0]).segment.length
+  }
+  const cps = Array.from(s)
+  return (fromEnd ? cps[cps.length - 1] : cps[0]).length
+}
+
+/**
+ * 選択が【直す対象として】指しているルビ（PopupMenu._rubyAtSelection の中身）。
+ * ① 両端が同じルビの中 ② ちょうど 1 つのルビを覆い、外の文字を含まない、のときだけ返す。
+ * @param {Range} range
+ * @param {Element|null} root  この中のルビだけを対象にする
+ */
+function rubyTargetOfRange(range, root) {
+  try {
+    const inRoot = (r) => r && (!root || root.contains(r))
+    const rs = rubyOf(range.startContainer)
+    const re = rubyOf(range.endContainer)
+    if (rs && rs === re && inRoot(rs)) return rs
+
+    const scope = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement
+    const hits = Array.from(scope?.querySelectorAll?.('ruby') ?? [])
+      .filter((r) => inRoot(r) && range.intersectsNode(r))
+    // 端の片方だけがルビの中にあるときも、交差の一覧に入る（scope の子孫なので）
+    for (const r of [rs, re]) if (inRoot(r) && !hits.includes(r)) hits.push(r)
+    if (hits.length !== 1) return null
+    // ルビの外の文字を含むか: 選択の写しからルビを除いて残りを見る。
+    // 端がルビの中にあっても、cloneContents はそのルビを（部分的に）複製して
+    // 写しに入れるので、ここで一緒に除かれる。
+    const frag = range.cloneContents()
+    for (const r of frag.querySelectorAll('ruby')) r.remove()
+    return frag.textContent.trim() === '' ? hits[0] : null
+  } catch {
+    return null
+  }
+}
 
 /** Line-height presets.  1.6 = editor default (leading-relaxed). */
 const LINE_HEIGHT_OPTIONS = [
@@ -2411,9 +2483,17 @@ export class PopupMenu {
   }
 
   /**
-   * The <ruby> the current selection sits in / covers, or null.
-   * 祖先をたどるだけでは足りない — 単語をまるごと選ぶと、選択の端が <ruby> の
-   * 外（親要素の子インデックス）に来るため。その場合は交差で拾う。
+   * 選択が【直す対象として】指しているルビ、無ければ null。
+   *
+   * 対象になるのは次の 2 つだけ:
+   *   ① 選択の両端が同じ 1 つのルビの中にある（親文字の中のキャレット・一部の選択）
+   *   ② 選択がちょうど 1 つのルビを覆い、ルビの外の文字を含まない
+   *      （単語をまるごと選ぶと端がルビの外＝親要素の子インデックスに来るため、
+   *       祖先をたどるだけでは拾えない）
+   * ⚠ 「選択に交差するルビ」で拾わない — 「の漢」「字後ろ」「段落全部」のように
+   *   ルビの外まで選んで読みを入れたのに、そのルビの読みだけが黙って書き換わり、
+   *   選んだ残りの文字にはルビが付かなかった（2026-11-27）。ルビの外を含む選択は
+   *   「選択全体に新しいルビを振る」（中の既存ルビは親文字だけ残す）。
    */
   _rubyAtSelection() {
     const root = this.constraintEl
@@ -2425,20 +2505,7 @@ export class PopupMenu {
       ? (this._activeRange ?? live)
       : (live ?? this._activeRange)
     if (!range) return null
-    try {
-      let node = range.startContainer
-      if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
-      const inside = node?.closest?.('ruby')
-      if (inside && (!root || root.contains(inside))) return inside
-
-      const scope = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
-        ? range.commonAncestorContainer
-        : range.commonAncestorContainer.parentElement
-      for (const r of scope?.querySelectorAll?.('ruby') ?? []) {
-        if ((!root || root.contains(r)) && range.intersectsNode(r)) return r
-      }
-    } catch {}
-    return null
+    return rubyTargetOfRange(range, root)
   }
 
   _showRubyPanel() {
@@ -8436,6 +8503,8 @@ export class KuroEditor {
     this._onDocSelChange = () => {
       // 打っていた場所からカーソルが離れたら、打ちかけを 1 手として確定する（Undo の単位）。
       this._historyCaretBoundary()
+      // キャレットが読みの中・読みの後ろに入ったら、ルビの直後へ出す
+      this._guardRubyCaret()
       // ⚠ 本文の中にキャレットがある間は、その位置を【常に】控える。blur のときだけ
       //   覚えていると、本文を一度も触っていない状態でツールバーから挿入したとき
       //   「最後に居た場所」が無く、挿入が本文の先頭に飛ぶ（＝画面も先頭へ戻る）。
@@ -8576,6 +8645,8 @@ export class KuroEditor {
         this._histSeal = false   // 打鍵は操作ではない（ボタンが本文を変えなかったときの区切りを解く）
         this._historyTypingBoundary(e)   // 改行・入力⇄削除で切る
       }
+      // ルビの端の Backspace / Delete は読みではなく親文字を消す
+      if (this._handleRubyBeforeInput(e)) return
       if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') return
       // コードブロック (<textarea>) は自分の履歴を持つ（keydown と同じ扱い）。
       if (e.target.closest?.('.kuro-code-wrap')) return
@@ -8589,6 +8660,8 @@ export class KuroEditor {
       // コードブロック textarea の入力はここへは届かない（_wireCodeBlock が
       // stopPropagation する）。textarea の dirty 検知 + undo 履歴は
       // _wireCodeBlock 内の専用 input リスナーが直接駆動する。
+      // ルビの形を直す（親文字が空・読みが空・読みの後ろに入った字）。変換中は触らない。
+      if (!e.isComposing) this._repairRubies()
       this._markDirty()
       this._scheduleSnapshot()
       this._noteHistoryCaret()
@@ -8618,6 +8691,8 @@ export class KuroEditor {
     //  「読者がチェックできる Todo」は保存が絡むのでホスト側の責務）。
     this.wysiwyg.addEventListener('pointerdown', (e) => {
       if (this._mode !== 'wysiwyg') return
+      // ルビの読みを押したら、親文字を選んで読み欄を開く（読みは本文の上では直さない）
+      if (this._onRubyTextPointerDown(e)) return
       const tappedSlot = e.target.closest?.('[data-kuro-caret-slot]')
       if (tappedSlot?.parentElement === this.wysiwyg) {
         e.preventDefault()
@@ -9489,6 +9564,10 @@ export class KuroEditor {
     // IME 変換中のキーは IME のもの。日本語入力の Enter (変換確定) で
     // 引用/コールアウトの抜け出しや Tab のインデント処理を走らせない。
     if (isImeComposing(e)) return
+    // 親文字の途中の改行は、ルビの手前か直後へ寄せる（ルビを割らない）
+    if (e.key === 'Enter') this._moveCaretOutOfRubyForBreak()
+    // ⚠ selectionchange は遅れて届き、次の打鍵の後になることがあるので、打鍵の前にも見る
+    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) this._guardRubyCaret()
     // カーソルを動かすキーは Undo の区切り（selectionchange は遅れて届き、次の打鍵の後になることがある）。
     if (/^(Arrow(Left|Right|Up|Down)|Home|End|PageUp|PageDown)$/.test(e.key) && this._histTimer != null) this._commitSnapshot()
     // Native contenteditable navigation can remain trapped in the last table
@@ -9815,6 +9894,14 @@ export class KuroEditor {
     const startLine = this._nearestLine(range.startContainer)
     if (!startLine || startLine !== this._nearestLine(range.endContainer)) return
 
+    // 選択の端が既存のルビの中にあれば、そのルビを丸ごと含めるまで広げる。
+    // ⚠ 広げずに切り出すと、ルビが「選択の外の半分（読み無し）」と「中の半分（元の
+    //   読みつき）」に割れ、元の読みが半分の親文字に乗ったまま残る。
+    const rs = rubyOf(range.startContainer)
+    const re = rubyOf(range.endContainer)
+    if (rs && this.wysiwyg.contains(rs)) range.setStartBefore(rs)
+    if (re && this.wysiwyg.contains(re)) range.setEndAfter(re)
+
     const ruby = document.createElement('ruby')
     if (sizeClass) ruby.className = sizeClass
     try {
@@ -9895,6 +9982,334 @@ export class KuroEditor {
       sel.setBaseAndExtent(ruby, 0, ruby, end)
       if (sel.rangeCount) this.popm._activeRange = sel.getRangeAt(0).cloneRange()
     } catch { /* 選択が作れない環境では諦める（本文の内容は正しい） */ }
+  }
+
+  // ── ルビの付いた文字を本文の上で直すときの守り ────────────────────────────
+  //
+  // 読み（<rt>）は本文の上では直さない（popm の読み欄で直す）。編集画面では
+  // editor-core.css が <rt> を編集できない島にしているが、それだけでは次が残る
+  // （2026-11-27 Chromium で実測）ので、ここで受ける:
+  //   ・Backspace / Delete がルビの端に当たると、読みが丸ごと消えて親文字だけの
+  //     <ruby> が残る → 親文字を 1 字ずつ消す（_handleRubyBeforeInput）
+  //   ・→ で親文字の末尾を越えると、キャレットが <ruby> の中の読みの後ろに入り、
+  //     打った字がルビの中に入る / 読みをクリックすると行頭へ飛ぶ
+  //     → ルビの直後へ出す・読みのクリックは親文字を選んで読み欄を開く（_guardRubyCaret）
+  //   ・親文字の途中の Enter でルビが割れ、前半は読みを失い後半は全部の読みを持つ
+  //     → 改行はルビの手前か直後で入れる（_moveCaretOutOfRubyForBreak）
+  //   ・親文字を消し切ると読みだけが宙に浮く・読みが消えて空の <ruby> が残る
+  //     → 入力のたびに形を直す（_repairRubies）
+
+  /** (node, offset) を親文字の端・読みの中から、ルビの外の点へ写す（写せなければそのまま）。 */
+  _pointOutOfRuby(node, offset, dir) {
+    const r = rubyOf(node)
+    if (!r || !this.wysiwyg.contains(r)) return { node, offset }
+    const parent = r.parentNode
+    const idx    = Array.prototype.indexOf.call(parent.childNodes, r)
+    const after  = { node: parent, offset: idx + 1 }
+    const before = { node: parent, offset: idx }
+    if (inRubyText(node)) return after
+    const rt = r.querySelector('rt')
+    const rtIdx = rt ? Array.prototype.indexOf.call(r.childNodes, rt) : r.childNodes.length
+    if (node === r) {
+      if (offset > rtIdx) return after
+      if (offset === 0 && dir === 'backward') return before
+      if (offset >= rtIdx && dir === 'forward') return after
+      return { node, offset }
+    }
+    const texts = rubyBaseTextNodes(r).filter((t) => t.data.length)
+    if (dir === 'backward' && node === texts[0] && offset === 0) return before
+    if (dir === 'forward' && node === texts[texts.length - 1] && offset === node.data.length) return after
+    return { node, offset }
+  }
+
+  /** 点のすぐ前（dir='backward'）/ すぐ後ろ（'forward'）に隣り合うルビ。間に文字があれば null。 */
+  _rubyAdjacent(node, offset, dir) {
+    const INLINE = /^(STRONG|B|EM|I|U|S|SPAN|A|CODE|KBD|MARK|SUB|SUP|SMALL|FONT)$/
+    const isEmptyText = (n) => n?.nodeType === Node.TEXT_NODE && n.data.length === 0
+    const back = dir === 'backward'
+    let cur
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (back ? offset > 0 : offset < node.data.length) return null
+      cur = node
+    } else {
+      const child = node.childNodes[back ? offset - 1 : offset]
+      if (child) {
+        let c = child
+        while (isEmptyText(c)) c = back ? c.previousSibling : c.nextSibling
+        return c?.nodeName === 'RUBY' ? c : null
+      }
+      cur = node
+    }
+    // 兄弟が無ければ、行内の装飾の外へ出てたどる（<strong>後ろ</strong> の先頭など）
+    while (cur && cur !== this.wysiwyg) {
+      let sib = back ? cur.previousSibling : cur.nextSibling
+      while (isEmptyText(sib)) sib = back ? sib.previousSibling : sib.nextSibling
+      if (sib) return sib.nodeName === 'RUBY' ? sib : null
+      const p = cur.parentElement
+      if (!p || !INLINE.test(p.nodeName)) return null
+      cur = p
+    }
+    return null
+  }
+
+  /** キャレットをルビのすぐ後ろ（after=true）/ すぐ手前に置く。 */
+  _caretBesideRuby(ruby, after) {
+    const sel = window.getSelection()
+    if (!sel) return
+    const parent = ruby.parentNode
+    const idx    = Array.prototype.indexOf.call(parent.childNodes, ruby)
+    const sib    = after ? ruby.nextSibling : ruby.previousSibling
+    try {
+      if (sib?.nodeType === Node.TEXT_NODE) {
+        const o = after ? 0 : sib.data.length
+        sel.setBaseAndExtent(sib, o, sib, o)
+      } else {
+        const o = after ? idx + 1 : idx
+        sel.setBaseAndExtent(parent, o, parent, o)
+      }
+    } catch { /* noop */ }
+  }
+
+  /** ルビを取り除き、その場所にキャレットを置く（親文字が空になったとき）。 */
+  _removeEmptyRuby(ruby, placeCaret) {
+    const parent = ruby.parentNode
+    if (!parent) return
+    const prev = ruby.previousSibling
+    const idx  = Array.prototype.indexOf.call(parent.childNodes, ruby)
+    ruby.remove()
+    if (!placeCaret) return
+    const sel = window.getSelection()
+    try {
+      if (prev?.nodeType === Node.TEXT_NODE) sel.setBaseAndExtent(prev, prev.data.length, prev, prev.data.length)
+      else sel.setBaseAndExtent(parent, idx, parent, idx)
+    } catch { /* noop */ }
+  }
+
+  /** 親文字を末尾（fromEnd）または先頭から 1 字消す。消し切ったらルビごと消す。 */
+  _deleteRubyBaseChar(ruby, fromEnd) {
+    const texts = rubyBaseTextNodes(ruby).filter((t) => t.data.length)
+    const t = fromEnd ? texts[texts.length - 1] : texts[0]
+    if (t) {
+      const n = graphemeLen(t.data, fromEnd)
+      if (fromEnd) t.deleteData(t.data.length - n, n)
+      else t.deleteData(0, n)
+    }
+    if (!rubyBaseText(ruby).trim()) { this._removeEmptyRuby(ruby, true); return }
+    // キャレットは消す前と同じ側（Backspace＝ルビの直後・Delete＝ルビの手前）
+    this._caretBesideRuby(ruby, fromEnd)
+  }
+
+  /**
+   * Backspace / Delete がルビの端に当たったら、読みではなく親文字を 1 字消す。
+   * @returns {boolean} 自分で処理した（既定の編集を止めた）
+   */
+  _handleRubyBeforeInput(e) {
+    if (this._mode !== 'wysiwyg' || e.isComposing) return false
+    const type = e.inputType
+    const sel = window.getSelection()
+    if (!sel?.rangeCount || !sel.isCollapsed) return false
+    const { startContainer, startOffset } = sel.getRangeAt(0)
+    if (!this.wysiwyg.contains(startContainer)) return false
+    // 親文字の先頭で打った字はルビの手前へ（ルビの外の文字の後ろで打ったときと同じ）。
+    // ⚠ ルビが 2 つ並ぶと、間の点はブラウザが後ろのルビの親文字の先頭として扱い、
+    //   間に打った字が後ろの単語の親文字になる（Chromium で実測）。
+    if (type === 'insertText' && e.data) {
+      let r = null
+      const inside = rubyOf(startContainer)
+      if (inside && this.wysiwyg.contains(inside) && !inRubyText(startContainer)) {
+        const pt = this._pointOutOfRuby(startContainer, startOffset, 'backward')
+        if (pt.node !== startContainer || pt.offset !== startOffset) r = inside
+      } else if (!inside && startContainer.nodeType === Node.ELEMENT_NODE) {
+        // 要素の境目（ルビとルビの間・行頭のルビの手前）: 受けるテキストノードが無い
+        r = this._rubyAdjacent(startContainer, startOffset, 'forward')
+      }
+      if (!r) return false
+      e.preventDefault()
+      let t = r.previousSibling
+      if (t?.nodeType !== Node.TEXT_NODE) {
+        t = document.createTextNode('')
+        r.parentNode.insertBefore(t, r)
+      }
+      t.appendData(e.data)
+      sel.setBaseAndExtent(t, t.data.length, t, t.data.length)
+      this._afterManualInput(type)
+      return true
+    }
+    if (type !== 'deleteContentBackward' && type !== 'deleteContentForward') return false
+    const dir = type === 'deleteContentBackward' ? 'backward' : 'forward'
+    const pt  = this._pointOutOfRuby(startContainer, startOffset, dir)
+    const ruby = this._rubyAdjacent(pt.node, pt.offset, dir)
+    if (ruby) {
+      e.preventDefault()
+      this._deleteRubyBaseChar(ruby, dir === 'backward')
+      this._afterManualInput(type)
+      return true
+    }
+    // 親文字の末尾で Delete: 次の 1 字は読みではなくルビの後ろの文字
+    const moved = pt.node !== startContainer || pt.offset !== startOffset
+    if (dir === 'forward' && moved) {
+      const r = rubyOf(startContainer)
+      const next = r?.nextSibling
+      if (next?.nodeType === Node.TEXT_NODE && next.data.length) {
+        e.preventDefault()
+        next.deleteData(0, graphemeLen(next.data, false))
+        this._afterManualInput(type)
+        return true
+      }
+      // 行末のルビ: キャレットをルビの外へ出してからブラウザに任せる（次の行と繋ぐ）
+      this._caretBesideRuby(r, true)
+    }
+    return false
+  }
+
+  /** 既定の編集を止めて自分で本文を変えたあと、input と同じ後処理を通す。 */
+  _afterManualInput(inputType) {
+    this.wysiwyg.dispatchEvent(new InputEvent('input', { bubbles: true, inputType }))
+  }
+
+  /**
+   * キャレットが読みの中・読みの後ろ（<ruby> の中で <rt> より後ろ）に入ったら、
+   * ルビの直後へ出す。読みは本文の上では直さない。
+   */
+  _guardRubyCaret() {
+    if (this._mode !== 'wysiwyg' || this._composing) return
+    const sel = window.getSelection()
+    if (!sel?.rangeCount || !sel.isCollapsed) return
+    const { startContainer: n, startOffset: o } = sel.getRangeAt(0)
+    const r = rubyOf(n)
+    if (!r || !this.wysiwyg.contains(r)) return
+    const rt = r.querySelector('rt')
+    const rtIdx = rt ? Array.prototype.indexOf.call(r.childNodes, rt) : -1
+    if (inRubyText(n) || (n === r && rt && o > rtIdx)) {
+      this._caretBesideRuby(r, true)
+    } else if (n === r && rt && o === rtIdx) {
+      // 親文字と読みの境目（要素の子インデックス）: 親文字の末尾の文字の中へ
+      const texts = rubyBaseTextNodes(r).filter((t) => t.data.length)
+      const last = texts[texts.length - 1]
+      if (last) sel.setBaseAndExtent(last, last.data.length, last, last.data.length)
+    }
+  }
+
+  /**
+   * 読みをクリック / タップしたら、そのルビの親文字を選んで読み欄を開く。
+   * ⚠ ブラウザに任せると、編集できない島（読み）の上の点がキャレットにならず、
+   *   行頭に飛んで打った字がそこへ入る（Chromium で実測）。
+   * @returns {boolean} 処理した
+   */
+  _onRubyTextPointerDown(e) {
+    if (this._mode !== 'wysiwyg') return false
+    const rt = e.target?.closest?.('rt')
+    const ruby = rt?.closest?.('ruby')
+    if (!ruby || !this.wysiwyg.contains(ruby)) return false
+    e.preventDefault()
+    this.wysiwyg.focus({ preventScroll: true })
+    this._selectRubyBase(ruby)
+    this.popm.show()
+    this.popm._showRubyPanel()
+    return true
+  }
+
+  /**
+   * 親文字の途中で改行するときは、改行をルビの手前（親文字の先頭にいるとき）か
+   * 直後（それ以外）へ寄せる。ルビは単語ごとの読みなので、途中で割ると前半は
+   * 読みを失い、後半は単語全部の読みを持ったまま残る。
+   */
+  _moveCaretOutOfRubyForBreak() {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount || !sel.isCollapsed) return
+    const { startContainer: n, startOffset: o } = sel.getRangeAt(0)
+    const r = rubyOf(n)
+    if (!r || !this.wysiwyg.contains(r)) return
+    const head = document.createRange()
+    head.setStart(r, 0)
+    try { head.setEnd(n, o) } catch { return }
+    const frag = head.cloneContents()
+    for (const x of frag.querySelectorAll('rt, rp')) x.remove()
+    const atStart = !inRubyText(n) && frag.textContent.length === 0
+    this._caretBesideRuby(r, !atStart)
+  }
+
+  /**
+   * キャレットのある行のルビの形を直す（入力のたび）。
+   *   ・親文字が空 → ルビごと消す（読みだけが宙に浮くのを残さない）
+   *   ・読みが空・無い → ルビを外して親文字だけにする
+   *   ・<ruby> の中で読みより後ろに入った中身 → ルビの直後へ出す
+   * ⚠ 本文全体ではなくキャレットの行だけを見る。共同編集では他の行は他の人の
+   *   編集で、ここで直すと触っていない行の変更が送られる。
+   * キャレットは「テキストノード＋位置」で控えて戻す（ノードを動かすと Range の
+   * 端点は親へ畳まれる）。
+   */
+  _repairRubies() {
+    if (this._mode !== 'wysiwyg') return
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return
+    const anchor = sel.getRangeAt(0).startContainer
+    if (!this.wysiwyg.contains(anchor) || anchor === this.wysiwyg) return
+    let block = anchor
+    while (block.parentNode && block.parentNode !== this.wysiwyg) block = block.parentNode
+    // Enter の直後はキャレットが新しい行にあるので、手前の行も見る
+    const rubies = []
+    for (const b of [block.previousSibling, block]) {
+      if (!b || b.nodeType !== Node.ELEMENT_NODE) continue
+      if (b.nodeName === 'RUBY') rubies.push(b)
+      else rubies.push(...b.querySelectorAll('ruby'))
+    }
+    if (!rubies.length) return
+
+    const caret = sel.isCollapsed ? { node: sel.anchorNode, offset: sel.anchorOffset } : null
+    let changed = false
+    let caretFallback = null
+    for (const r of rubies) {
+      if (!r.isConnected) continue
+      if (!rubyBaseText(r).trim() && !r.querySelector('img')) {
+        const holdsCaret = caret && r.contains(caret.node)
+        const parent = r.parentNode
+        const prev = r.previousSibling
+        const idx = Array.prototype.indexOf.call(parent.childNodes, r)
+        r.remove()
+        if (holdsCaret) caretFallback = prev?.nodeType === Node.TEXT_NODE
+          ? { node: prev, offset: prev.data.length } : { node: parent, offset: idx }
+        changed = true
+        continue
+      }
+      const rts = Array.from(r.querySelectorAll('rt'))
+      if (!rts.some((x) => x.textContent.trim())) {
+        for (const x of r.querySelectorAll('rt, rp')) x.remove()
+        const parent = r.parentNode
+        while (r.firstChild) parent.insertBefore(r.firstChild, r)
+        r.remove()
+        changed = true
+        continue
+      }
+      // 行末のルビの後ろの <br>: 行末にルビ（編集できない島を含む）があると、ブラウザは
+      // 改行のたびに置き場の <br> を足す。見た目に効かず保存に残るだけなので外す。
+      // （Shift+Enter の改行は <br> が 2 つ続くので、最後の 1 つでない限り残る）
+      const br = r.nextSibling
+      if (br?.nodeName === 'BR' && br === br.parentNode.lastChild && br.parentNode !== this.wysiwyg) {
+        br.remove()
+        changed = true
+      }
+      const lastRt = rts[rts.length - 1]
+      if (lastRt.parentNode === r) {
+        let ref = r.nextSibling
+        for (let n = lastRt.nextSibling; n; ) {
+          const next = n.nextSibling
+          if (n.nodeName !== 'RP' && !(n.nodeType === Node.TEXT_NODE && n.data === '')) {
+            r.parentNode.insertBefore(n, ref)
+            changed = true
+          }
+          n = next
+        }
+      }
+    }
+    if (!changed) return
+    const target = caret && caret.node.isConnected && this.wysiwyg.contains(caret.node) ? caret : caretFallback
+    if (!target) return
+    try {
+      const max = target.node.nodeType === Node.TEXT_NODE ? target.node.data.length : target.node.childNodes.length
+      const o = Math.min(target.offset, max)
+      sel.setBaseAndExtent(target.node, o, target.node, o)
+    } catch { /* noop */ }
   }
 
   _format(command) {
